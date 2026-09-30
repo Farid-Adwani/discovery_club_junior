@@ -1,0 +1,6 @@
+{
+  "name": "Discovery Club Junior",
+  "description": "Next-generation robotics, coding, and STEM club management platform and community portal for kids and teens.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

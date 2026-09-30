@@ -1,0 +1,270 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #f8fafc;
+    color: #1e293b;
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(28, 176, 246, 0.08), transparent 30%),
+      radial-gradient(circle at 90% 15%, rgba(88, 204, 2, 0.08), transparent 35%),
+      radial-gradient(circle at 50% 80%, rgba(255, 200, 0, 0.07), transparent 40%);
+    background-attachment: fixed;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Duolingo-Inspired Chunky 3D Tactile Buttons */
+.btn-duo-green {
+  background-color: #58cc02;
+  border-bottom: 4px solid #46a302;
+  color: #ffffff;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-green:hover {
+  background-color: #61e002;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(88, 204, 2, 0.35);
+}
+.btn-duo-green:active {
+  border-bottom-width: 0px;
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.btn-duo-blue {
+  background-color: #1cb0f6;
+  border-bottom: 4px solid #1899d6;
+  color: #ffffff;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-blue:hover {
+  background-color: #2bd0ff;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(28, 176, 246, 0.35);
+}
+.btn-duo-blue:active {
+  border-bottom-width: 0px;
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.btn-duo-yellow {
+  background-color: #ffc800;
+  border-bottom: 4px solid #e5a500;
+  color: #451a03;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-yellow:hover {
+  background-color: #ffd224;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(255, 200, 0, 0.4);
+}
+.btn-duo-yellow:active {
+  border-bottom-width: 0px;
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.btn-duo-orange {
+  background-color: #ff9600;
+  border-bottom: 4px solid #d97706;
+  color: #ffffff;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-orange:hover {
+  background-color: #ffa524;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(255, 150, 0, 0.35);
+}
+.btn-duo-orange:active {
+  border-bottom-width: 0px;
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.btn-duo-purple {
+  background-color: #a855f7;
+  border-bottom: 4px solid #7e22ce;
+  color: #ffffff;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-purple:hover {
+  background-color: #b56cf8;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(168, 85, 247, 0.35);
+}
+.btn-duo-purple:active {
+  border-bottom-width: 0px;
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.btn-duo-secondary {
+  background-color: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-bottom: 4px solid #cbd5e1;
+  color: #475569;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-secondary:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+  border-color: #94a3b8;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(148, 163, 184, 0.25);
+}
+.btn-duo-secondary:active {
+  border-bottom-width: 2px;
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* Duolingo Chunky Cards with Glowing Hover Effects */
+.duo-card {
+  background-color: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-bottom: 5px solid #cbd5e1;
+  border-radius: 1.5rem;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.duo-card:hover {
+  border-color: #38bdf8;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 35px -8px rgba(56, 189, 248, 0.22);
+}
+
+.duo-card-glow-green:hover {
+  border-color: #58cc02;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 35px -8px rgba(88, 204, 2, 0.25);
+}
+
+.duo-card-glow-blue:hover {
+  border-color: #1cb0f6;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 35px -8px rgba(28, 176, 246, 0.25);
+}
+
+.duo-card-glow-yellow:hover {
+  border-color: #ffc800;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 35px -8px rgba(255, 200, 0, 0.28);
+}
+
+.duo-card-glow-purple:hover {
+  border-color: #a855f7;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 35px -8px rgba(168, 85, 247, 0.25);
+}
+
+.duo-card-glow-orange:hover {
+  border-color: #ff9600;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 35px -8px rgba(255, 150, 0, 0.25);
+}
+
+.duo-card-interactive {
+  cursor: pointer;
+}
+.duo-card-interactive:active {
+  border-bottom-width: 2px;
+  transform: translateY(3px);
+}
+
+/* Mascot Speech Bubble */
+.duo-speech-bubble {
+  position: relative;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-bottom: 4px solid #cbd5e1;
+  border-radius: 1.25rem;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+.duo-speech-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 28px;
+  border-width: 10px 10px 0 0;
+  border-style: solid;
+  border-color: #cbd5e1 transparent transparent transparent;
+}
+.duo-speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 30px;
+  border-width: 8px 8px 0 0;
+  border-style: solid;
+  border-color: #ffffff transparent transparent transparent;
+}
+
+/* Section Ambient Glow Container */
+.section-glow-container {
+  position: relative;
+  transition: all 0.3s ease;
+}
+.section-glow-container:hover {
+  filter: drop-shadow(0 0 25px rgba(28, 176, 246, 0.08));
+}
+
+/* Floating animation keyframes */
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(1.5deg); }
+}
+
+.animate-float {
+  animation: floatGentle 4s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}
+
+/* Soft custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

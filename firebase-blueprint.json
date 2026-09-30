@@ -1,0 +1,175 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "trainer", "parent", "visitor"] },
+        "roles": { "type": "array" },
+        "trainerId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student record in club or waitlist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentAge": { "type": "number" },
+        "parentName": { "type": "string" },
+        "parentPhone": { "type": "string" },
+        "parentEmail": { "type": "string" },
+        "programId": { "type": "string" },
+        "status": { "type": "string", "enum": ["waitlist", "accepted", "active"] },
+        "registeredAt": { "type": "string" },
+        "groupId": { "type": "string" },
+        "standardMonthlyPrice": { "type": "number" },
+        "customMonthlyPrice": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["paid", "pending", "scholarship"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "studentName", "parentName", "parentPhone", "programId", "status"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Cohort group schedule and lab assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "programId": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "dayOfWeek": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "room": { "type": "string" },
+        "maxCapacity": { "type": "number" }
+      },
+      "required": ["id", "name", "programId", "trainerId", "dayOfWeek", "timeSlot", "room", "maxCapacity"]
+    },
+    "SessionRecord": {
+      "title": "SessionRecord",
+      "description": "Weekly session attendance and evaluation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "groupId": { "type": "string" },
+        "date": { "type": "string" },
+        "weekNumber": { "type": "number" },
+        "topicTaught": { "type": "string" },
+        "isSyllabusValidated": { "type": "boolean" },
+        "validatedAt": { "type": "string" },
+        "trainerNotes": { "type": "string" },
+        "records": { "type": "object" }
+      },
+      "required": ["id", "groupId", "date", "weekNumber", "topicTaught"]
+    },
+    "HoodieDistribution": {
+      "title": "HoodieDistribution",
+      "description": "Club hoodie order and distribution log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "parentName": { "type": "string" },
+        "size": { "type": "string" },
+        "isPersonalized": { "type": "boolean" },
+        "personalizedText": { "type": "string" },
+        "status": { "type": "string", "enum": ["requested", "ready", "picked_up"] },
+        "requestedAt": { "type": "string" },
+        "pickedUpAt": { "type": "string" },
+        "price": { "type": "number" }
+      },
+      "required": ["id", "studentId", "studentName", "size", "status", "price"]
+    },
+    "HoodieStock": {
+      "title": "HoodieStock",
+      "description": "Inventory stock count by size",
+      "type": "object",
+      "properties": {
+        "size": { "type": "string" },
+        "count": { "type": "number" }
+      },
+      "required": ["size", "count"]
+    },
+    "MaterialRequest": {
+      "title": "MaterialRequest",
+      "description": "Trainer equipment requisition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "trainerName": { "type": "string" },
+        "groupId": { "type": "string" },
+        "groupName": { "type": "string" },
+        "itemsNeeded": { "type": "string" },
+        "quantity": { "type": "string" },
+        "urgency": { "type": "string" },
+        "status": { "type": "string" },
+        "requestedAt": { "type": "string" },
+        "sessionDate": { "type": "string" }
+      },
+      "required": ["id", "trainerId", "groupId", "itemsNeeded", "status"]
+    },
+    "ClubEvent": {
+      "title": "ClubEvent",
+      "description": "Tournament, competition, or maker event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "spotsLeft": { "type": "number" },
+        "isRegistered": { "type": "boolean" }
+      },
+      "required": ["id", "title", "date", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and roles"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Student admissions and enrolled member records"
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Cohort groups and timetables"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "SessionRecord",
+      "description": "Class session attendance and evaluations"
+    },
+    "/hoodie_distributions/{distributionId}": {
+      "schema": "HoodieDistribution",
+      "description": "Club hoodies requested and distributed"
+    },
+    "/hoodie_stock/{size}": {
+      "schema": "HoodieStock",
+      "description": "Merchandise stock counts"
+    },
+    "/material_requests/{requestId}": {
+      "schema": "MaterialRequest",
+      "description": "Equipment requisitions from trainers"
+    },
+    "/events/{eventId}": {
+      "schema": "ClubEvent",
+      "description": "Competitions and hackathons"
+    }
+  }
+}
