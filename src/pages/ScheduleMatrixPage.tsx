@@ -26,7 +26,7 @@ export const ScheduleMatrixPage: React.FC = () => {
         const g1 = groups[i];
         const g2 = groups[j];
         if (g1.dayOfWeek === g2.dayOfWeek && g1.timeSlot === g2.timeSlot) {
-          if (g1.trainerId === g2.trainerId) {
+          if (g1.trainerIds.some((id) => g2.trainerIds.includes(id))) {
             conflicts.push({
               reason: 'Trainer Double-Booked',
               groupA: g1.name,
@@ -135,7 +135,7 @@ export const ScheduleMatrixPage: React.FC = () => {
       {/* Matrix Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredGroups.map((g) => {
-          const trainer = trainers.find((t) => t.id === g.trainerId);
+          const trainerNames = trainers.filter((t) => g.trainerIds.includes(t.id)).map((t) => t.name).join(', ');
           const program = programs.find((p) => p.id === g.programId);
 
           return (
@@ -166,7 +166,7 @@ export const ScheduleMatrixPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <User className="w-3.5 h-3.5 text-sky-500" />
-                  <span>Trainer: <strong className="text-slate-800 font-bold">{trainer?.name}</strong></span>
+                  <span>{g.trainerIds.length > 1 ? 'Trainers' : 'Trainer'}: <strong className="text-slate-800 font-bold">{trainerNames || 'Unassigned'}</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Layers className="w-3.5 h-3.5 text-emerald-500" />

@@ -21,7 +21,7 @@ export const ScheduleGeneratorModal: React.FC<Props> = ({ isOpen, onClose }) => 
         const g1 = groups[i];
         const g2 = groups[j];
         if (g1.dayOfWeek === g2.dayOfWeek && g1.timeSlot === g2.timeSlot) {
-          if (g1.trainerId === g2.trainerId) {
+          if (g1.trainerIds.some((id) => g2.trainerIds.includes(id))) {
             conflicts.push({
               reason: 'Trainer Double-Booked',
               groupA: g1.name,
@@ -81,7 +81,7 @@ export const ScheduleGeneratorModal: React.FC<Props> = ({ isOpen, onClose }) => 
             )}
             <span>
               {detectedConflicts.length === 0
-                ? 'All 4 cohorts verified without trainer or lab room collisions.'
+                ? `All ${groups.length} classes verified without trainer or lab room collisions.`
                 : `Found ${detectedConflicts.length} schedule conflict(s)!`}
             </span>
           </div>
@@ -110,7 +110,7 @@ export const ScheduleGeneratorModal: React.FC<Props> = ({ isOpen, onClose }) => 
         <div className="flex-1 overflow-y-auto pr-1 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {filteredGroups.map((group) => {
-              const trainer = trainers.find((t) => t.id === group.trainerId);
+              const trainerNames = trainers.filter((t) => group.trainerIds.includes(t.id)).map((t) => t.name).join(', ');
               const program = programs.find((p) => p.id === group.programId);
 
               return (
@@ -138,7 +138,7 @@ export const ScheduleGeneratorModal: React.FC<Props> = ({ isOpen, onClose }) => 
 
                     <div className="flex items-center gap-2 text-slate-400">
                       <User className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Lead Trainer: {trainer?.name || 'Unassigned'}</span>
+                      <span>Trainers: {trainerNames || 'Unassigned'}</span>
                     </div>
                   </div>
 

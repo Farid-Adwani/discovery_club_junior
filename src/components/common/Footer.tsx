@@ -1,4 +1,5 @@
 import React from 'react';
+import { CLUB_PHOTOS } from '../../data/initialData';
 import { useApp } from '../../context/AppContext';
 import { ExternalLink, Heart, MapPin, Phone, Mail, Clock, Sparkles } from 'lucide-react';
 
@@ -13,9 +14,9 @@ export const Footer: React.FC = () => {
           <div className="space-y-4 md:col-span-1">
             <div className="flex items-center gap-3">
               <img
-                src="/src/assets/images/duo_junior_mascot_1790795302958.jpg"
-                alt="Junior Mascot"
-                className="w-10 h-10 rounded-2xl object-cover border-2 border-slate-200"
+                src={CLUB_PHOTOS.clubAvatar}
+                alt="Discovery Club Junior logo"
+                className="bg-white w-10 h-10 rounded-2xl object-cover border-2 border-slate-200"
               />
               <span className="text-base font-black tracking-tight text-slate-800">
                 Discovery Junior
@@ -63,14 +64,6 @@ export const Footer: React.FC = () => {
                   className="hover:text-sky-600 transition-colors cursor-pointer"
                 >
                   Member Sign In (RBAC)
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => navigateTo('waitlist')}
-                  className="hover:text-amber-600 transition-colors cursor-pointer"
-                >
-                  Waitlist Application
                 </button>
               </li>
             </ul>

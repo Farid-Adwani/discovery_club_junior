@@ -1,35 +1,44 @@
-import { Program, Trainer, Group, Student, HoodieSize, HoodieDistribution, SessionRecord, MaterialRequest, ClubEvent, FacebookPost, AppUser } from '../types';
+import { Program, Trainer, Group, Student, HoodieSize, HoodieDistribution, SessionRecord, MaterialRequest, ClubEvent, FacebookPost } from '../types';
 
-import fbEurobotChamps from '../assets/images/fb_eurobot_champs_1790880596105.jpg';
-import fbTrophyCert from '../assets/images/fb_trophy_cert_1790880984674.jpg';
-import fbMinisterHonor from '../assets/images/fb_minister_honor_1790881017763.jpg';
-import fbViennaRobocup from '../assets/images/fb_vienna_robocup_1790881002427.jpg';
-import fbKidsRobotLab from '../assets/images/fb_kids_robot_lab_1790880609885.jpg';
-import fbGirlsStem from '../assets/images/fb_girls_stem_1790880621451.jpg';
-import fbHoodieCrew from '../assets/images/fb_hoodie_crew_1790880647054.jpg';
-import fbTeensAiLab from '../assets/images/fb_teens_ai_lab_1790880634528.jpg';
-import duoJuniorMascot from '../assets/images/duo_junior_mascot_1790795302958.jpg';
-import duoRobotTrophy from '../assets/images/duo_robot_trophy_1790795316867.jpg';
-import heroRoboticsClub from '../assets/images/hero_robotics_club_1790790599599.jpg';
-import codingStemWorkshop from '../assets/images/coding_stem_workshop_1790790611938.jpg';
-import discoveryClubHoodie from '../assets/images/discovery_club_hoodie_1790790624273.jpg';
-import realFbLogoCover from '../assets/images/real_fb_logo_cover.jpg';
+// Photos live in /public/photos so their URLs are stable and can be stored in the database
+const eurobotSpainChampions = '/photos/eurobot_spain_champions.jpg';
+const eurobotSpainTrophyCert = '/photos/eurobot_spain_trophy_cert.jpg';
+const eurobotSpainStage = '/photos/eurobot_spain_stage.jpg';
+const ministryHonorCeremony = '/photos/ministry_honor_ceremony.jpeg';
+const robocupViennaMarxHalle = '/photos/robocup_vienna_marx_halle.jpg';
+const robocupJuniorEgypt = '/photos/robocup_junior_egypt.jpg';
+const robocupEgyptTeam = '/photos/robocup_egypt_team.jpg';
+const odaRobots2ndPrize = '/photos/oda_robots_2nd_prize.jpg';
+const eurobotJuniorTunisiaQualif = '/photos/eurobot_junior_tunisia_qualif.jpg';
+const internationalFriendsThailand = '/photos/international_friends_thailand.jpg';
+const officialTrophyReception = '/photos/official_trophy_reception.jpg';
+const airportDepartureTunis = '/photos/airport_departure_tunis.jpg';
+const airportDeparturePalestine = '/photos/airport_departure_palestine.jpg';
+const istanbulAirportEuropeanChamp = '/photos/istanbul_airport_european_champ.jpg';
+const nationsFlags = '/photos/nations_flags.jpg';
+const clubLogo = '/photos/logo.png';
 
 export const CLUB_PHOTOS = {
-  realFbLogo: realFbLogoCover,
-  fbEurobotChamps,
-  fbTrophyCert,
-  fbMinisterHonor,
-  fbViennaRobocup,
-  fbKidsRobotLab,
-  fbGirlsStem,
-  fbHoodieCrew,
-  fbTeensAiLab,
-  duoJuniorMascot,
-  duoRobotTrophy,
-  heroRoboticsClub,
-  codingStemWorkshop,
-  discoveryClubHoodie
+  eurobotSpainChampions,
+  eurobotSpainTrophyCert,
+  eurobotSpainStage,
+  ministryHonorCeremony,
+  robocupViennaMarxHalle,
+  robocupJuniorEgypt,
+  robocupEgyptTeam,
+  odaRobots2ndPrize,
+  eurobotJuniorTunisiaQualif,
+  internationalFriendsThailand,
+  officialTrophyReception,
+  airportDepartureTunis,
+  airportDeparturePalestine,
+  istanbulAirportEuropeanChamp,
+  nationsFlags,
+  // Official club logo, used in header/footer/login cards
+  clubLogo,
+  clubAvatar: clubLogo,
+  // Team in club colours, used for the hoodie / merchandise sections
+  teamInClubColors: odaRobots2ndPrize
 };
 
 export const INITIAL_PROGRAMS: Program[] = [
@@ -134,7 +143,7 @@ export const INITIAL_GROUPS: Group[] = [
     id: 'grp-rob-sat-am',
     name: 'Robotics Juniors - Alpha',
     programId: 'prog-robotics-starter',
-    trainerId: 'tr-2',
+    trainerIds: ['tr-2'],
     dayOfWeek: 'Saturday',
     timeSlot: '09:00 - 11:00',
     room: 'Lab A - Discovery Arena',
@@ -144,7 +153,7 @@ export const INITIAL_GROUPS: Group[] = [
     id: 'grp-ard-sat-pm',
     name: 'Makers Electronics - Beta',
     programId: 'prog-arduino-makers',
-    trainerId: 'tr-1',
+    trainerIds: ['tr-1'],
     dayOfWeek: 'Saturday',
     timeSlot: '14:00 - 16:30',
     room: 'Lab B - Circuitry Workshop',
@@ -154,7 +163,7 @@ export const INITIAL_GROUPS: Group[] = [
     id: 'grp-ai-sun-am',
     name: 'AI & Python Explorers',
     programId: 'prog-ai-python',
-    trainerId: 'tr-3',
+    trainerIds: ['tr-3'],
     dayOfWeek: 'Sunday',
     timeSlot: '10:00 - 12:30',
     room: 'Lab C - Computing Suite',
@@ -164,7 +173,7 @@ export const INITIAL_GROUPS: Group[] = [
     id: 'grp-comp-wed-pm',
     name: 'National Championship Team',
     programId: 'prog-competitive-robotics',
-    trainerId: 'tr-1',
+    trainerIds: ['tr-1'],
     dayOfWeek: 'Wednesday',
     timeSlot: '16:30 - 19:30',
     room: 'Lab A - Competition Mat Area',
@@ -183,7 +192,7 @@ export const INITIAL_STUDENTS: Student[] = [
     programId: 'prog-robotics-starter',
     status: 'active',
     registeredAt: '2026-09-01',
-    groupId: 'grp-rob-sat-am',
+    groupIds: ['grp-rob-sat-am'],
     standardMonthlyPrice: 85,
     paymentStatus: 'paid',
     notes: 'Very curious with gears. Works well in pairs.'
@@ -198,7 +207,7 @@ export const INITIAL_STUDENTS: Student[] = [
     programId: 'prog-robotics-starter',
     status: 'active',
     registeredAt: '2026-09-02',
-    groupId: 'grp-rob-sat-am',
+    groupIds: ['grp-rob-sat-am'],
     standardMonthlyPrice: 85,
     customMonthlyPrice: 75, // sibling discount override
     paymentStatus: 'paid',
@@ -214,7 +223,7 @@ export const INITIAL_STUDENTS: Student[] = [
     programId: 'prog-arduino-makers',
     status: 'active',
     registeredAt: '2026-09-05',
-    groupId: 'grp-ard-sat-pm',
+    groupIds: ['grp-ard-sat-pm'],
     standardMonthlyPrice: 95,
     paymentStatus: 'paid',
     notes: 'Loves building custom sensor circuits.'
@@ -229,7 +238,7 @@ export const INITIAL_STUDENTS: Student[] = [
     programId: 'prog-arduino-makers',
     status: 'active',
     registeredAt: '2026-09-06',
-    groupId: 'grp-ard-sat-pm',
+    groupIds: ['grp-ard-sat-pm'],
     standardMonthlyPrice: 95,
     paymentStatus: 'pending',
     notes: 'Pending payment validation for October.'
@@ -244,7 +253,7 @@ export const INITIAL_STUDENTS: Student[] = [
     programId: 'prog-ai-python',
     status: 'active',
     registeredAt: '2026-09-08',
-    groupId: 'grp-ai-sun-am',
+    groupIds: ['grp-ai-sun-am'],
     standardMonthlyPrice: 110,
     paymentStatus: 'paid',
     notes: 'High aptitude for logic and Python loops.'
@@ -259,7 +268,7 @@ export const INITIAL_STUDENTS: Student[] = [
     programId: 'prog-competitive-robotics',
     status: 'active',
     registeredAt: '2026-09-04',
-    groupId: 'grp-comp-wed-pm',
+    groupIds: ['grp-comp-wed-pm'],
     standardMonthlyPrice: 125,
     customMonthlyPrice: 100, // merit scholarship
     paymentStatus: 'scholarship',
@@ -275,6 +284,7 @@ export const INITIAL_STUDENTS: Student[] = [
     parentEmail: 'kmar.cherif@gmail.com',
     programId: 'prog-robotics-starter',
     status: 'waitlist',
+    groupIds: [],
     registeredAt: '2026-09-26',
     standardMonthlyPrice: 85,
     paymentStatus: 'pending',
@@ -289,6 +299,7 @@ export const INITIAL_STUDENTS: Student[] = [
     parentEmail: 'bilel.ayari@gmail.com',
     programId: 'prog-arduino-makers',
     status: 'waitlist',
+    groupIds: [],
     registeredAt: '2026-09-28',
     standardMonthlyPrice: 95,
     paymentStatus: 'pending',
@@ -303,6 +314,7 @@ export const INITIAL_STUDENTS: Student[] = [
     parentEmail: 'monia.ch@gmail.com',
     programId: 'prog-ai-python',
     status: 'accepted',
+    groupIds: [],
     registeredAt: '2026-09-27',
     standardMonthlyPrice: 110,
     paymentStatus: 'pending',
@@ -385,13 +397,13 @@ export const INITIAL_SESSIONS: SessionRecord[] = [
       'std-101': {
         studentId: 'std-101',
         status: 'present',
-        rating: 5,
+        rating: 18,
         pedagogicalRemark: 'Outstanding focus on calibration of optical sensor. Completed bonus challenge.'
       },
       'std-102': {
         studentId: 'std-102',
         status: 'present',
-        rating: 4,
+        rating: 15,
         pedagogicalRemark: 'Great curiosity. Understood motor speed differential turns quickly.'
       }
     }
@@ -409,13 +421,13 @@ export const INITIAL_SESSIONS: SessionRecord[] = [
       'std-103': {
         studentId: 'std-103',
         status: 'present',
-        rating: 5,
+        rating: 18,
         pedagogicalRemark: 'Built a 2-axis robotic arm claw. Calibrated zero angle accurately.'
       },
       'std-104': {
         studentId: 'std-104',
         status: 'late',
-        rating: 4,
+        rating: 15,
         pedagogicalRemark: 'Arrived 15m late due to traffic, quickly caught up with wiring diagram.'
       }
     }
@@ -492,7 +504,7 @@ export const FACEBOOK_POSTS: FacebookPost[] = [
     id: 'fb-01',
     caption: '🏆 HISTORIQUE ! Notre équipe "Discovery 2" remporte la 1ère PLACE MONDIALE à la compétition internationale Eurobot Junior 2026 en Espagne ! 🇹🇳 Félicitations à nos jeunes génies tunisiens qui ont conçu, programmé et piloté un rover 100% autonome. La relève technologique est assurée à Manouba !',
     date: 'Hier à 18:30',
-    imageUrl: fbEurobotChamps,
+    imageUrl: eurobotSpainChampions,
     likes: 542,
     comments: 118,
     tag: '🏆 Eurobot Champions',
@@ -502,7 +514,7 @@ export const FACEBOOK_POSTS: FacebookPost[] = [
     id: 'fb-02',
     caption: '📜 Trophée Don Quichotte & Diplôme Officiel : "EUROBOT SPAIN JUNIOR INT. FINALS - FIRST PLACE - DISCOVERY 2" ! Remis à l’Université d’Alcalá de Henares en présence du doyen de l’École Polytechnique Bernardo Alarcos et des sponsors technologiques maxon, JLCPCB et 2ingenia.',
     date: 'Il y a 2 jours',
-    imageUrl: fbTrophyCert,
+    imageUrl: eurobotSpainTrophyCert,
     likes: 498,
     comments: 73,
     tag: '🏆 Eurobot Champions',
@@ -512,7 +524,7 @@ export const FACEBOOK_POSTS: FacebookPost[] = [
     id: 'fb-03',
     caption: '🎖️ Cérémonie d’Honneur Solennelle : L’équipe de Discovery Club Junior reçue et félicitée sous les armoiries nationales tunisiennes par les hauts responsables de la Jeunesse et des Sports ! Fiers de porter haut les couleurs de la Tunisie.',
     date: 'Il y a 3 jours',
-    imageUrl: fbMinisterHonor,
+    imageUrl: ministryHonorCeremony,
     likes: 624,
     comments: 142,
     tag: '🇹🇳 Honneur National',
@@ -522,7 +534,7 @@ export const FACEBOOK_POSTS: FacebookPost[] = [
     id: 'fb-04',
     caption: '🇦🇹 RoboCup Junior European Championship 2026 à la Marx Halle de Vienne, Autriche ! La délégation de Manouba sur le tapis rouge avec le drapeau national et la chéchia tunisienne parmi plus de 20 pays participants.',
     date: 'Il y a 4 jours',
-    imageUrl: fbViennaRobocup,
+    imageUrl: robocupViennaMarxHalle,
     likes: 445,
     comments: 67,
     tag: '🌍 Tournoi International',
@@ -530,74 +542,86 @@ export const FACEBOOK_POSTS: FacebookPost[] = [
   },
   {
     id: 'fb-05',
-    caption: '🤖 Samedi après-midi au lab de Manouba : Les petits génies du club Junior Explorer (7-10 ans) construisent et programment leurs premiers rovers mécaniques ! Manipulation des engrenages, moteurs pas à pas et capteurs ultrasons.',
+    caption: '🇪🇬 RoboCup Junior Egypt : Toute la délégation Discovery Club Junior réunie devant l’entrée officielle de la compétition ! Une semaine de défis, de rencontres et de robots autonomes.',
     date: 'Il y a 5 jours',
-    imageUrl: fbKidsRobotLab,
+    imageUrl: robocupJuniorEgypt,
     likes: 384,
     comments: 46,
-    tag: '🛠️ Ateliers Manouba',
+    tag: '🌍 Tournoi International',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   },
   {
     id: 'fb-06',
-    caption: '⚡ Girls in STEM ! Nos jeunes ingénieures ont brillamment relevé le défi de navigation autonome avec détection d’obstacles. La robotique, le code et l’électronique sont pour toutes et tous chez Discovery Club Junior ! 🚀💡',
+    caption: '🥈 2ème PRIX au concours ODA Robots à Carthage ! Explosion de joie pour nos membres en sweats rouges. Bravo à toute l’équipe pour ce magnifique résultat !',
     date: 'Il y a 1 semaine',
-    imageUrl: fbGirlsStem,
+    imageUrl: odaRobots2ndPrize,
     likes: 412,
     comments: 53,
-    tag: '👧 Girls in Tech',
+    tag: '🏆 Podium National',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   },
   {
     id: 'fb-07',
-    caption: '👕 C’est le jour de distribution des Capuches officielles "Discovery Junior" ! Chaque membre arbore fièrement son sweat bordeaux/marine brodé à son prénom et numéro. Prêts pour les tournois de robotique !',
+    caption: '🤖 Qualifications nationales Eurobot Junior Tunisie organisées par l’ATR : nos équipes, les arbitres et les organisateurs réunis autour de la table de jeu. Merci à tous pour cette belle journée !',
     date: 'Il y a 1 semaine',
-    imageUrl: fbHoodieCrew,
+    imageUrl: eurobotJuniorTunisiaQualif,
     likes: 467,
     comments: 82,
-    tag: '👕 Les Capuches',
+    tag: '🇹🇳 Qualifications Nationales',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   },
   {
     id: 'fb-08',
-    caption: '💻 Cohorte Ados (12-16 ans) : Algorithmes de vision par ordinateur avec OpenCV et ESP32 ! Suivi de ligne à haute vitesse et traitement d’images en temps réel pour le circuit de compétition.',
+    caption: '✈️ Départ vers le Championnat d’Europe RoboCup Junior ! Escale à l’aéroport d’Istanbul avec la banderole Discovery Club Junior et le drapeau tunisien. Allez les jeunes !',
     date: 'Il y a 2 semaines',
-    imageUrl: fbTeensAiLab,
+    imageUrl: istanbulAirportEuropeanChamp,
     likes: 298,
     comments: 34,
-    tag: '🧠 IA & Vision',
+    tag: '✈️ En Route',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-09',
+    caption: '🤝 Amitiés internationales : nos membres posent avec l’équipe de Thaïlande. La robotique, c’est aussi des rencontres avec des jeunes du monde entier !',
+    date: 'Il y a 2 semaines',
+    imageUrl: internationalFriendsThailand,
+    likes: 276,
+    comments: 29,
+    tag: '🌍 Tournoi International',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-10',
+    caption: '🏅 Réception officielle : l’équipe remet le trophée de la compétition aux responsables. Fiers de représenter la Tunisie à l’international !',
+    date: 'Il y a 3 semaines',
+    imageUrl: officialTrophyReception,
+    likes: 351,
+    comments: 41,
+    tag: '🇹🇳 Honneur National',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-11',
+    caption: '🎉 Eurobot Spain Junior : sur scène pour la remise des prix à l’Université d’Alcalá, drapeau tunisien en main !',
+    date: 'Il y a 3 semaines',
+    imageUrl: eurobotSpainStage,
+    likes: 520,
+    comments: 77,
+    tag: '🏆 Eurobot Champions',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-12',
+    caption: '🌐 Tous les drapeaux réunis : Slovaquie, Tunisie, France, Italie, Égypte… nos jeunes partagent la passion de la robotique avec les délégations du monde entier.',
+    date: 'Il y a 1 mois',
+    imageUrl: nationsFlags,
+    likes: 233,
+    comments: 22,
+    tag: '🌍 Tournoi International',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   }
 ];
 
-export const PRESET_ACCOUNTS: AppUser[] = [
-  {
-    uid: 'usr-admin-01',
-    email: 'faridadwani2000@gmail.com',
-    displayName: 'Farid Adwani (Club Director)',
-    role: 'admin',
-    roles: ['admin', 'trainer', 'parent', 'visitor'],
-    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-  },
-  {
-    uid: 'usr-trainer-01',
-    email: 'k.bensalem@discoveryclubjunior.org',
-    displayName: 'Karim Ben Salem (Lead Trainer)',
-    role: 'trainer',
-    roles: ['trainer', 'visitor'],
-    trainerId: 'tr-1',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
-  },
-  {
-    uid: 'usr-parent-01',
-    email: 'sonia.khelifi@gmail.com',
-    displayName: 'Sonia Khelifi (Parent)',
-    role: 'parent',
-    roles: ['parent', 'visitor'],
-    studentId: 'std-101',
-    photoURL: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-  }
-];
 
 
 export const CLUB_STATS = {

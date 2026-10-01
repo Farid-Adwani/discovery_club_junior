@@ -13,6 +13,7 @@
         "roles": { "type": "array" },
         "trainerId": { "type": "string" },
         "studentId": { "type": "string" },
+        "studentIds": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string" }
       },
       "required": ["uid", "email", "role"]

@@ -1,12 +1,8 @@
 {
-  "projectId": "formal-dynamo-0kx2q",
-  "appId": "1:897611539033:web:e6fef8d35303b80c960748",
-  "apiKey": "AIzaSyBJcFkLmT_7IAnIMfnfAzcUB8_W0cZymns",
-  "authDomain": "formal-dynamo-0kx2q.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-discoveryclubjun-8e062812-a768-41a8-aeaf-ea1d43f8dbbd",
-  "storageBucket": "formal-dynamo-0kx2q.firebasestorage.app",
-  "messagingSenderId": "897611539033",
-  "measurementId": "",
-  "oAuthClientId": "897611539033-kt8m054kgbck3sl2q6fq46gupe282af2.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "discovery-club-junior",
+  "appId": "1:900133143887:web:5a80427412039b3ce1b13a",
+  "apiKey": "AIzaSyB94JsjMdpu8TNfKrZWoYgfWaDAskXMKLI",
+  "authDomain": "discovery-club-junior.firebaseapp.com",
+  "storageBucket": "discovery-club-junior.firebasestorage.app",
+  "messagingSenderId": "900133143887"
 }

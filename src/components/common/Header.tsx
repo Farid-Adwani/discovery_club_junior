@@ -46,9 +46,9 @@ export const Header: React.FC = () => {
   };
 
   const roleStyles: Record<UserRole, { badge: string; text: string; color: string }> = {
-    admin: { badge: 'bg-amber-100 text-amber-800 border-amber-300', text: 'Admin Hero', color: '#ffc800' },
-    trainer: { badge: 'bg-sky-100 text-sky-800 border-sky-300', text: 'Trainer Coach', color: '#1cb0f6' },
-    parent: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', text: 'Parent Guide', color: '#58cc02' },
+    admin: { badge: 'bg-amber-100 text-amber-800 border-amber-300', text: 'Admin Hero', color: '#c11e3d' },
+    trainer: { badge: 'bg-sky-100 text-sky-800 border-sky-300', text: 'Trainer Coach', color: '#191919' },
+    parent: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', text: 'Parent Guide', color: '#6a0d1f' },
     visitor: { badge: 'bg-slate-100 text-slate-700 border-slate-300', text: 'Explorer', color: '#94a3b8' }
   };
 
@@ -68,9 +68,9 @@ export const Header: React.FC = () => {
               className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm shrink-0 bg-sky-50 flex items-center justify-center"
             >
               <img
-                src={CLUB_PHOTOS.realFbLogo}
-                alt="Discovery Club Junior Official Logo"
-                className="w-full h-full object-cover"
+                src={CLUB_PHOTOS.clubAvatar}
+                alt="Discovery Club Junior logo"
+                className="bg-white w-full h-full object-cover"
               />
             </motion.div>
 
@@ -81,7 +81,7 @@ export const Header: React.FC = () => {
                   STEM
                 </span>
               </span>
-              <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500">
+              <div className="hidden sm:flex items-center gap-2 text-[11px] font-bold text-slate-500">
                 <span>Manouba, Tunisia</span>
                 {isFirebaseConnected && (
                   <span className="flex items-center gap-1 text-emerald-700 font-bold text-[10px] bg-emerald-100 border border-emerald-300 px-2 py-0.2 rounded-full">
@@ -132,17 +132,6 @@ export const Header: React.FC = () => {
             <span>Community</span>
           </button>
 
-          <button
-            onClick={() => navigateTo('waitlist')}
-            className={`px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
-              currentPage === 'waitlist'
-                ? 'bg-amber-100 text-amber-800 font-black'
-                : 'hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Zap className="w-4 h-4 text-amber-500" />
-            <span>Waitlist</span>
-          </button>
         </nav>
 
         {/* Zone 3: Authentication & Authorized Spaces */}
@@ -201,7 +190,7 @@ export const Header: React.FC = () => {
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-2xl bg-white border-2 border-slate-200 border-b-4 border-b-slate-300 hover:border-slate-300 transition-all cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-400 to-emerald-400 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-sky-900 text-white flex items-center justify-center font-black text-xs shadow-sm">
                     {currentUser.displayName.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="text-left hidden md:block">

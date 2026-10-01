@@ -33,12 +33,12 @@ export const TrainerPortal: React.FC = () => {
   const currentTrainer = trainers.find((t) => t.id === activeTrainerId) || trainers[0];
 
   // Filter groups assigned to this trainer
-  const trainerGroups = groups.filter((g) => g.trainerId === currentTrainer.id);
+  const trainerGroups = groups.filter((g) => g.trainerIds.includes(currentTrainer.id));
   const [selectedGroupId, setSelectedGroupId] = useState(trainerGroups[0]?.id || groups[0]?.id || '');
 
   const activeGroup = groups.find((g) => g.id === selectedGroupId) || groups[0];
   const activeProgram = programs.find((p) => p.id === activeGroup?.programId);
-  const groupStudents = students.filter((s) => s.groupId === activeGroup?.id);
+  const groupStudents = students.filter((s) => !!activeGroup && s.groupIds.includes(activeGroup.id));
 
   // Form states for attendance & evaluation
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -49,19 +49,11 @@ export const TrainerPortal: React.FC = () => {
   const [validateSyllabus, setValidateSyllabus] = useState(true);
   const [trainerGlobalNotes, setTrainerGlobalNotes] = useState('');
 
-  // Per-student attendance and rating state
-  const [studentRecords, setStudentRecords] = useState<Record<string, StudentAttendanceRecord>>(() => {
-    const initial: Record<string, StudentAttendanceRecord> = {};
-    groupStudents.forEach((st) => {
-      initial[st.id] = {
-        studentId: st.id,
-        status: 'present',
-        rating: 5,
-        remarks: 'Great problem solving with ultrasonic sensors today!'
-      };
-    });
-    return initial;
-  });
+  // Per-student attendance and mark (/20). Only edited students are stored here;
+  // everyone else in the group uses the default (present, not rated yet).
+  const [studentRecords, setStudentRecords] = useState<Record<string, StudentAttendanceRecord>>({});
+  const recordFor = (studentId: string): StudentAttendanceRecord =>
+    studentRecords[studentId] || { studentId, status: 'present', remarks: '' };
 
   // Material request state
   const [itemsNeeded, setItemsNeeded] = useState('');
@@ -69,40 +61,26 @@ export const TrainerPortal: React.FC = () => {
   const [urgency, setUrgency] = useState<'low' | 'medium' | 'urgent'>('medium');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
 
-  const handleStatusChange = (studentId: string, status: StudentAttendanceRecord['status']) => {
+  const updateRecord = (studentId: string, patch: Partial<StudentAttendanceRecord>) => {
     setStudentRecords((prev) => ({
       ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        studentId,
-        status,
-        rating: prev[studentId]?.rating || 5
-      }
+      [studentId]: { ...(prev[studentId] || { studentId, status: 'present', remarks: '' }), ...patch }
     }));
   };
 
-  const handleRatingChange = (studentId: string, rating: number) => {
-    setStudentRecords((prev) => ({
-      ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        studentId,
-        status: prev[studentId]?.status || 'present',
-        rating
-      }
-    }));
+  const handleStatusChange = (studentId: string, status: StudentAttendanceRecord['status']) => {
+    // An absent child is not rated
+    updateRecord(studentId, status === 'absent' ? { status, rating: undefined } : { status });
+  };
+
+  const handleRatingChange = (studentId: string, value: string) => {
+    if (value === '') return updateRecord(studentId, { rating: undefined });
+    const mark = Math.min(20, Math.max(0, Number(value)));
+    if (Number.isFinite(mark)) updateRecord(studentId, { rating: mark });
   };
 
   const handleRemarksChange = (studentId: string, remarks: string) => {
-    setStudentRecords((prev) => ({
-      ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        studentId,
-        status: prev[studentId]?.status || 'present',
-        remarks
-      }
-    }));
+    updateRecord(studentId, { remarks });
   };
 
   const handleSaveAttendance = async (e: React.FormEvent) => {
@@ -114,7 +92,8 @@ export const TrainerPortal: React.FC = () => {
       sessionDate,
       weekNumber,
       topicTaught,
-      studentRecords,
+      // Send every child in the group, not only the ones that were edited
+      Object.fromEntries(groupStudents.map((st) => [st.id, recordFor(st.id)])),
       validateSyllabus,
       trainerGlobalNotes
     );
@@ -192,7 +171,7 @@ export const TrainerPortal: React.FC = () => {
                 <span className="text-xl">📋</span>
                 <div>
                   <h3 className="text-base font-black text-slate-800">
-                    {activeGroup?.name || 'Cohort'} Session Attendance
+                    {activeGroup?.name || 'Class'} Session Attendance
                   </h3>
                   <div className="text-xs text-slate-500 font-medium">
                     {groupStudents.length} students enrolled in this lab
@@ -232,21 +211,17 @@ export const TrainerPortal: React.FC = () => {
             {/* Student List with Easy 1-Tap Buttons */}
             <div className="space-y-3 pt-2">
               <div className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                Student Check-In & Star Ratings
+                Student Check-In & Marks (/20)
               </div>
 
               {groupStudents.length === 0 ? (
                 <div className="p-6 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                  No students currently assigned to this cohort. Assign students in Admin!
+                  No students in this class yet. Add students from the Admin dashboard!
                 </div>
               ) : (
-                groupStudents.map((student) => {
-                  const record = studentRecords[student.id] || {
-                    studentId: student.id,
-                    status: 'present',
-                    rating: 5,
-                    remarks: ''
-                  };
+                <div className="scroll-panel scroll-fade max-h-[620px] space-y-3 pr-1 py-2">
+                {groupStudents.map((student) => {
+                  const record = recordFor(student.id);
 
                   return (
                     <div
@@ -293,23 +268,23 @@ export const TrainerPortal: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Star Rating & Remarks */}
+                      {/* Mark /20 & Remarks */}
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pt-1 border-t border-slate-200/80">
-                        <div className="sm:col-span-4 flex items-center gap-1 text-xs">
-                          <span className="font-bold text-slate-500 mr-1">Rating:</span>
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              key={star}
-                              type="button"
-                              onClick={() => handleRatingChange(student.id, star)}
-                              className="text-base cursor-pointer hover:scale-110 transition-transform"
-                            >
-                              <span className={star <= (record.rating || 5) ? 'text-amber-400' : 'text-slate-200'}>
-                                ★
-                              </span>
-                            </button>
-                          ))}
-                        </div>
+                        <label className="sm:col-span-4 flex items-center gap-2 text-xs">
+                          <span className="font-bold text-slate-500">Mark:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            value={record.rating ?? ''}
+                            disabled={record.status === 'absent'}
+                            onChange={(e) => handleRatingChange(student.id, e.target.value)}
+                            placeholder={record.status === 'absent' ? 'absent' : '—'}
+                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-800 text-center focus:outline-none focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
+                          />
+                          <span className="font-black text-slate-400">/ 20</span>
+                        </label>
 
                         <div className="sm:col-span-8">
                           <input
@@ -323,7 +298,8 @@ export const TrainerPortal: React.FC = () => {
                       </div>
                     </div>
                   );
-                })
+                })}
+                </div>
               )}
             </div>
 

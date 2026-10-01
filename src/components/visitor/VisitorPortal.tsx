@@ -36,22 +36,15 @@ import {
 import { CLUB_STATS, CLUB_ACHIEVEMENTS_TIMELINE, CLUB_PHOTOS } from '../../data/initialData';
 import { FacebookPost } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { INTRO_DELAY } from '../common/IntroReveal';
+import { CircuitBackground, CodeTyper, CountUp, Gear, LogoMechanism, Oscilloscope, Reveal, RobotArm } from './RoboticsArt';
 
-const MASCOT_MESSAGES = [
-  "Hi there! Tap me anytime for robotics tips! 🤖",
-  "Did you know our Eurobot rover has 4 ultrasonic sensors? 🚀",
-  "Every student gets their own microcontrollers & servo kit! 🛠️",
-  "We won 1st Place at Eurobot Junior 2026 in Spain! 🥇",
-  "No boring theory! Kids build working rovers from Day 1! ⭐",
-  "Manouba's friendliest tech family welcomes you! 🇹🇳"
-];
 
 export const VisitorPortal: React.FC = () => {
   const {
     programs,
     events,
     toggleEventRegistration,
-    setSelectedProgramForWaitlist,
     navigateTo,
     showToast,
     facebookPosts,
@@ -63,7 +56,6 @@ export const VisitorPortal: React.FC = () => {
 
   const [activeProgramTab, setActiveProgramTab] = useState(programs[0]?.id || 'prog-robotics-starter');
   const [ageFilter, setAgeFilter] = useState<'all' | '6-9' | '10-13' | '14-17'>('all');
-  const [mascotMessageIdx, setMascotMessageIdx] = useState(0);
 
   const [postFilter, setPostFilter] = useState<string>('all');
   const [lightboxPost, setLightboxPost] = useState<FacebookPost | null>(null);
@@ -113,10 +105,6 @@ export const VisitorPortal: React.FC = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const cycleMascotMessage = () => {
-    setMascotMessageIdx((prev) => (prev + 1) % MASCOT_MESSAGES.length);
-  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -185,559 +173,554 @@ export const VisitorPortal: React.FC = () => {
 
   const selectedProgram = programs.find((p) => p.id === activeProgramTab) || programs[0];
 
-  const handleEnrollClick = (progId: string) => {
-    setSelectedProgramForWaitlist(progId);
-    navigateTo('waitlist');
-  };
+  const isAdmin = !!currentUser?.roles.includes('admin');
+  const goRegister = () => navigateTo('register-parent');
+  const scrollToSection = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+
+  // Rotating word in the hero headline
+  const HERO_WORDS = ['robots', 'rovers', 'circuits', 'inventions'];
+  const [heroWordIdx, setHeroWordIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setHeroWordIdx((i) => (i + 1) % HERO_WORDS.length), 2200);
+    return () => clearInterval(t);
+  }, []);
+
+  // Photo conveyor belt: every club photo, linked to its post when there is one
+  const beltPhotos = [
+    { img: CLUB_PHOTOS.eurobotSpainChampions, title: 'Victoire Eurobot Junior', tag: '🏆 1ère Place' },
+    { img: CLUB_PHOTOS.eurobotSpainTrophyCert, title: 'Trophée Don Quichotte', tag: '📜 Alcalá de Henares' },
+    { img: CLUB_PHOTOS.robocupViennaMarxHalle, title: 'RoboCup Vienna', tag: '🇦🇹 Marx Halle' },
+    { img: CLUB_PHOTOS.ministryHonorCeremony, title: 'Honneur Ministère', tag: '🇹🇳 Réception Officielle' },
+    { img: CLUB_PHOTOS.robocupJuniorEgypt, title: 'RoboCup Egypt', tag: '🇪🇬 RoboCup Junior' },
+    { img: CLUB_PHOTOS.odaRobots2ndPrize, title: 'ODA Robots', tag: '🥈 2ème Prix' },
+    { img: CLUB_PHOTOS.eurobotSpainStage, title: 'Remise des prix', tag: '🎉 Eurobot Spain' },
+    { img: CLUB_PHOTOS.eurobotJuniorTunisiaQualif, title: 'Qualifications Eurobot', tag: '🇹🇳 ATR · INSAT' },
+    { img: CLUB_PHOTOS.istanbulAirportEuropeanChamp, title: 'En route pour l’Europe', tag: '✈️ Istanbul' },
+    { img: CLUB_PHOTOS.robocupEgyptTeam, title: 'Équipe RoboCup', tag: '🤖 Égypte' },
+    { img: CLUB_PHOTOS.nationsFlags, title: 'Drapeaux du monde', tag: '🌍 International' },
+    { img: CLUB_PHOTOS.officialTrophyReception, title: 'Réception du trophée', tag: '🏅 Officiel' },
+    { img: CLUB_PHOTOS.internationalFriendsThailand, title: 'Amis de Thaïlande', tag: '🤝 Amitié' },
+    { img: CLUB_PHOTOS.airportDepartureTunis, title: 'Départ de Tunis', tag: '✈️ Tunis-Carthage' },
+    { img: CLUB_PHOTOS.airportDeparturePalestine, title: 'Toute la délégation', tag: '🇹🇳 Ensemble' }
+  ].map((p) => ({ ...p, post: facebookPosts.find((fp) => fp.imageUrl === p.img) }));
+
+  const stats = [
+    { value: CLUB_STATS.activeStudents, suffix: '+', label: 'Young builders' },
+    { value: CLUB_STATS.workshopsCompleted, suffix: '+', label: 'Workshops run' },
+    { value: CLUB_STATS.projectsBuilt, suffix: '+', label: 'Robots built' },
+    { value: CLUB_STATS.competitionsWon, suffix: '', label: 'Trophies won' }
+  ];
+
+  const steps = [
+    {
+      n: '01',
+      title: 'Build',
+      text: 'Gears, motors and chassis: kids assemble real mechanisms with their own hands.',
+      art: (
+        <div className="relative w-[190px] h-full mx-auto">
+          <Gear size={104} teeth={16} duration={16} color="#c11e3d" className="absolute left-[8px] top-[4px]" />
+          <Gear size={68} teeth={10} duration={10} reverse color="#191919" windows={4} className="absolute left-[100px] top-[6px]" />
+        </div>
+      )
+    },
+    {
+      n: '02',
+      title: 'Wire',
+      text: 'Breadboards, sensors and LEDs: they learn how electricity really flows.',
+      art: <Oscilloscope className="w-full h-full" />
+    },
+    {
+      n: '03',
+      title: 'Code',
+      text: 'Arduino, ESP32 and Python bring every robot to life, line by line.',
+      art: <CodeTyper className="w-full h-full" />
+    },
+    {
+      n: '04',
+      title: 'Compete',
+      text: 'From Manouba to Eurobot and RoboCup podiums across the world.',
+      art: (
+        <div className="shine w-full h-full rounded-xl bg-gradient-to-br from-sky-700 via-sky-900 to-[#191919] flex items-center justify-center">
+          <Trophy className="w-14 h-14 text-amber-300 drop-shadow-[0_0_14px_rgba(252,211,77,0.6)]" />
+        </div>
+      )
+    }
+  ];
 
   return (
-    <div className="space-y-20 pb-24 relative overflow-x-hidden">
-      {/* 1. HERO SECTION WITH GLOW & ANIMATION */}
-      <section className="relative pt-8 md:pt-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto section-glow-container">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          {/* Left Column: Headlines & 3D CTAs */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-24 pb-24 relative overflow-x-hidden">
+      {/* 1. HERO: circuit board, gear train and the club logo */}
+      <section className="relative overflow-hidden bg-[#141414] text-white">
+        <CircuitBackground className="absolute inset-0 w-full h-full" />
+        <div className="absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-sky-600/25 blur-[120px] pointer-events-none" />
+        <div className="absolute -bottom-48 right-0 w-[560px] h-[560px] rounded-full bg-sky-900/40 blur-[120px] pointer-events-none" />
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10 md:pt-20">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div className="lg:col-span-7 space-y-7">
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -12 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border-2 border-emerald-300 text-emerald-800 text-xs font-black tracking-wide shadow-sm hover:scale-105 transition-transform cursor-pointer"
-                onClick={cycleMascotMessage}
+                transition={{ delay: INTRO_DELAY }}
+                className="flex flex-wrap items-center gap-2"
               >
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>🏆 Eurobot Junior 2026 World Champions · Admissions Open</span>
-              </motion.div>
-
-              {/* Official Facebook Verified Page Badge */}
-              <a
-                href="https://www.facebook.com/DiscoveryClubJunior/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-black hover:bg-blue-100 transition-colors"
-              >
-                <img
-                  src={CLUB_PHOTOS.realFbLogo}
-                  alt="Discovery Club Junior Logo"
-                  className="w-4 h-4 rounded-full object-cover"
-                />
-                <span>@DiscoveryClubJunior · 4,200+ Fans</span>
-              </a>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.15]">
-              Where Kids Build <br className="hidden sm:inline" />
-              <span className="text-sky-500 drop-shadow-sm">Real Robots</span> &{' '}
-              <span className="text-emerald-500 drop-shadow-sm">Dream Big!</span>
-            </h1>
-
-            <p className="text-base sm:text-lg text-slate-600 font-medium leading-relaxed max-w-xl">
-              Discovery Club Junior is Tunisia’s friendliest hands-on robotics, coding, and maker academy in Manouba for children and teens ages 6 to 17. No scary tech jargon — just pure hands-on fun! 🤖✨
-            </p>
-
-            {/* 3D Action Buttons */}
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => {
-                  setSelectedProgramForWaitlist('prog-robotics-starter');
-                  navigateTo('waitlist');
-                }}
-                className="px-8 py-4 btn-duo-green text-sm font-black flex items-center gap-2.5 cursor-pointer shadow-lg"
-              >
-                <span>Join Priority Waitlist 🚀</span>
-                <ArrowRight className="w-4 h-4" />
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => navigateTo('register-parent')}
-                className="px-7 py-4 btn-duo-blue text-sm font-black flex items-center gap-2 cursor-pointer shadow-lg"
-              >
-                <HeartHandshake className="w-4 h-4" />
-                <span>Parent Portal Registration</span>
-              </motion.button>
-
-              <button
-                onClick={() => setIsUploadModalOpen(true)}
-                className="px-4 py-4 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer text-slate-700"
-              >
-                <Camera className="w-4 h-4 text-sky-500" />
-                <span>+ Upload Photo</span>
-              </button>
-            </div>
-
-            {/* Gamified Stat Badges with Dynamic Glowing Hover */}
-            <div className="pt-6 grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              <motion.div
-                whileHover={{ y: -6, scale: 1.04 }}
-                className="duo-card duo-card-glow-blue p-4 text-center space-y-1 bg-white"
-              >
-                <div className="text-2xl sm:text-3xl font-black text-sky-600 font-mono">
-                  {CLUB_STATS.activeStudents}+
-                </div>
-                <div className="text-xs font-black text-slate-500">Young Builders</div>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -6, scale: 1.04 }}
-                className="duo-card duo-card-glow-green p-4 text-center space-y-1 bg-white"
-              >
-                <div className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">
-                  {CLUB_STATS.workshopsCompleted}+
-                </div>
-                <div className="text-xs font-black text-slate-500">Workshops Run</div>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -6, scale: 1.04 }}
-                className="duo-card duo-card-glow-yellow p-4 text-center space-y-1 bg-white"
-              >
-                <div className="text-2xl sm:text-3xl font-black text-amber-500 font-mono">
-                  {CLUB_STATS.projectsBuilt}+
-                </div>
-                <div className="text-xs font-black text-slate-500">Robots Built</div>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -6, scale: 1.04 }}
-                className="duo-card duo-card-glow-purple p-4 text-center space-y-1 bg-white"
-              >
-                <div className="text-2xl sm:text-3xl font-black text-purple-600 font-mono">
-                  {CLUB_STATS.competitionsWon}
-                </div>
-                <div className="text-xs font-black text-slate-500">Trophies Won</div>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Right Column: Official Badge & Interactive Mascot */}
-          <div className="lg:col-span-5 relative">
-            <motion.div
-              whileHover={{ y: -4 }}
-              className="duo-card duo-card-glow-blue p-6 sm:p-8 bg-white text-center space-y-5 relative"
-            >
-              {/* Official Facebook Profile Picture Badge */}
-              <div className="flex items-center justify-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                <img
-                  src={CLUB_PHOTOS.realFbLogo}
-                  alt="Discovery Club Junior Official Profile Photo"
-                  className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-sm"
-                />
-                <div className="text-left">
-                  <div className="text-xs font-black text-slate-800 flex items-center gap-1">
-                    <span>Discovery Club Junior</span>
-                    <span className="text-sky-500">✓</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-bold">
-                    Club de Robotique pour Enfants · Manouba
-                  </div>
-                </div>
-              </div>
-
-              {/* Mascot Image with breathing hover animation */}
-              <div
-                onClick={cycleMascotMessage}
-                className="relative mx-auto w-40 h-40 sm:w-48 sm:h-48 cursor-pointer group"
-                title="Click me for robotics fun facts!"
-              >
-                <motion.img
-                  animate={{ y: [0, -8, 0], rotate: [0, 1, -1, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                  whileHover={{ scale: 1.08 }}
-                  src={CLUB_PHOTOS.duoJuniorMascot}
-                  alt="Junior the Robot Mascot"
-                  className="w-full h-full object-cover rounded-3xl border-4 border-sky-100 shadow-md group-hover:border-sky-300 transition-all"
-                />
-                <div className="absolute -bottom-2 -right-2 px-3 py-1.5 rounded-2xl bg-amber-400 text-amber-950 font-black text-xs shadow-md border-2 border-white flex items-center gap-1 group-hover:scale-110 transition-transform">
-                  <span>⭐ Level 1 Junior</span>
-                </div>
-              </div>
-
-              {/* Dynamic Speech Bubble that updates on click */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={mascotMessageIdx}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  onClick={cycleMascotMessage}
-                  className="duo-speech-bubble text-center space-y-1 cursor-pointer hover:border-sky-400 transition-colors"
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-black tracking-wide backdrop-blur">
+                  <span className="w-2 h-2 rounded-full bg-sky-500 led-blink" />
+                  🏆 Eurobot Junior 2026 · 1st place in Spain
+                </span>
+                <a
+                  href="https://www.facebook.com/DiscoveryClubJunior/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 transition-colors"
                 >
-                  <div className="text-xs font-black uppercase text-sky-600 flex items-center justify-center gap-1">
-                    <span>Junior Speaks</span>
-                    <span className="text-[10px] text-slate-400 font-bold">(tap to chat!)</span>
-                  </div>
-                  <p className="text-xs text-slate-700 font-bold leading-relaxed">
-                    "{MASCOT_MESSAGES[mascotMessageIdx]}"
-                  </p>
-                </motion.div>
-              </AnimatePresence>
+                  <img src={CLUB_PHOTOS.clubLogo} alt="" className="w-4 h-4 rounded-full bg-white object-contain" />
+                  @DiscoveryClubJunior · 4,200+ fans
+                </a>
+              </motion.div>
 
-              <div className="pt-2 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
-                <span>📍 Manouba Campus, Tunisia</span>
-                <span>·</span>
-                <span className="text-emerald-600 font-black">Ages 6 - 17</span>
+              <motion.h1
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: INTRO_DELAY + 0.1 }}
+                className="text-4xl sm:text-5xl lg:text-[4.2rem] font-black tracking-tight leading-[1.05]"
+              >
+                Where kids build <br className="hidden sm:inline" />
+                real{' '}
+                <span className="relative inline-flex overflow-hidden align-bottom text-sky-500 pb-1">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={HERO_WORDS[heroWordIdx]}
+                      initial={{ y: '100%', opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: '-100%', opacity: 0 }}
+                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      className="inline-block"
+                    >
+                      {HERO_WORDS[heroWordIdx]}
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+                <br />
+                <span className="text-white/90">and dream big.</span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: INTRO_DELAY + 0.25 }}
+                className="text-base sm:text-lg text-white/65 font-medium leading-relaxed max-w-xl"
+              >
+                Discovery Club Junior is Manouba’s hands-on robotics, electronics and coding club. Kids and teens design,
+                wire and program real robots, and take them to international competitions.
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: INTRO_DELAY + 0.4 }}
+                className="flex flex-wrap items-center gap-4"
+              >
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={goRegister}
+                  className="px-8 py-4 btn-duo-green text-sm font-black flex items-center gap-2.5 cursor-pointer shadow-[0_10px_40px_-8px_rgba(193,30,61,0.7)]"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Register your child</span>
+                  <ArrowRight className="w-4 h-4" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => scrollToSection('programs')}
+                  className="px-7 py-4 rounded-2xl border-2 border-white/20 text-sm font-black text-white hover:bg-white/10 hover:border-white/40 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <Cpu className="w-4 h-4 text-sky-400" />
+                  <span>Explore programs</span>
+                </motion.button>
+              </motion.div>
+
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-white/50">
+                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-sky-500" /> Manouba, Tunisia</span>
+                <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-sky-500" /> Real hardware from day one</span>
+                <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-sky-500" /> International podiums</span>
               </div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85, rotate: -8 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              transition={{ duration: 1, delay: INTRO_DELAY + 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="lg:col-span-5 py-6"
+            >
+              <LogoMechanism logoSrc={CLUB_PHOTOS.clubLogo} />
             </motion.div>
           </div>
+
+          {/* live counters */}
+          <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            {stats.map((s, i) => (
+              <Reveal key={s.label} delay={INTRO_DELAY + 0.5 + i * 0.08} y={20}>
+                <div className="rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur px-5 py-4 hover:border-sky-500/60 hover:bg-white/[0.07] transition-colors">
+                  <div className="text-3xl sm:text-4xl font-black font-mono text-white">
+                    <CountUp to={s.value} suffix={s.suffix} delay={INTRO_DELAY + 0.5} />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-white/45 mt-1">{s.label}</div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </div>
+        {/* angled bottom edge */}
+        <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="relative block w-full h-10 sm:h-14 text-[#f8fafc]" aria-hidden="true">
+          <path d="M0 60 L0 30 L1440 0 L1440 60 Z" fill="currentColor" />
+        </svg>
       </section>
 
-      {/* 2. AUTHENTIC FACEBOOK PHOTO HIGHLIGHTS STRIP */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="duo-card p-6 bg-white border-2 border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Camera className="w-5 h-5 text-sky-500" />
-              <h3 className="text-base font-black text-slate-800">
-                Moments en Direct : Compétitions & Ateliers Discovery Junior
-              </h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsUploadModalOpen(true)}
-                className="text-xs font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full border border-emerald-300 flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Ajouter Vos Photos</span>
-              </button>
-              <span className="text-xs font-black text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
-                📸 Scraped from Facebook
-              </span>
-            </div>
+      {/* 2. PHOTO CONVEYOR BELT */}
+      <section className="-mt-16 space-y-5">
+        <Reveal className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">Moments en direct</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">From the workshop to the world stage</h2>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-            {[
-              {
-                img: CLUB_PHOTOS.fbEurobotChamps,
-                title: 'Victoire Eurobot Junior',
-                tag: '🏆 1ère Place Mondiale',
-                post: facebookPosts[0]
-              },
-              {
-                img: CLUB_PHOTOS.fbTrophyCert,
-                title: 'Trophée Don Quichotte',
-                tag: '📜 Alcalá de Henares',
-                post: facebookPosts[1]
-              },
-              {
-                img: CLUB_PHOTOS.fbMinisterHonor,
-                title: 'Honneur Ministère',
-                tag: '🇹🇳 Réception Officielle',
-                post: facebookPosts[2]
-              },
-              {
-                img: CLUB_PHOTOS.fbViennaRobocup,
-                title: 'RoboCup Vienna',
-                tag: '🇦🇹 Marx Halle Vienne',
-                post: facebookPosts[3]
-              },
-              {
-                img: CLUB_PHOTOS.fbKidsRobotLab,
-                title: 'Ateliers Enfants',
-                tag: '🛠️ Lab Manouba',
-                post: facebookPosts[4]
-              },
-              {
-                img: CLUB_PHOTOS.fbGirlsStem,
-                title: 'Girls in STEM',
-                tag: '👧 Code & Capteurs',
-                post: facebookPosts[5]
-              }
-            ].map((item, idx) => (
-              <motion.div
+          {isAdmin && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="px-4 py-2.5 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer self-start"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Ajouter une photo</span>
+            </button>
+          )}
+        </Reveal>
+        <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
+          <div className="marquee-track flex w-max gap-4 py-2">
+            {[...beltPhotos, ...beltPhotos].map((item, idx) => (
+              <button
                 key={idx}
-                whileHover={{ scale: 1.05, y: -4 }}
-                onClick={() => {
-                  if (item.post) setLightboxPost(item.post);
-                }}
-                className="group relative rounded-2xl overflow-hidden cursor-pointer border-2 border-slate-200 shadow-sm h-32"
+                type="button"
+                onClick={() => item.post && setLightboxPost(item.post)}
+                className="group relative w-64 sm:w-72 h-44 sm:h-48 shrink-0 rounded-2xl overflow-hidden border-2 border-white shadow-lg cursor-pointer"
               >
-                <img
-                  src={item.img}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-90 group-hover:opacity-100" />
-                <div className="absolute bottom-2 left-2 right-2 text-left text-white">
-                  <span className="text-[9px] font-black text-amber-300 block truncate">{item.tag}</span>
-                  <span className="text-[11px] font-black leading-tight block truncate">{item.title}</span>
+                <img src={item.img} alt={item.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#191919]/90 via-[#191919]/10 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3 text-left text-white">
+                  <span className="text-[10px] font-black text-amber-300 block truncate">{item.tag}</span>
+                  <span className="text-sm font-black leading-tight block truncate">{item.title}</span>
                 </div>
-              </motion.div>
+              </button>
             ))}
           </div>
         </div>
       </section>
 
-      {/* 3. DYNAMIC STEM OLYMPIAD COUNTDOWN BANNER */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          className="duo-card duo-card-glow-yellow p-6 sm:p-8 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-300 flex flex-col md:flex-row items-center justify-between gap-6"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-amber-400 text-amber-950 flex items-center justify-center text-3xl shadow-sm shrink-0">
-              🏆
-            </div>
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[11px] font-black uppercase mb-1">
-                <span>Next International Challenge</span>
-              </div>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-                Eurobot Junior 2026 Qualification Round
-              </h3>
-              <p className="text-xs text-slate-600 font-medium">
-                Our young engineers are building autonomous rovers for the international championship arena!
-              </p>
-            </div>
-          </div>
+      {/* 3. HOW IT WORKS: build, wire, code, compete */}
+      <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+        <Reveal className="text-center max-w-2xl mx-auto space-y-3">
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">How we learn</span>
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">From the first gear to the podium</h2>
+          <p className="text-sm text-slate-600 font-medium">
+            No passive screen time. Every session ends with something that moves, blinks or beeps.
+          </p>
+        </Reveal>
 
-          {/* Live Ticking Countdown */}
-          <div className="flex items-center gap-2 font-mono shrink-0">
-            <div className="p-3 bg-white rounded-2xl border-2 border-amber-200 border-b-4 border-b-amber-300 text-center min-w-[64px]">
-              <span className="text-xl sm:text-2xl font-black text-slate-800">{timeLeft.days}</span>
-              <span className="text-[10px] font-bold text-slate-400 block font-sans">DAYS</span>
-            </div>
-            <span className="text-xl font-black text-amber-400">:</span>
-            <div className="p-3 bg-white rounded-2xl border-2 border-amber-200 border-b-4 border-b-amber-300 text-center min-w-[64px]">
-              <span className="text-xl sm:text-2xl font-black text-slate-800">{timeLeft.hours}</span>
-              <span className="text-[10px] font-bold text-slate-400 block font-sans">HOURS</span>
-            </div>
-            <span className="text-xl font-black text-amber-400">:</span>
-            <div className="p-3 bg-white rounded-2xl border-2 border-amber-200 border-b-4 border-b-amber-300 text-center min-w-[64px]">
-              <span className="text-xl sm:text-2xl font-black text-slate-800">{timeLeft.minutes}</span>
-              <span className="text-[10px] font-bold text-slate-400 block font-sans">MINS</span>
-            </div>
-            <span className="text-xl font-black text-amber-400">:</span>
-            <div className="p-3 bg-white rounded-2xl border-2 border-amber-200 border-b-4 border-b-amber-300 text-center min-w-[64px]">
-              <span className="text-xl sm:text-2xl font-black text-emerald-600">{timeLeft.seconds}</span>
-              <span className="text-[10px] font-bold text-slate-400 block font-sans">SECS</span>
-            </div>
-          </div>
-        </motion.div>
+        <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* circuit trace connecting the steps */}
+          <svg className="hidden lg:block absolute left-[12%] right-[12%] top-[86px] h-4 w-[76%] pointer-events-none" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="2" x2="100" y2="2" stroke="#e2e8f0" strokeWidth="0.6" />
+            <line x1="0" y1="2" x2="100" y2="2" stroke="#c11e3d" strokeWidth="0.9" pathLength={100} className="pcb-signal" style={{ animationDuration: '3s' }} />
+          </svg>
+          {steps.map((step, i) => (
+            <Reveal key={step.n} delay={i * 0.12}>
+              <motion.div whileHover={{ y: -8 }} className="duo-card relative h-full p-5 bg-white space-y-4">
+                <div className="h-32 rounded-xl bg-slate-50 border border-slate-100 p-2 overflow-hidden">{step.art}</div>
+                <div className="flex items-center gap-3">
+                  <span className="w-10 h-10 rounded-xl bg-[#191919] text-white font-mono font-black text-sm flex items-center justify-center shadow-md">
+                    {step.n}
+                  </span>
+                  <h3 className="text-xl font-black text-slate-900">{step.title}</h3>
+                </div>
+                <p className="text-sm text-slate-600 font-medium leading-relaxed">{step.text}</p>
+              </motion.div>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
-      {/* 4. ABOUT US & MISSION ROADMAP */}
-      <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-5 space-y-5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-black uppercase">
-              <Zap className="w-3.5 h-3.5 text-sky-600" />
-              <span>Our Superpower Philosophy</span>
-            </div>
-
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
-              Learning Through Real Creation, Play & Teamwork
-            </h2>
-
-            <p className="text-sm text-slate-600 font-medium leading-relaxed">
-              At Discovery Club Junior, we reject passive screen scrolling. Every kid builds hands-on hardware from day one. Based in Manouba with partnerships across Cité des Sciences à Tunis, our club turns curious kids into confident makers.
-            </p>
-
-            <div className="space-y-3 pt-2">
-              <motion.div
-                whileHover={{ x: 6 }}
-                className="p-4 rounded-2xl bg-white border-2 border-slate-200 border-b-4 border-b-slate-200 hover:border-sky-300 flex items-start gap-3 transition-colors cursor-pointer"
-              >
-                <span className="text-2xl">🛠️</span>
-                <div>
-                  <h4 className="text-xs font-black text-slate-800">100% Real Hardware</h4>
-                  <p className="text-xs text-slate-500 font-medium">Arduino, ESP32, servos, infrared sensors, and 3D printing.</p>
+      {/* 4. ROBOT LAB: animated arm soldering a board */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <div className="relative overflow-hidden rounded-[2rem] bg-[#141414] text-white p-8 sm:p-12">
+            <CircuitBackground className="absolute inset-0 w-full h-full opacity-60" />
+            <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+              <div className="space-y-6">
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-400">Inside the lab</span>
+                <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+                  Real hardware, <span className="text-sky-500">real engineering</span>
+                </h2>
+                <p className="text-sm text-white/65 font-medium leading-relaxed">
+                  Our makers work with the same parts engineers use: microcontrollers, servo motors, sensors and 3D-printed
+                  mechanisms. Parents follow every step from their own account: attendance, trainer marks out of 20 and remarks.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {['Arduino', 'ESP32', 'Servo motors', 'Ultrasonic sensors', 'Infrared', '3D printing', 'C++', 'Python', 'Computer vision'].map((t, i) => (
+                    <motion.span
+                      key={t}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.05 }}
+                      className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-black font-mono text-white/80 hover:border-sky-500 hover:text-white transition-colors"
+                    >
+                      {t}
+                    </motion.span>
+                  ))}
                 </div>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ x: 6 }}
-                className="p-4 rounded-2xl bg-white border-2 border-slate-200 border-b-4 border-b-slate-200 hover:border-emerald-300 flex items-start gap-3 transition-colors cursor-pointer"
-              >
-                <span className="text-2xl">👨‍👩‍👧</span>
-                <div>
-                  <h4 className="text-xs font-black text-slate-800">Relaxing Parent Tracking</h4>
-                  <p className="text-xs text-slate-500 font-medium">Weekly attendance, teacher feedback, and milestone check-ins in your pocket.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <Bot className="w-5 h-5 text-sky-400 mb-2" />
+                    <h4 className="text-sm font-black">100% hands-on</h4>
+                    <p className="text-xs text-white/55 font-medium">Every kid gets their own kit and builds from day one.</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <HeartHandshake className="w-5 h-5 text-sky-400 mb-2" />
+                    <h4 className="text-sm font-black">Parents in the loop</h4>
+                    <p className="text-xs text-white/55 font-medium">Attendance, marks and remarks in the parent portal.</p>
+                  </div>
                 </div>
-              </motion.div>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-10 rounded-full bg-sky-600/20 blur-3xl" />
+                <RobotArm className="relative w-full max-w-md mx-auto" />
+              </div>
             </div>
           </div>
+        </Reveal>
+      </section>
 
-          {/* Timeline of Achievements with Glowing Cards */}
-          <div className="lg:col-span-7 duo-card duo-card-glow-yellow p-6 sm:p-8 bg-white space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                <span>🏆</span>
-                <span>Our Trophy Hall of Fame</span>
-              </h3>
-              <span className="text-xs font-bold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
-                International Podium
-              </span>
+      {/* 5. NEXT CHALLENGE COUNTDOWN */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <div className="duo-card p-6 sm:p-8 bg-white grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            <div className="lg:col-span-4">
+              <Oscilloscope className="w-full h-auto rounded-xl" />
             </div>
+            <div className="lg:col-span-4 space-y-1.5">
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">Next international challenge</span>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">Eurobot Junior 2026 qualification round</h3>
+              <p className="text-sm text-slate-600 font-medium">Our young engineers are building autonomous rovers for the championship arena.</p>
+            </div>
+            <div className="lg:col-span-4 flex items-center justify-center lg:justify-end gap-2 font-mono">
+              {[
+                { v: timeLeft.days, l: 'Days' },
+                { v: timeLeft.hours, l: 'Hours' },
+                { v: timeLeft.minutes, l: 'Mins' },
+                { v: timeLeft.seconds, l: 'Secs' }
+              ].map((t, i) => (
+                <React.Fragment key={t.l}>
+                  {i > 0 && <span className="text-xl font-black text-sky-600 led-blink">:</span>}
+                  <div className="relative w-16 py-3 rounded-2xl bg-[#191919] text-center shadow-lg overflow-hidden">
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span
+                        key={t.v}
+                        initial={{ y: -12, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 12, opacity: 0 }}
+                        className="block text-2xl font-black text-white"
+                      >
+                        {String(t.v).padStart(2, '0')}
+                      </motion.span>
+                    </AnimatePresence>
+                    <span className="text-[10px] font-bold text-white/45 uppercase font-sans">{t.l}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+      </section>
 
-            <div className="space-y-3">
+      {/* 6. HALL OF FAME TIMELINE */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          <Reveal className="lg:col-span-5 space-y-5 lg:sticky lg:top-28">
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">Hall of fame</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+              A garage club that became a podium team
+            </h2>
+            <p className="text-sm text-slate-600 font-medium leading-relaxed">
+              Based in Manouba with partners across Tunis, our club turns curious kids into confident makers, one robot at a time.
+            </p>
+            <div className="relative rounded-3xl overflow-hidden shadow-xl">
+              <img src={CLUB_PHOTOS.eurobotSpainChampions} alt="Eurobot champions" className="w-full h-56 object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#191919]/85 to-transparent" />
+              <div className="absolute bottom-4 left-4 text-white">
+                <div className="text-xs font-black text-amber-300 uppercase">Eurobot Spain Junior</div>
+                <div className="text-lg font-black">1st place · “Discovery 2”</div>
+              </div>
+            </div>
+          </Reveal>
+
+          <div className="lg:col-span-7 relative pl-8">
+            <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-slate-200" />
+            <motion.div
+              className="absolute left-3 top-2 w-0.5 bg-sky-600 origin-top"
+              initial={{ scaleY: 0 }}
+              whileInView={{ scaleY: 1 }}
+              viewport={{ once: true, margin: '-100px' }}
+              transition={{ duration: 1.6, ease: 'easeInOut' }}
+              style={{ bottom: '0.5rem' }}
+            />
+            <div className="space-y-5">
               {CLUB_ACHIEVEMENTS_TIMELINE.map((item, idx) => (
-                <motion.div
-                  key={idx}
-                  whileHover={{ y: -3, scale: 1.01 }}
-                  className="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 flex items-start gap-3.5 transition-all cursor-pointer"
-                >
-                  <div className="w-8 h-8 rounded-xl bg-amber-400 text-amber-950 flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
-                    {idx + 1}
+                <Reveal key={idx} delay={idx * 0.1} y={24}>
+                  <div className="relative">
+                    <span className="absolute -left-[26px] top-5 w-4 h-4 rounded-full bg-white border-4 border-sky-600 shadow" />
+                    <motion.div whileHover={{ x: 6 }} className="duo-card p-5 bg-white">
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="px-2.5 py-1 rounded-lg bg-[#191919] text-white text-xs font-mono font-black">{item.year}</span>
+                        <h4 className="text-sm font-black text-slate-900">{item.title}</h4>
+                      </div>
+                      <p className="text-sm text-slate-600 font-medium">{item.description}</p>
+                    </motion.div>
                   </div>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-black text-sky-600">{item.year}</span>
-                      <span className="text-slate-300">·</span>
-                      <h4 className="text-xs font-black text-slate-800">{item.title}</h4>
-                    </div>
-                    <p className="text-xs text-slate-600 font-medium">{item.description}</p>
-                  </div>
-                </motion.div>
+                </Reveal>
               ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* 5. DYNAMIC PROGRAMS & COURSES WITH AGE FILTER & GLOW */}
+      {/* 7. PROGRAMS WITH AGE FILTER */}
       <section id="programs" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="text-center max-w-2xl mx-auto space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase">
-            <span>🚀 4 Hands-On STEM Pathways</span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Pick Your Robotics Learning Track
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 font-medium">
-            Filter by age to find the perfect hands-on match for your future innovator:
-          </p>
+        <Reveal className="text-center max-w-2xl mx-auto space-y-3">
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{programs.length} hands-on pathways</span>
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Pick a robotics learning track</h2>
+          <p className="text-sm text-slate-600 font-medium">Filter by age to find the right match for your future engineer.</p>
 
-          {/* Dynamic Age Filter Selector */}
-          <div className="flex items-center justify-center gap-2 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
             {[
-              { id: 'all', label: 'All Tracks (Ages 6-17)' },
-              { id: '6-9', label: '👶 Starter (Ages 6-9)' },
-              { id: '10-13', label: '⚡ Junior (Ages 10-13)' },
-              { id: '14-17', label: '🤖 Senior Squad (Ages 14-17)' }
+              { id: 'all', label: 'All tracks' },
+              { id: '6-9', label: 'Starter · 6-9' },
+              { id: '10-13', label: 'Junior · 10-13' },
+              { id: '14-17', label: 'Senior · 14+' }
             ].map((f) => (
               <button
                 key={f.id}
-                onClick={() => setAgeFilter(f.id as any)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  ageFilter === f.id
-                    ? 'btn-duo-green'
-                    : 'btn-duo-secondary'
+                onClick={() => setAgeFilter(f.id as typeof ageFilter)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  ageFilter === f.id ? 'btn-duo-green' : 'btn-duo-secondary'
                 }`}
               >
                 {f.label}
               </button>
             ))}
           </div>
-        </div>
+        </Reveal>
 
-        {/* Programs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {filteredPrograms.map((prog) => (
-            <motion.div
-              key={prog.id}
-              whileHover={{ y: -6 }}
-              className={`duo-card p-6 bg-white flex flex-col justify-between space-y-5 transition-all cursor-pointer ${
-                activeProgramTab === prog.id
-                  ? 'border-sky-400 ring-4 ring-sky-100 duo-card-glow-blue'
-                  : 'hover:border-slate-300'
-              }`}
-              onClick={() => setActiveProgramTab(prog.id)}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-[11px] font-black">
-                    {prog.ageRange}
-                  </span>
-                  <span className="text-xs font-mono font-black text-slate-400">
-                    {prog.duration.split(' ')[0]} {prog.duration.split(' ')[1]}
-                  </span>
-                </div>
-
-                <h3 className="text-lg font-black text-slate-800 leading-snug">
-                  {prog.title}
-                </h3>
-
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  {prog.description}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t-2 border-slate-100 space-y-4">
-                <div className="flex items-baseline justify-between">
-                  <div className="text-2xl font-black text-slate-800 font-mono">
-                    {prog.pricePerMonth} <span className="text-xs font-bold text-slate-400">DT/mo</span>
+        <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <AnimatePresence mode="popLayout">
+            {filteredPrograms.map((prog, i) => (
+              <motion.div
+                layout
+                key={prog.id}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ delay: i * 0.06 }}
+                whileHover={{ y: -8 }}
+                onClick={() => setActiveProgramTab(prog.id)}
+                className={`duo-card group relative overflow-hidden p-6 bg-white flex flex-col justify-between gap-5 cursor-pointer ${
+                  activeProgramTab === prog.id ? '!border-sky-600 ring-4 ring-sky-100' : ''
+                }`}
+              >
+                <Gear
+                  teeth={14}
+                  duration={20}
+                  color="#c11e3d"
+                  windows={4}
+                  className="absolute -top-8 -right-8 w-28 h-28 opacity-[0.07] group-hover:opacity-20 transition-opacity"
+                />
+                <div className="relative space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-black">{prog.ageRange}</span>
+                    <span className="text-xs font-mono font-black text-slate-400">{prog.duration.split(' ').slice(0, 2).join(' ')}</span>
                   </div>
-                  <span className="text-xs font-bold text-emerald-600">Kit Included</span>
+                  <h3 className="text-lg font-black text-slate-900 leading-snug">{prog.title}</h3>
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed">{prog.description}</p>
                 </div>
+                <div className="relative pt-4 border-t-2 border-slate-100 space-y-4">
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-2xl font-black text-slate-900 font-mono">
+                      {prog.pricePerMonth} <span className="text-xs font-bold text-slate-400">DT/mo</span>
+                    </div>
+                    <span className="text-xs font-bold text-sky-700">Kit included</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      goRegister();
+                    }}
+                    className="w-full py-3 btn-duo-green text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Register your child</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
 
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEnrollClick(prog.id);
-                  }}
-                  className="w-full py-3 btn-duo-green text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <span>Select Track</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </motion.button>
+        {selectedProgram && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={selectedProgram.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              className="duo-card p-6 sm:p-8 bg-white space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-100 pb-5">
+                <div>
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">Curriculum preview</span>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">{selectedProgram.title}: the journey</h3>
+                </div>
+                <button onClick={goRegister} className="px-6 py-3 btn-duo-blue text-xs font-black flex items-center gap-2 cursor-pointer self-start sm:self-auto">
+                  <span>Register your child</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {selectedProgram.syllabus.map((item, i) => (
+                  <motion.div
+                    key={item.week}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.07 }}
+                    className="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 space-y-2 hover:border-sky-300 transition-colors"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono font-black text-sky-600">Week {item.week}</span>
+                      <span className="w-2 h-2 rounded-full bg-sky-500 led-blink" />
+                    </div>
+                    <h4 className="text-xs font-black text-slate-900 leading-snug">{item.title}</h4>
+                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{item.description}</p>
+                    <div className="pt-2 border-t border-slate-200 text-[10px] font-bold text-slate-600">
+                      Hardware: <span className="text-sky-700">{item.hardware}</span>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </motion.div>
-          ))}
-        </div>
-
-        {/* Selected Program Syllabus Spotlight */}
-        {selectedProgram && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="duo-card duo-card-glow-blue p-6 sm:p-8 bg-white space-y-6"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-100 pb-5">
-              <div>
-                <span className="text-xs font-black uppercase text-sky-600">Curriculum Preview</span>
-                <h3 className="text-xl sm:text-2xl font-black text-slate-800">
-                  {selectedProgram.title} — Syllabus Journey
-                </h3>
-              </div>
-              <button
-                onClick={() => handleEnrollClick(selectedProgram.id)}
-                className="px-6 py-3 btn-duo-yellow text-xs font-black flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-              >
-                <span>Reserve Seat in {selectedProgram.title.split(' ')[0]}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {selectedProgram.syllabus.map((item) => (
-                <div
-                  key={item.week}
-                  className="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 space-y-2 hover:border-sky-300 transition-colors"
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono font-black text-sky-600">Week {item.week}</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  </div>
-                  <h4 className="text-xs font-black text-slate-800 leading-snug">{item.title}</h4>
-                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{item.description}</p>
-                  <div className="pt-2 border-t border-slate-200 text-[10px] font-bold text-slate-600">
-                    Hardware: <span className="text-sky-700">{item.hardware}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+          </AnimatePresence>
         )}
       </section>
 
-      {/* 6. OFFICIAL FACEBOOK FEED & PHOTO GALLERY WITH FIRESTORE PERSISTENCE */}
+      {/* 8. OFFICIAL FACEBOOK FEED & PHOTO GALLERY */}
       <section id="facebook-feed" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -753,14 +736,16 @@ export const VisitorPortal: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Upload/Add User Photo Button */}
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="px-4 py-3 btn-duo-green text-xs font-black flex items-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Ajouter une photo</span>
-            </button>
+            {/* Only admins can publish photos */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsUploadModalOpen(true)}
+                className="px-4 py-3 btn-duo-green text-xs font-black flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Ajouter une photo</span>
+              </button>
+            )}
 
             <a
               href="https://www.facebook.com/DiscoveryClubJunior/"
@@ -1149,7 +1134,8 @@ export const VisitorPortal: React.FC = () => {
         </AnimatePresence>
       </section>
 
-      {/* 7. LES CAPUCHES HOODIE MERCHANDISE SECTION WITH REAL PHOTOS */}
+      {/* 9. LES CAPUCHES HOODIES */}
+      <Reveal>
       <section id="hoodies" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="duo-card duo-card-glow-blue p-8 sm:p-10 bg-white border-2 border-slate-200">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -1185,7 +1171,7 @@ export const VisitorPortal: React.FC = () => {
             <div className="lg:col-span-6">
               <div className="relative rounded-3xl overflow-hidden border-4 border-slate-100 shadow-xl group">
                 <img
-                  src={CLUB_PHOTOS.fbHoodieCrew}
+                  src={CLUB_PHOTOS.teamInClubColors}
                   alt="Students wearing Discovery Junior Hoodies"
                   className="w-full h-72 sm:h-80 object-cover group-hover:scale-105 transition-transform duration-300"
                 />
@@ -1199,8 +1185,10 @@ export const VisitorPortal: React.FC = () => {
           </div>
         </div>
       </section>
+      </Reveal>
 
-      {/* 8. UPCOMING COMPETITIONS & HACKATHONS */}
+      {/* 10. UPCOMING EVENTS */}
+      <Reveal>
       <section id="events" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -1258,6 +1246,32 @@ export const VisitorPortal: React.FC = () => {
             </motion.div>
           ))}
         </div>
+      </section>
+      </Reveal>
+      {/* 11. FINAL CALL TO ACTION */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-sky-600 via-sky-800 to-sky-950 text-white px-8 py-14 sm:px-14 text-center">
+            <Gear teeth={24} duration={40} color="rgba(255,255,255,0.08)" windows={6} className="absolute -left-20 -bottom-24 w-72 h-72" />
+            <Gear teeth={12} duration={20} reverse color="rgba(255,255,255,0.1)" windows={4} className="absolute -right-10 -top-12 w-48 h-48" />
+            <div className="relative max-w-2xl mx-auto space-y-5">
+              <h2 className="text-3xl sm:text-5xl font-black tracking-tight">Ready to build the future?</h2>
+              <p className="text-white/75 font-medium">
+                Create your parent account in one minute, add all your children, and we’ll place each one in the right class.
+              </p>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={goRegister}
+                className="inline-flex items-center gap-2.5 px-9 py-4 rounded-2xl bg-white text-sky-700 font-black text-sm shadow-xl cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                Register your child
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </div>
+        </Reveal>
       </section>
     </div>
   );

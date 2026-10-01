@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { PRESET_ACCOUNTS } from '../data/initialData';
-import { UserRole } from '../types';
+import { CLUB_PHOTOS } from '../data/initialData';
 import {
   LogIn,
   ArrowLeft,
@@ -24,7 +23,6 @@ import { motion } from 'motion/react';
 export const LoginPage: React.FC = () => {
   const {
     loginWithGoogle,
-    loginWithPreset,
     loginWithEmailPassword,
     navigateTo,
     currentUser,
@@ -32,38 +30,10 @@ export const LoginPage: React.FC = () => {
     isFirebaseConnected
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'signin' | 'demo'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const roleStyles: Record<UserRole, { badge: string; text: string; bg: string; icon: any }> = {
-    admin: {
-      badge: 'bg-amber-100 text-amber-900 border-amber-300',
-      text: 'Super Admin',
-      bg: 'bg-amber-400',
-      icon: ShieldCheck
-    },
-    trainer: {
-      badge: 'bg-sky-100 text-sky-900 border-sky-300',
-      text: 'Lead Trainer',
-      bg: 'bg-sky-400',
-      icon: GraduationCap
-    },
-    parent: {
-      badge: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-      text: 'Parent Guardian',
-      bg: 'bg-emerald-500',
-      icon: HeartHandshake
-    },
-    visitor: {
-      badge: 'bg-slate-100 text-slate-900 border-slate-300',
-      text: 'Visitor',
-      bg: 'bg-slate-400',
-      icon: Sparkles
-    }
-  };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,9 +79,9 @@ export const LoginPage: React.FC = () => {
             <motion.img
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-              src="/src/assets/images/duo_junior_mascot_1790795302958.jpg"
-              alt="Junior Robot Mascot"
-              className="w-32 h-32 rounded-3xl object-cover border-4 border-slate-100 shadow-md"
+              src={CLUB_PHOTOS.clubAvatar}
+              alt="Discovery Club Junior logo"
+              className="bg-white w-32 h-32 rounded-3xl object-cover border-4 border-slate-100 shadow-md"
             />
             <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl bg-amber-400 border-2 border-white flex items-center justify-center text-amber-950 font-black text-xs shadow-md">
               ⚡
@@ -188,32 +158,6 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Toggle between Direct Sign In & Evaluator 1-Click Directory */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
-            <button
-              onClick={() => setActiveTab('signin')}
-              className={`py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                activeTab === 'signin'
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Email & Google
-            </button>
-            <button
-              onClick={() => setActiveTab('demo')}
-              className={`py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                activeTab === 'demo'
-                  ? 'bg-amber-400 text-amber-950 shadow-sm font-black'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <span>⭐ Evaluator Presets</span>
-            </button>
-          </div>
-
-          {/* TAB 1: Direct Sign In */}
-          {activeTab === 'signin' && (
             <div className="space-y-4">
               <form onSubmit={handleEmailSignIn} className="space-y-3.5 text-xs">
                 <div>
@@ -297,61 +241,6 @@ export const LoginPage: React.FC = () => {
                 <span>Continue with Google</span>
               </button>
             </div>
-          )}
-
-          {/* TAB 2: Evaluator Demo Directory */}
-          {activeTab === 'demo' && (
-            <div className="space-y-3">
-              <div className="p-3 bg-amber-50 border-2 border-amber-200 rounded-2xl text-xs text-amber-900 font-semibold">
-                Tap any role persona below to test that portal instantly with 1 click:
-              </div>
-
-              <div className="space-y-2.5">
-                {PRESET_ACCOUNTS.map((account) => {
-                  const isCurrent = currentUser?.uid === account.uid;
-                  const Icon = roleStyles[account.role]?.icon || Sparkles;
-
-                  return (
-                    <button
-                      key={account.uid}
-                      onClick={() => loginWithPreset(account)}
-                      className={`w-full p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all cursor-pointer ${
-                        isCurrent
-                          ? 'bg-sky-50 border-sky-400 border-b-4 border-b-sky-500 shadow-sm'
-                          : 'bg-white border-slate-200 border-b-4 border-b-slate-300 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-white ${roleStyles[account.role]?.bg || 'bg-slate-500'} shadow-sm`}>
-                          <Icon className="w-5 h-5 text-white" />
-                        </div>
-
-                        <div>
-                          <div className="font-black text-slate-800 text-xs flex items-center gap-2">
-                            <span>{account.displayName}</span>
-                            {isCurrent && <CheckCircle2 className="w-4 h-4 text-sky-600" />}
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-mono">{account.email}</div>
-                          <div className="text-[10px] text-slate-400 font-medium">
-                            {account.role === 'admin' && 'Supervises all rosters, payments & hoodies'}
-                            {account.role === 'trainer' && 'Alpha group trainer · Takes attendance & grades'}
-                            {account.role === 'parent' && 'Parent of Yassine · View attendance & order hoodie'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${roleStyles[account.role]?.badge || ''}`}>
-                          {roleStyles[account.role]?.text}
-                        </span>
-                        <ArrowRight className="w-4 h-4 text-slate-400" />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Card footer */}
           <div className="pt-4 border-t-2 border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">

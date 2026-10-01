@@ -5,7 +5,6 @@ export type AppPage =
   | 'visitor'
   | 'login'
   | 'register-parent'
-  | 'waitlist'
   | 'schedule-matrix'
   | 'admin'
   | 'trainer'
@@ -19,7 +18,8 @@ export interface AppUser {
   roles: UserRole[];
   photoURL?: string;
   trainerId?: string;
-  studentId?: string;
+  studentId?: string; // first child (kept for older accounts)
+  studentIds?: string[]; // all children linked to this parent
   parentPhone?: string;
   childName?: string;
 }
@@ -51,12 +51,14 @@ export interface Student {
   parentName: string;
   parentPhone: string;
   parentEmail: string;
+  parentUid?: string; // account of the parent who registered the child
   studentName: string;
+  photoURL?: string; // small square JPEG stored as a data URL (resized in the browser)
   studentAge: number;
-  programId: string;
+  programId: string; // program of the first class; '' until the admin places the child in a class
   status: StudentStatus;
   registeredAt: string;
-  groupId?: string;
+  groupIds: string[]; // a child can attend several classes
   standardMonthlyPrice: number;
   customMonthlyPrice?: number; // admin override
   paymentStatus: 'paid' | 'pending' | 'scholarship';
@@ -95,7 +97,7 @@ export interface Group {
   id: string;
   name: string;
   programId: string;
-  trainerId: string;
+  trainerIds: string[]; // one or more trainers teach this class
   dayOfWeek: 'Wednesday' | 'Saturday' | 'Sunday';
   timeSlot: string;
   room: string;
@@ -105,7 +107,9 @@ export interface Group {
 export interface StudentAttendanceRecord {
   studentId: string;
   status: 'present' | 'absent' | 'late' | 'unmarked';
-  rating: number; // 1 to 5
+  rating?: number; // mark out of 20; missing = not rated (e.g. absent)
+  ratedBy?: string; // trainer who gave the mark
+  ratedAt?: string; // when the mark was saved (YYYY-MM-DD HH:MM)
   pedagogicalRemark?: string;
   remarks?: string;
 }

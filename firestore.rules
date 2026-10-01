@@ -1,93 +1,12 @@
 rules_version = '2';
+
+// The website never talks to Firestore directly: every read and write goes through
+// our Express API (server/), which uses the Admin SDK and checks permissions itself.
+// The Admin SDK bypasses these rules, so the browser is simply locked out.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Default-deny catch-all
     match /{document=**} {
       allow read, write: if false;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'faridadwani2000@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    // Connection test document
-    match /test/connection {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    // Users collection with RBAC
-    match /users/{userId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if isAdmin();
-    }
-
-    // Admins index
-    match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    // Students / Waitlist collection
-    match /students/{studentId} {
-      allow read, write: if true;
-    }
-
-    // Programs collection
-    match /programs/{programId} {
-      allow read, write: if true;
-    }
-
-    // Trainers collection
-    match /trainers/{trainerId} {
-      allow read, write: if true;
-    }
-
-    // Cohort groups
-    match /groups/{groupId} {
-      allow read, write: if true;
-    }
-
-    // Sessions & Attendance
-    match /sessions/{sessionId} {
-      allow read, write: if true;
-    }
-
-    // Hoodie Merchandise Distributions & Orders
-    match /hoodie_distributions/{distributionId} {
-      allow read, write: if true;
-    }
-
-    // Hoodie Stock
-    match /hoodie_stock/{size} {
-      allow read, write: if true;
-    }
-
-    // Material requests
-    match /material_requests/{requestId} {
-      allow read, write: if true;
-    }
-
-    // Competitions & Events
-    match /events/{eventId} {
-      allow read, write: if true;
-    }
-
-    // Community Facebook Posts & Live Likes
-    match /facebook_posts/{postId} {
-      allow read, write: if true;
-      match /comments/{commentId} {
-        allow read, write: if true;
-      }
     }
   }
 }

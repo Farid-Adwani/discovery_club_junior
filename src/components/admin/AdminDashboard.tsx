@@ -49,8 +49,10 @@ export const AdminDashboard: React.FC = () => {
     updateStudentStatus,
     updateStudentPrice,
     assignStudentToGroup,
+    removeStudentFromGroup,
     deleteStudent,
     createGroup,
+    updateGroup,
     deleteGroup,
     addHoodieStock,
     updateHoodieStatus,
@@ -76,7 +78,7 @@ export const AdminDashboard: React.FC = () => {
   const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupProg, setNewGroupProg] = useState(programs[0]?.id || '');
-  const [newGroupTrainer, setNewGroupTrainer] = useState(trainers[0]?.id || '');
+  const [newGroupTrainerIds, setNewGroupTrainerIds] = useState<string[]>(trainers[0] ? [trainers[0].id] : []);
   const [newGroupDay, setNewGroupDay] = useState<'Saturday' | 'Sunday' | 'Wednesday'>('Saturday');
   const [newGroupTime, setNewGroupTime] = useState('09:00 - 11:00');
   const [newGroupRoom, setNewGroupRoom] = useState('Mechatronics Lab A');
@@ -106,7 +108,7 @@ export const AdminDashboard: React.FC = () => {
   const [isAddPostOpen, setIsAddPostOpen] = useState(false);
   const [newPostCaption, setNewPostCaption] = useState('');
   const [newPostTag, setNewPostTag] = useState('🏆 Eurobot Champions');
-  const [newPostImageUrl, setNewPostImageUrl] = useState(CLUB_PHOTOS.fbEurobotChamps);
+  const [newPostImageUrl, setNewPostImageUrl] = useState(CLUB_PHOTOS.eurobotSpainChampions);
   const adminFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const handleAdminFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,11 +149,15 @@ export const AdminDashboard: React.FC = () => {
   const handleCreateGroupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName) return;
+    if (newGroupTrainerIds.length === 0) {
+      showToast('Choose at least one trainer for this class', 'error');
+      return;
+    }
 
     createGroup({
       name: newGroupName,
       programId: newGroupProg,
-      trainerId: newGroupTrainer,
+      trainerIds: newGroupTrainerIds,
       dayOfWeek: newGroupDay,
       timeSlot: newGroupTime,
       room: newGroupRoom,
@@ -250,7 +256,7 @@ export const AdminDashboard: React.FC = () => {
         {[
           { id: 'overview', label: 'Overview & KPIs', icon: <TrendingUp className="w-4 h-4" /> },
           { id: 'students', label: `Waitlist & Students (${students.length})`, icon: <Users className="w-4 h-4" /> },
-          { id: 'groups', label: `Groups & Cohorts (${groups.length})`, icon: <Calendar className="w-4 h-4" /> },
+          { id: 'groups', label: `Classes (${groups.length})`, icon: <Calendar className="w-4 h-4" /> },
           { id: 'attendance', label: 'Attendance Call Lists', icon: <ClipboardList className="w-4 h-4" /> },
           { id: 'payments', label: 'Payments & Tuition', icon: <DollarSign className="w-4 h-4" /> },
           { id: 'inventory', label: '“Les Capuches” Inventory', icon: <Package className="w-4 h-4" /> },
@@ -286,7 +292,7 @@ export const AdminDashboard: React.FC = () => {
                 {activeStudents.length}
               </div>
               <div className="text-[11px] font-bold text-sky-600">
-                +{acceptedStudents.length} admitted pending cohort
+                +{acceptedStudents.length} accepted, awaiting a class
               </div>
             </div>
 
@@ -470,15 +476,15 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-semibold">
+          <div className="scroll-panel max-h-[560px] rounded-2xl border-2 border-slate-100">
+            <table className="data-table w-full text-left text-xs font-semibold">
               <thead>
                 <tr className="border-b-2 border-slate-200 text-slate-400 font-black">
                   <th className="pb-3">Student Name</th>
                   <th className="pb-3">Age</th>
                   <th className="pb-3">Parent Info</th>
                   <th className="pb-3">Track & Status</th>
-                  <th className="pb-3">Assigned Cohort</th>
+                  <th className="pb-3">Class</th>
                   <th className="pb-3">Tuition Override</th>
                   <th className="pb-3 text-right">Actions</th>
                 </tr>
@@ -486,7 +492,7 @@ export const AdminDashboard: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredStudents.map((st) => {
                   const program = programs.find((p) => p.id === st.programId);
-                  const assignedGroup = groups.find((g) => g.id === st.groupId);
+                  const studentGroups = groups.filter((g) => st.groupIds.includes(g.id));
 
                   return (
                     <tr key={st.id} className="hover:bg-slate-50 transition-colors">
@@ -504,7 +510,11 @@ export const AdminDashboard: React.FC = () => {
                         <div className="text-slate-400 text-[11px] font-mono">{st.parentPhone}</div>
                       </td>
                       <td className="py-3">
-                        <div className="text-slate-800 font-black">{program?.title || st.programId}</div>
+                        <div className="text-slate-800 font-black">
+                          {[...new Set(studentGroups.map((g) => programs.find((p) => p.id === g.programId)?.title).filter(Boolean))].join(', ') ||
+                            program?.title ||
+                            'Not placed yet'}
+                        </div>
                         <span
                           className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
                             st.status === 'active'
@@ -518,27 +528,45 @@ export const AdminDashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3">
-                        {assignedGroup ? (
-                          <div>
-                            <span className="font-black text-slate-800">{assignedGroup.name}</span>
-                            <span className="block text-[10px] text-slate-400">
-                              {assignedGroup.dayOfWeek} · {assignedGroup.timeSlot}
-                            </span>
-                          </div>
-                        ) : (
-                          <select
-                            onChange={(e) => assignStudentToGroup(st.id, e.target.value)}
-                            defaultValue=""
-                            className="px-2 py-1 bg-white border-2 border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 focus:outline-none cursor-pointer"
-                          >
-                            <option value="" disabled>Assign to Group...</option>
-                            {groups.map((g) => (
-                              <option key={g.id} value={g.id}>
-                                {g.name} ({g.dayOfWeek})
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                        <div className="space-y-1.5">
+                          {studentGroups.map((g) => (
+                            <div
+                              key={g.id}
+                              className="flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-sky-50 border border-sky-200"
+                            >
+                              <div>
+                                <span className="font-black text-slate-800">{g.name}</span>
+                                <span className="block text-[10px] text-slate-400">
+                                  {g.dayOfWeek} · {g.timeSlot}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeStudentFromGroup(st.id, g.id)}
+                                className="text-slate-400 hover:text-rose-500 cursor-pointer font-black"
+                                title={`Remove from ${g.name}`}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          {groups.some((g) => !st.groupIds.includes(g.id)) && (
+                            <select
+                              value=""
+                              onChange={(e) => e.target.value && assignStudentToGroup(st.id, e.target.value)}
+                              className="px-2 py-1 bg-white border-2 border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 focus:outline-none cursor-pointer"
+                            >
+                              <option value="" disabled>{studentGroups.length ? '+ Add another class...' : 'Add to class...'}</option>
+                              {groups
+                                .filter((g) => !st.groupIds.includes(g.id))
+                                .map((g) => (
+                                  <option key={g.id} value={g.id}>
+                                    {g.name} ({g.dayOfWeek})
+                                  </option>
+                                ))}
+                            </select>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3">
                         <button
@@ -600,26 +628,25 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 3. GROUPS & COHORTS TAB */}
+      {/* 3. CLASSES TAB */}
       {adminTab === 'groups' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-black text-slate-800">
-              Active Cohort Schedules & Labs
+              Classes, Schedules & Labs
             </h3>
             <button
               onClick={() => setIsAddGroupOpen(true)}
               className="px-4 py-2 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Create Cohort Group</span>
+              <span>Create Class</span>
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {groups.map((grp) => {
-              const enrolledInGroup = students.filter((s) => s.groupId === grp.id);
-              const trainer = trainers.find((t) => t.id === grp.trainerId);
+              const enrolledInGroup = students.filter((s) => s.groupIds.includes(grp.id));
               const prog = programs.find((p) => p.id === grp.programId);
               const isFull = enrolledInGroup.length >= grp.maxCapacity;
 
@@ -633,7 +660,7 @@ export const AdminDashboard: React.FC = () => {
                     <button
                       onClick={() => deleteGroup(grp.id)}
                       className="text-slate-300 hover:text-rose-500 cursor-pointer p-1"
-                      title="Delete Group"
+                      title="Delete class"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -648,9 +675,38 @@ export const AdminDashboard: React.FC = () => {
                       <span className="font-bold text-slate-400">Lab Room:</span>
                       <span className="font-bold text-slate-700">{grp.room}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-400">Lead Trainer:</span>
-                      <span className="font-bold text-slate-800">{trainer?.name || 'Assigned'}</span>
+                    <div className="space-y-1.5">
+                      <span className="font-bold text-slate-400">Trainers (click to add / remove):</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {trainers.map((t) => {
+                          const isAssigned = grp.trainerIds.includes(t.id);
+                          const isLastOne = isAssigned && grp.trainerIds.length === 1;
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              disabled={isLastOne}
+                              title={isLastOne ? 'A class needs at least one trainer' : undefined}
+                              onClick={() =>
+                                updateGroup({
+                                  ...grp,
+                                  trainerIds: isAssigned
+                                    ? grp.trainerIds.filter((id) => id !== t.id)
+                                    : [...grp.trainerIds, t.id]
+                                })
+                              }
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-black border transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                                isAssigned
+                                  ? 'bg-sky-500 text-white border-sky-600'
+                                  : 'bg-white text-slate-500 border-slate-200 hover:border-sky-300'
+                              }`}
+                            >
+                              {isAssigned ? '✓ ' : '+ '}
+                              {t.name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
@@ -717,8 +773,8 @@ export const AdminDashboard: React.FC = () => {
               Roster for {groups.find((g) => g.id === selectedCallListGroupId)?.name}
             </h4>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-semibold">
+            <div className="scroll-panel max-h-[560px] rounded-2xl border-2 border-slate-100">
+              <table className="data-table w-full text-left text-xs font-semibold">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-400 font-black">
                     <th className="pb-2">Student Name</th>
@@ -730,7 +786,7 @@ export const AdminDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {students
-                    .filter((s) => s.groupId === selectedCallListGroupId)
+                    .filter((s) => s.groupIds.includes(selectedCallListGroupId))
                     .map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50">
                         <td className="py-3 font-black text-slate-800">{s.studentName}</td>
@@ -769,8 +825,8 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-semibold">
+          <div className="scroll-panel max-h-[560px] rounded-2xl border-2 border-slate-100">
+            <table className="data-table w-full text-left text-xs font-semibold">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 font-black">
                   <th className="pb-2">Student</th>
@@ -787,7 +843,7 @@ export const AdminDashboard: React.FC = () => {
                   <tr key={st.id} className="hover:bg-slate-50">
                     <td className="py-3 font-black text-slate-800">{st.studentName}</td>
                     <td className="py-3 text-slate-600">{st.parentName} ({st.parentPhone})</td>
-                    <td className="py-3 font-bold text-slate-700">{st.programId}</td>
+                    <td className="py-3 font-bold text-slate-700">{st.programId || '—'}</td>
                     <td className="py-3 font-mono text-slate-400">{st.standardMonthlyPrice} DT</td>
                     <td className="py-3 font-mono font-black text-emerald-600">
                       {st.customMonthlyPrice !== undefined ? st.customMonthlyPrice : st.standardMonthlyPrice} DT
@@ -864,8 +920,8 @@ export const AdminDashboard: React.FC = () => {
           {/* Distribution Orders List */}
           <div className="duo-card p-6 bg-white space-y-4">
             <h4 className="text-sm font-black text-slate-800">Member Orders & Pickup Queue</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-semibold">
+            <div className="scroll-panel max-h-[560px] rounded-2xl border-2 border-slate-100">
+              <table className="data-table w-full text-left text-xs font-semibold">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-400 font-black">
                     <th className="pb-2">Student</th>
@@ -1056,14 +1112,18 @@ export const AdminDashboard: React.FC = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
               {[
-                { name: 'Eurobot Champs', img: CLUB_PHOTOS.fbEurobotChamps, tag: '🏆 Eurobot Champions' },
-                { name: 'Trophée Certificat', img: CLUB_PHOTOS.fbTrophyCert, tag: '🏆 Eurobot Champions' },
-                { name: 'Honneur Ministère', img: CLUB_PHOTOS.fbMinisterHonor, tag: '🇹🇳 Honneur National' },
-                { name: 'RoboCup Vienne', img: CLUB_PHOTOS.fbViennaRobocup, tag: '🌍 Tournoi International' },
-                { name: 'Kids Robot Lab', img: CLUB_PHOTOS.fbKidsRobotLab, tag: '🛠️ Ateliers Manouba' },
-                { name: 'Girls in STEM', img: CLUB_PHOTOS.fbGirlsStem, tag: '👧 Girls in Tech' },
-                { name: 'Hoodie Crew', img: CLUB_PHOTOS.fbHoodieCrew, tag: '👕 Les Capuches' },
-                { name: 'Teens AI Lab', img: CLUB_PHOTOS.fbTeensAiLab, tag: '🧠 IA & Vision' }
+                { name: 'Eurobot Champions', img: CLUB_PHOTOS.eurobotSpainChampions, tag: '🏆 Eurobot Champions' },
+                { name: 'Trophée Certificat', img: CLUB_PHOTOS.eurobotSpainTrophyCert, tag: '🏆 Eurobot Champions' },
+                { name: 'Remise des Prix', img: CLUB_PHOTOS.eurobotSpainStage, tag: '🏆 Eurobot Champions' },
+                { name: 'Honneur Ministère', img: CLUB_PHOTOS.ministryHonorCeremony, tag: '🇹🇳 Honneur National' },
+                { name: 'RoboCup Vienne', img: CLUB_PHOTOS.robocupViennaMarxHalle, tag: '🌍 Tournoi International' },
+                { name: 'RoboCup Égypte', img: CLUB_PHOTOS.robocupJuniorEgypt, tag: '🌍 Tournoi International' },
+                { name: 'ODA Robots 2ème Prix', img: CLUB_PHOTOS.odaRobots2ndPrize, tag: '🏆 Podium National' },
+                { name: 'Qualif. Eurobot Tunisie', img: CLUB_PHOTOS.eurobotJuniorTunisiaQualif, tag: '🇹🇳 Qualifications Nationales' },
+                { name: 'Aéroport Istanbul', img: CLUB_PHOTOS.istanbulAirportEuropeanChamp, tag: '✈️ En Route' },
+                { name: 'Départ Tunis', img: CLUB_PHOTOS.airportDepartureTunis, tag: '✈️ En Route' },
+                { name: 'Amis Thaïlande', img: CLUB_PHOTOS.internationalFriendsThailand, tag: '🌍 Tournoi International' },
+                { name: 'Drapeaux du Monde', img: CLUB_PHOTOS.nationsFlags, tag: '🌍 Tournoi International' }
               ].map((item, idx) => (
                 <div
                   key={idx}
@@ -1084,8 +1144,8 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Posts Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Posts Grid (scrolls inside its panel) */}
+          <div className="scroll-panel scroll-fade max-h-[760px] pr-1 py-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {facebookPosts.map((post) => (
               <div key={post.id} className="duo-card p-5 bg-white space-y-4 flex flex-col justify-between">
                 <div className="space-y-3">
@@ -1351,7 +1411,7 @@ export const AdminDashboard: React.FC = () => {
       {isAddGroupOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="duo-card p-6 bg-white max-w-md w-full space-y-4">
-            <h3 className="text-base font-black text-slate-800">Create New Cohort Group</h3>
+            <h3 className="text-base font-black text-slate-800">Create New Class</h3>
             <form onSubmit={handleCreateGroupSubmit} className="space-y-3 text-xs font-bold text-slate-700">
               <div>
                 <label className="block mb-1">Group Name *</label>
@@ -1380,16 +1440,23 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block mb-1">Trainer:</label>
-                  <select
-                    value={newGroupTrainer}
-                    onChange={(e) => setNewGroupTrainer(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white cursor-pointer"
-                  >
+                  <label className="block mb-1">Trainers:</label>
+                  <div className="space-y-1 max-h-28 overflow-y-auto p-2 bg-slate-50 border-2 border-slate-200 rounded-xl">
                     {trainers.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <label key={t.id} className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newGroupTrainerIds.includes(t.id)}
+                          onChange={(e) =>
+                            setNewGroupTrainerIds((prev) =>
+                              e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                            )
+                          }
+                        />
+                        <span>{t.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
               </div>
 

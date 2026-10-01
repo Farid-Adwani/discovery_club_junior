@@ -4,17 +4,18 @@
  */
 
 import React, { useState } from 'react';
+import { CLUB_PHOTOS } from './data/initialData';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
+import { IntroReveal } from './components/common/IntroReveal';
 import { VisitorPortal } from './components/visitor/VisitorPortal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { TrainerPortal } from './components/trainer/TrainerPortal';
 import { ParentPortal } from './components/parent/ParentPortal';
 import { LoginPage } from './pages/LoginPage';
 import { ParentRegisterPage } from './pages/ParentRegisterPage';
-import { WaitlistPage } from './pages/WaitlistPage';
 import { ScheduleMatrixPage } from './pages/ScheduleMatrixPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShieldAlert, LogIn, ArrowLeft, UserPlus, Sparkles, Lock, KeyRound } from 'lucide-react';
@@ -31,15 +32,12 @@ const AppContent: React.FC = () => {
       case 'register-parent':
         return <ParentRegisterPage key="page-register-parent" />;
 
-      case 'waitlist':
-        return <WaitlistPage key="page-waitlist" />;
-
       case 'schedule-matrix':
         if (!currentUser || (!currentUser.roles.includes('admin') && !currentUser.roles.includes('trainer'))) {
           return (
             <AccessDeniedGate
               title="Trainer & Admin Timetable Matrix"
-              description="This view checks schedule conflicts for all cohorts and rooms. Please sign in as an Administrator or Trainer."
+              description="This view checks schedule conflicts for all classes and rooms. Please sign in as an Administrator or Trainer."
               requiredRole="admin"
             />
           );
@@ -109,6 +107,9 @@ const AppContent: React.FC = () => {
         </AnimatePresence>
       </main>
 
+      {/* Start-up reveal animation (once per session) */}
+      <IntroReveal />
+
       {/* Global Notifications */}
       <ToastContainer />
 
@@ -145,9 +146,9 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
         {/* Friendly Mascot Avatar */}
         <div className="relative mx-auto w-24 h-24">
           <img
-            src="/src/assets/images/duo_junior_mascot_1790795302958.jpg"
-            alt="Junior Mascot"
-            className="w-24 h-24 rounded-full object-cover shadow-md border-4 border-white"
+            src={CLUB_PHOTOS.clubAvatar}
+            alt="Discovery Club Junior logo"
+            className="bg-white w-24 h-24 rounded-full object-cover shadow-md border-4 border-white"
           />
           <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center text-slate-900 shadow-sm">
             <Lock className="w-4 h-4" />

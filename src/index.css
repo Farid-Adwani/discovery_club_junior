@@ -1,5 +1,104 @@
 @import "tailwindcss";
 
+/*
+ * Brand theme, taken from the club logo:
+ *   crimson #c11e3d · maroon #6a0d1f · charcoal #191919 · white
+ * The components use Tailwind color names, so we remap those palettes here:
+ *   sky, orange (accents)                   -> crimson
+ *   emerald, purple, blue, cyan, indigo     -> charcoal
+ *   amber (marks, waiting list) and rose (errors, absent) keep their meaning.
+ */
+@theme {
+  --color-brand: #c11e3d;
+  --color-brand-dark: #6a0d1f;
+  --color-ink: #191919;
+
+  --color-sky-50: #fdf2f4;
+  --color-sky-100: #fbe3e7;
+  --color-sky-200: #f6c4cd;
+  --color-sky-300: #ee96a6;
+  --color-sky-400: #e05c75;
+  --color-sky-500: #d03252;
+  --color-sky-600: #c11e3d;
+  --color-sky-700: #a1172f;
+  --color-sky-800: #861529;
+  --color-sky-900: #6a0d1f;
+  --color-sky-950: #3d0610;
+
+  --color-purple-50: #f6f6f6;
+  --color-purple-100: #e7e7e7;
+  --color-purple-200: #d1d1d1;
+  --color-purple-300: #b0b0b0;
+  --color-purple-400: #888888;
+  --color-purple-500: #4f4f4f;
+  --color-purple-600: #3d3d3d;
+  --color-purple-700: #2a2a2a;
+  --color-purple-800: #222222;
+  --color-purple-900: #191919;
+  --color-purple-950: #0f0f0f;
+
+  --color-blue-50: #f6f6f6;
+  --color-blue-100: #e7e7e7;
+  --color-blue-200: #d1d1d1;
+  --color-blue-300: #b0b0b0;
+  --color-blue-400: #888888;
+  --color-blue-500: #4f4f4f;
+  --color-blue-600: #3d3d3d;
+  --color-blue-700: #2a2a2a;
+  --color-blue-800: #222222;
+  --color-blue-900: #191919;
+  --color-blue-950: #0f0f0f;
+
+  --color-cyan-50: #f6f6f6;
+  --color-cyan-100: #e7e7e7;
+  --color-cyan-200: #d1d1d1;
+  --color-cyan-300: #b0b0b0;
+  --color-cyan-400: #888888;
+  --color-cyan-500: #4f4f4f;
+  --color-cyan-600: #3d3d3d;
+  --color-cyan-700: #2a2a2a;
+  --color-cyan-800: #222222;
+  --color-cyan-900: #191919;
+  --color-cyan-950: #0f0f0f;
+
+  --color-indigo-50: #f6f6f6;
+  --color-indigo-100: #e7e7e7;
+  --color-indigo-200: #d1d1d1;
+  --color-indigo-300: #b0b0b0;
+  --color-indigo-400: #888888;
+  --color-indigo-500: #4f4f4f;
+  --color-indigo-600: #3d3d3d;
+  --color-indigo-700: #2a2a2a;
+  --color-indigo-800: #222222;
+  --color-indigo-900: #191919;
+  --color-indigo-950: #0f0f0f;
+
+  --color-emerald-50: #f6f6f6;
+  --color-emerald-100: #e7e7e7;
+  --color-emerald-200: #d1d1d1;
+  --color-emerald-300: #b0b0b0;
+  --color-emerald-400: #888888;
+  --color-emerald-500: #3d3d3d;
+  --color-emerald-600: #2a2a2a;
+  --color-emerald-700: #222222;
+  --color-emerald-800: #191919;
+  --color-emerald-900: #141414;
+  --color-emerald-950: #0f0f0f;
+
+  --color-orange-50: #fdf2f4;
+  --color-orange-100: #fbe3e7;
+  --color-orange-200: #f6c4cd;
+  --color-orange-300: #ee96a6;
+  --color-orange-400: #e05c75;
+  --color-orange-500: #d03252;
+  --color-orange-600: #c11e3d;
+  --color-orange-700: #a1172f;
+  --color-orange-800: #861529;
+  --color-orange-900: #6a0d1f;
+  --color-orange-950: #3d0610;
+}
+
+
 @layer base {
   html {
     scroll-behavior: smooth;
@@ -7,11 +106,11 @@
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     background-color: #f8fafc;
-    color: #1e293b;
+    color: #191919;
     background-image: 
-      radial-gradient(circle at 10% 20%, rgba(28, 176, 246, 0.08), transparent 30%),
-      radial-gradient(circle at 90% 15%, rgba(88, 204, 2, 0.08), transparent 35%),
-      radial-gradient(circle at 50% 80%, rgba(255, 200, 0, 0.07), transparent 40%);
+      radial-gradient(circle at 10% 20%, rgba(193, 30, 61, 0.07), transparent 30%),
+      radial-gradient(circle at 90% 15%, rgba(25, 25, 25, 0.05), transparent 35%),
+      radial-gradient(circle at 50% 80%, rgba(193, 30, 61, 0.04), transparent 40%);
     background-attachment: fixed;
   }
   
@@ -22,8 +121,8 @@
 
 /* Duolingo-Inspired Chunky 3D Tactile Buttons */
 .btn-duo-green {
-  background-color: #58cc02;
-  border-bottom: 4px solid #46a302;
+  background-color: #c11e3d;
+  border-bottom: 4px solid #6a0d1f;
   color: #ffffff;
   font-weight: 800;
   border-radius: 1rem;
@@ -31,9 +130,9 @@
   user-select: none;
 }
 .btn-duo-green:hover {
-  background-color: #61e002;
+  background-color: #d03252;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px -4px rgba(88, 204, 2, 0.35);
+  box-shadow: 0 8px 20px -4px rgba(193, 30, 61, 0.35);
 }
 .btn-duo-green:active {
   border-bottom-width: 0px;
@@ -42,8 +141,8 @@
 }
 
 .btn-duo-blue {
-  background-color: #1cb0f6;
-  border-bottom: 4px solid #1899d6;
+  background-color: #191919;
+  border-bottom: 4px solid #000000;
   color: #ffffff;
   font-weight: 800;
   border-radius: 1rem;
@@ -51,9 +150,9 @@
   user-select: none;
 }
 .btn-duo-blue:hover {
-  background-color: #2bd0ff;
+  background-color: #2a2a2a;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px -4px rgba(28, 176, 246, 0.35);
+  box-shadow: 0 8px 20px -4px rgba(25, 25, 25, 0.35);
 }
 .btn-duo-blue:active {
   border-bottom-width: 0px;
@@ -82,8 +181,8 @@
 }
 
 .btn-duo-orange {
-  background-color: #ff9600;
-  border-bottom: 4px solid #d97706;
+  background-color: #6a0d1f;
+  border-bottom: 4px solid #3d0610;
   color: #ffffff;
   font-weight: 800;
   border-radius: 1rem;
@@ -91,9 +190,9 @@
   user-select: none;
 }
 .btn-duo-orange:hover {
-  background-color: #ffa524;
+  background-color: #861529;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px -4px rgba(255, 150, 0, 0.35);
+  box-shadow: 0 8px 20px -4px rgba(106, 13, 31, 0.35);
 }
 .btn-duo-orange:active {
   border-bottom-width: 0px;
@@ -102,8 +201,8 @@
 }
 
 .btn-duo-purple {
-  background-color: #a855f7;
-  border-bottom: 4px solid #7e22ce;
+  background-color: #861529;
+  border-bottom: 4px solid #3d0610;
   color: #ffffff;
   font-weight: 800;
   border-radius: 1rem;
@@ -111,9 +210,9 @@
   user-select: none;
 }
 .btn-duo-purple:hover {
-  background-color: #b56cf8;
+  background-color: #a1172f;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px -4px rgba(168, 85, 247, 0.35);
+  box-shadow: 0 8px 20px -4px rgba(134, 21, 41, 0.35);
 }
 .btn-duo-purple:active {
   border-bottom-width: 0px;
@@ -133,8 +232,8 @@
 }
 .btn-duo-secondary:hover {
   background-color: #f8fafc;
-  color: #0f172a;
-  border-color: #94a3b8;
+  color: #191919;
+  border-color: #c11e3d;
   transform: translateY(-2px);
   box-shadow: 0 8px 20px -4px rgba(148, 163, 184, 0.25);
 }
@@ -153,21 +252,21 @@
   transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .duo-card:hover {
-  border-color: #38bdf8;
+  border-color: #c11e3d;
   transform: translateY(-4px);
-  box-shadow: 0 16px 35px -8px rgba(56, 189, 248, 0.22);
+  box-shadow: 0 16px 35px -8px rgba(193, 30, 61, 0.2);
 }
 
 .duo-card-glow-green:hover {
-  border-color: #58cc02;
+  border-color: #c11e3d;
   transform: translateY(-4px);
-  box-shadow: 0 16px 35px -8px rgba(88, 204, 2, 0.25);
+  box-shadow: 0 16px 35px -8px rgba(193, 30, 61, 0.22);
 }
 
 .duo-card-glow-blue:hover {
-  border-color: #1cb0f6;
+  border-color: #191919;
   transform: translateY(-4px);
-  box-shadow: 0 16px 35px -8px rgba(28, 176, 246, 0.25);
+  box-shadow: 0 16px 35px -8px rgba(25, 25, 25, 0.22);
 }
 
 .duo-card-glow-yellow:hover {
@@ -177,15 +276,15 @@
 }
 
 .duo-card-glow-purple:hover {
-  border-color: #a855f7;
+  border-color: #6a0d1f;
   transform: translateY(-4px);
-  box-shadow: 0 16px 35px -8px rgba(168, 85, 247, 0.25);
+  box-shadow: 0 16px 35px -8px rgba(106, 13, 31, 0.22);
 }
 
 .duo-card-glow-orange:hover {
-  border-color: #ff9600;
+  border-color: #c11e3d;
   transform: translateY(-4px);
-  box-shadow: 0 16px 35px -8px rgba(255, 150, 0, 0.25);
+  box-shadow: 0 16px 35px -8px rgba(193, 30, 61, 0.22);
 }
 
 .duo-card-interactive {
@@ -231,7 +330,7 @@
   transition: all 0.3s ease;
 }
 .section-glow-container:hover {
-  filter: drop-shadow(0 0 25px rgba(28, 176, 246, 0.08));
+  filter: drop-shadow(0 0 25px rgba(193, 30, 61, 0.08));
 }
 
 /* Floating animation keyframes */
@@ -266,5 +365,156 @@
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #c11e3d;
 }
+
+/* ---------- Robotics / electronics animations (landing page) ---------- */
+
+/* signal pulse racing along a PCB trace (paths use pathLength="100") */
+.pcb-signal {
+  stroke-dasharray: 10 90;
+  stroke-dashoffset: 100;
+  animation: pcb-flow 5s linear infinite;
+}
+@keyframes pcb-flow {
+  to { stroke-dashoffset: 0; }
+}
+
+.led-blink { animation: led-blink 1.6s ease-in-out infinite; }
+@keyframes led-blink {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.led-glow { animation: led-glow 1.4s ease-in-out infinite; }
+@keyframes led-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(193, 30, 61, 0.4)); opacity: 0.85; }
+  50% { filter: drop-shadow(0 0 10px rgba(255, 90, 120, 0.95)); opacity: 1; }
+}
+
+/* LEDs on the robot-arm board light up one after another */
+.led-chase { animation: led-chase 1.44s linear infinite; opacity: 0.2; }
+@keyframes led-chase {
+  0%, 12% { opacity: 1; filter: drop-shadow(0 0 6px #ff5a78); }
+  25%, 100% { opacity: 0.2; filter: none; }
+}
+
+/* robot arm joints: each group rotates around its own pivot (SVG user units) */
+.arm-shoulder, .arm-elbow, .arm-wrist { transform-box: view-box; animation-duration: 4s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+.arm-shoulder { transform-origin: 200px 230px; animation-name: arm-shoulder; }
+.arm-elbow { transform-origin: 200px 123px; animation-name: arm-elbow; }
+.arm-wrist { transform-origin: 294px 123px; animation-name: arm-wrist; }
+@keyframes arm-shoulder {
+  0%, 100% { transform: rotate(-14deg); }
+  45%, 60% { transform: rotate(6deg); }
+}
+@keyframes arm-elbow {
+  0%, 100% { transform: rotate(-10deg); }
+  45%, 60% { transform: rotate(14deg); }
+}
+@keyframes arm-wrist {
+  0%, 100% { transform: rotate(24deg); }
+  45%, 60% { transform: rotate(-20deg); }
+}
+/* sparks only while the soldering tip is down */
+.solder-spark { opacity: 0; animation: solder-spark 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes solder-spark {
+  0%, 44% { opacity: 0; transform: scale(0.4); }
+  48% { opacity: 1; transform: scale(1.1); }
+  52% { opacity: 0.4; transform: scale(0.8); }
+  55% { opacity: 1; transform: scale(1.2); }
+  60%, 100% { opacity: 0; transform: scale(0.4); }
+}
+
+/* oscilloscope: slide the waveform by exactly one period */
+.osc-wave { animation: osc-scroll 1.6s linear infinite; }
+@keyframes osc-scroll {
+  to { transform: translateX(-100px); }
+}
+
+/* endless photo conveyor belt */
+.marquee-track { animation: marquee 60s linear infinite; }
+.marquee-track:hover { animation-play-state: paused; }
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+
+.animate-ping-slow { animation: ping-slow 2.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 0.7; }
+  80%, 100% { transform: scale(1.18); opacity: 0; }
+}
+
+/* trophy shine sweep */
+.shine { position: relative; overflow: hidden; }
+.shine::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
+  animation: shine 3.2s ease-in-out infinite;
+}
+@keyframes shine {
+  0% { transform: translateX(-60%); }
+  60%, 100% { transform: translateX(60%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcb-signal, .led-blink, .led-glow, .led-chase, .arm-shoulder, .arm-elbow, .arm-wrist,
+  .solder-spark, .osc-wave, .marquee-track, .animate-ping-slow, .shine::after, .animate-float, .animate-pulse-glow {
+    animation: none !important;
+  }
+}
+
+/* intro: synthwave-style 3D grid floor racing toward the viewer */
+.grid-floor {
+  background-image:
+    linear-gradient(rgba(193, 30, 61, 0.75) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(193, 30, 61, 0.75) 2px, transparent 2px);
+  background-size: 64px 64px;
+  transform: perspective(380px) rotateX(68deg);
+  transform-origin: 50% 100%;
+  animation: grid-move 0.9s linear infinite;
+  -webkit-mask-image: linear-gradient(to top, black 30%, transparent 100%);
+  mask-image: linear-gradient(to top, black 30%, transparent 100%);
+}
+@keyframes grid-move {
+  to { background-position: 0 64px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grid-floor { animation: none; }
+}
+
+/* ---------- scrollable panels & data tables ---------- */
+.scroll-panel {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(193, 30, 61, 0.45) transparent;
+}
+.scroll-panel::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-panel::-webkit-scrollbar-track { background: transparent; }
+.scroll-panel::-webkit-scrollbar-thumb { background: rgba(193, 30, 61, 0.35); border-radius: 9999px; }
+.scroll-panel::-webkit-scrollbar-thumb:hover { background: #c11e3d; }
+
+/* soft fade at the top and bottom edges of a scrolling list */
+.scroll-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #ffffff;
+  padding-top: 0.75rem;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 -2px 0 #e2e8f0;
+}
+.data-table tbody tr { transition: background-color 0.15s ease; }
+.data-table tbody tr:hover { background-color: #fdf2f4; }
+.data-table tbody td:first-child, .data-table thead th:first-child { padding-left: 0.75rem; }
+.data-table tbody td:last-child, .data-table thead th:last-child { padding-right: 0.75rem; }

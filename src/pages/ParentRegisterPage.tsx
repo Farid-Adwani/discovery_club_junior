@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CLUB_PHOTOS } from '../data/initialData';
 import { useApp } from '../context/AppContext';
 import {
   HeartHandshake,
@@ -10,33 +11,39 @@ import {
   ShoppingBag,
   Star,
   Zap,
-  Smile
+  Smile,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const ParentRegisterPage: React.FC = () => {
   const {
-    programs,
     registerParentAccount,
     navigateTo,
     isFirebaseConnected
   } = useApp();
 
+  type ChildForm = { name: string; age: number; notes: string };
+  const emptyChild = (): ChildForm => ({ name: '', age: 9, notes: '' });
+
   const [parentName, setParentName] = useState('');
   const [parentEmail, setRegEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [childName, setChildName] = useState('');
-  const [childAge, setChildAge] = useState<number>(9);
-  const [programId, setProgramId] = useState(programs[0]?.id || 'prog-robotics-starter');
-  const [notes, setNotes] = useState('');
+  const [children, setChildren] = useState<ChildForm[]>([emptyChild()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedProgram = programs.find((p) => p.id === programId) || programs[0];
+  const updateChild = (idx: number, patch: Partial<ChildForm>) => {
+    setChildren((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+  };
+  const addChild = () => setChildren((prev) => [...prev, emptyChild()]);
+  const removeChild = (idx: number) => setChildren((prev) => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!parentName || !parentEmail || !phone || !childName) return;
+    const filledChildren = children.filter((c) => c.name.trim());
+    if (!parentName || !parentEmail || !phone || filledChildren.length === 0) return;
 
     setIsSubmitting(true);
     await registerParentAccount({
@@ -44,10 +51,11 @@ export const ParentRegisterPage: React.FC = () => {
       parentEmail,
       password,
       parentPhone: phone,
-      childName,
-      childAge: Number(childAge),
-      programId,
-      notes
+      children: filledChildren.map((c) => ({
+        name: c.name.trim(),
+        age: Number(c.age),
+        notes: c.notes.trim() || undefined
+      }))
     });
     setIsSubmitting(false);
   };
@@ -80,9 +88,9 @@ export const ParentRegisterPage: React.FC = () => {
         <div className="lg:col-span-5 duo-card p-6 sm:p-8 space-y-6 bg-white text-center">
           <div className="relative mx-auto w-28 h-28">
             <img
-              src="/src/assets/images/duo_junior_mascot_1790795302958.jpg"
-              alt="Junior Mascot"
-              className="w-28 h-28 rounded-3xl object-cover border-4 border-emerald-100 shadow-sm"
+              src={CLUB_PHOTOS.clubAvatar}
+              alt="Discovery Club Junior logo"
+              className="bg-white w-28 h-28 rounded-3xl object-cover border-4 border-emerald-100 shadow-sm"
             />
             <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-black text-xs border-2 border-white shadow-sm">
               ✓
@@ -191,9 +199,11 @@ export const ParentRegisterPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-black mb-1">Password (Optional)</label>
+                  <label className="block text-slate-700 font-black mb-1">Password (min. 6 characters) *</label>
                   <input
                     type="password"
+                    required
+                    minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Create a password"
@@ -210,78 +220,76 @@ export const ParentRegisterPage: React.FC = () => {
                 <span>Meet Your Future Robotics Star!</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-xs">
-                <div className="col-span-2">
-                  <label className="block text-slate-700 font-black mb-1">Child's Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={childName}
-                    onChange={(e) => setChildName(e.target.value)}
-                    placeholder="e.g. Yassine, Nour, Adam..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white text-xs font-semibold"
-                  />
-                </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                No need to pick a course now — our team will place each child in the right group and contact you.
+              </p>
 
-                <div>
-                  <label className="block text-slate-700 font-black mb-1">Age (6-17) *</label>
-                  <input
-                    type="number"
-                    min={6}
-                    max={17}
-                    required
-                    value={childAge}
-                    onChange={(e) => setChildAge(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 font-black focus:outline-none focus:border-sky-500 focus:bg-white text-xs text-center"
-                  />
-                </div>
-              </div>
-
-              {/* STEM Program Track Selection */}
-              <div className="space-y-1.5 text-xs">
-                <label className="block text-slate-700 font-black">Choose a STEM Track</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {programs.map((prog) => {
-                    const isSelected = prog.id === programId;
-                    return (
+              {children.map((child, idx) => (
+                <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border-2 border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-black text-slate-600">
+                    <span>Child {idx + 1}</span>
+                    {children.length > 1 && (
                       <button
-                        key={prog.id}
                         type="button"
-                        onClick={() => setProgramId(prog.id)}
-                        className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-sky-50 border-sky-400 border-b-4 border-b-sky-500'
-                            : 'bg-white border-slate-200 border-b-4 border-b-slate-200 hover:border-slate-300'
-                        }`}
+                        onClick={() => removeChild(idx)}
+                        className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-600 cursor-pointer"
                       >
-                        <div className="flex items-center justify-between font-black text-slate-800 text-xs mb-0.5">
-                          <span>{prog.title}</span>
-                          <span className="text-[10px] text-sky-600 bg-sky-100 px-1.5 py-0.2 rounded-full font-bold">
-                            {prog.ageRange}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-medium line-clamp-1">{prog.description}</div>
-                        <div className="text-[10px] font-black text-emerald-600 mt-1">
-                          ${prog.pricePerMonth} / month · All kits included
-                        </div>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
+                    )}
+                  </div>
 
-              <div>
-                <label className="block text-slate-700 font-black text-xs mb-1">
-                  Any special notes for trainers? (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g. Loves building LEGO, preferred session day..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold resize-none"
-                />
-              </div>
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div className="col-span-2">
+                      <label className="block text-slate-700 font-black mb-1">Child's Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={child.name}
+                        onChange={(e) => updateChild(idx, { name: e.target.value })}
+                        placeholder="e.g. Yassine, Nour, Adam..."
+                        className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 text-xs font-semibold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-black mb-1">Age (6-22) *</label>
+                      <input
+                        type="number"
+                        min={6}
+                        max={22}
+                        required
+                        value={child.age}
+                        onChange={(e) => updateChild(idx, { age: Number(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 font-black focus:outline-none focus:border-sky-500 text-xs text-center"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-black text-xs mb-1">
+                      Any special notes for trainers? (Optional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={child.notes}
+                      onChange={(e) => updateChild(idx, { notes: e.target.value })}
+                      placeholder="e.g. Loves building LEGO, preferred session day..."
+                      className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-xs font-semibold resize-none"
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addChild}
+                className="w-full py-2.5 rounded-2xl border-2 border-dashed border-sky-300 text-sky-600 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-sky-50 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add another child</span>
+              </button>
             </div>
 
             {/* Submit Button */}
