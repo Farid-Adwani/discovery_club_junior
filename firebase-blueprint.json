@@ -39,6 +39,39 @@
       },
       "required": ["id", "studentName", "parentName", "parentPhone", "programId", "status"]
     },
+    "Program": {
+      "title": "Program",
+      "description": "Robotics & STEM curriculum track",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "ageRange": { "type": "string" },
+        "description": { "type": "string" },
+        "level": { "type": "string" },
+        "pricePerMonth": { "type": "number" },
+        "duration": { "type": "string" },
+        "badge": { "type": "string" },
+        "syllabus": { "type": "array" }
+      },
+      "required": ["id", "title", "ageRange", "pricePerMonth"]
+    },
+    "Trainer": {
+      "title": "Trainer",
+      "description": "Club instructor profile and expertise",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "specialization": { "type": "string" },
+        "specialty": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "avatar": { "type": "string" },
+        "bio": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
     "Group": {
       "title": "Group",
       "description": "Cohort group schedule and lab assignment",
@@ -136,6 +169,22 @@
         "isRegistered": { "type": "boolean" }
       },
       "required": ["id", "title", "date", "category"]
+    },
+    "FacebookPost": {
+      "title": "FacebookPost",
+      "description": "Community post and achievement photo from Facebook page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "caption": { "type": "string" },
+        "date": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "likes": { "type": "number" },
+        "comments": { "type": "number" },
+        "tag": { "type": "string" },
+        "postUrl": { "type": "string" }
+      },
+      "required": ["id", "caption", "imageUrl", "likes", "tag"]
     }
   },
   "firestore": {
@@ -146,6 +195,14 @@
     "/students/{studentId}": {
       "schema": "Student",
       "description": "Student admissions and enrolled member records"
+    },
+    "/programs/{programId}": {
+      "schema": "Program",
+      "description": "Robotics curriculum tracks"
+    },
+    "/trainers/{trainerId}": {
+      "schema": "Trainer",
+      "description": "Club instructors and specialists"
     },
     "/groups/{groupId}": {
       "schema": "Group",
@@ -170,6 +227,10 @@
     "/events/{eventId}": {
       "schema": "ClubEvent",
       "description": "Competitions and hackathons"
+    },
+    "/facebook_posts/{postId}": {
+      "schema": "FacebookPost",
+      "description": "Community posts, achievement photos and likes"
     }
   }
 }

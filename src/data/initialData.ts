@@ -1,5 +1,37 @@
 import { Program, Trainer, Group, Student, HoodieSize, HoodieDistribution, SessionRecord, MaterialRequest, ClubEvent, FacebookPost, AppUser } from '../types';
 
+import fbEurobotChamps from '../assets/images/fb_eurobot_champs_1790880596105.jpg';
+import fbTrophyCert from '../assets/images/fb_trophy_cert_1790880984674.jpg';
+import fbMinisterHonor from '../assets/images/fb_minister_honor_1790881017763.jpg';
+import fbViennaRobocup from '../assets/images/fb_vienna_robocup_1790881002427.jpg';
+import fbKidsRobotLab from '../assets/images/fb_kids_robot_lab_1790880609885.jpg';
+import fbGirlsStem from '../assets/images/fb_girls_stem_1790880621451.jpg';
+import fbHoodieCrew from '../assets/images/fb_hoodie_crew_1790880647054.jpg';
+import fbTeensAiLab from '../assets/images/fb_teens_ai_lab_1790880634528.jpg';
+import duoJuniorMascot from '../assets/images/duo_junior_mascot_1790795302958.jpg';
+import duoRobotTrophy from '../assets/images/duo_robot_trophy_1790795316867.jpg';
+import heroRoboticsClub from '../assets/images/hero_robotics_club_1790790599599.jpg';
+import codingStemWorkshop from '../assets/images/coding_stem_workshop_1790790611938.jpg';
+import discoveryClubHoodie from '../assets/images/discovery_club_hoodie_1790790624273.jpg';
+import realFbLogoCover from '../assets/images/real_fb_logo_cover.jpg';
+
+export const CLUB_PHOTOS = {
+  realFbLogo: realFbLogoCover,
+  fbEurobotChamps,
+  fbTrophyCert,
+  fbMinisterHonor,
+  fbViennaRobocup,
+  fbKidsRobotLab,
+  fbGirlsStem,
+  fbHoodieCrew,
+  fbTeensAiLab,
+  duoJuniorMascot,
+  duoRobotTrophy,
+  heroRoboticsClub,
+  codingStemWorkshop,
+  discoveryClubHoodie
+};
+
 export const INITIAL_PROGRAMS: Program[] = [
   {
     id: 'prog-robotics-starter',
@@ -458,42 +490,82 @@ export const INITIAL_EVENTS: ClubEvent[] = [
 export const FACEBOOK_POSTS: FacebookPost[] = [
   {
     id: 'fb-01',
-    caption: '🏆 HISTORIC VICTORY! Our "Discovery 2" team wins 1st PLACE WORLDWIDE at Eurobot Junior 2026 in Alcalá de Henares, Spain! 🇹🇳 Outperforming 31 teams from 17 nations with our autonomous obstacle rover. Immense pride for our young Tunisian engineers!',
-    date: '3 days ago',
-    imageUrl: '/src/assets/images/eurobot_junior_victory_1790791215153.jpg',
-    likes: 482,
-    comments: 94,
-    tag: 'Eurobot Junior Champion',
+    caption: '🏆 HISTORIQUE ! Notre équipe "Discovery 2" remporte la 1ère PLACE MONDIALE à la compétition internationale Eurobot Junior 2026 en Espagne ! 🇹🇳 Félicitations à nos jeunes génies tunisiens qui ont conçu, programmé et piloté un rover 100% autonome. La relève technologique est assurée à Manouba !',
+    date: 'Hier à 18:30',
+    imageUrl: fbEurobotChamps,
+    likes: 542,
+    comments: 118,
+    tag: '🏆 Eurobot Champions',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   },
   {
     id: 'fb-02',
-    caption: '⚡ Saturday Morning in Manouba Lab: Our 10-14 year olds mastering Arduino Uno microcontrollers, ultrasonic echo sensor triangulation, and DC motor PWM control! Prototyping autonomous line followers with passion.',
-    date: '5 days ago',
-    imageUrl: '/src/assets/images/facebook_arduino_lab_1790791225683.jpg',
-    likes: 310,
-    comments: 42,
-    tag: 'Makers Workshop',
+    caption: '📜 Trophée Don Quichotte & Diplôme Officiel : "EUROBOT SPAIN JUNIOR INT. FINALS - FIRST PLACE - DISCOVERY 2" ! Remis à l’Université d’Alcalá de Henares en présence du doyen de l’École Polytechnique Bernardo Alarcos et des sponsors technologiques maxon, JLCPCB et 2ingenia.',
+    date: 'Il y a 2 jours',
+    imageUrl: fbTrophyCert,
+    likes: 498,
+    comments: 73,
+    tag: '🏆 Eurobot Champions',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   },
   {
     id: 'fb-03',
-    caption: '🤖 "Trial and error is the mother of engineering." Look at our Junior Robotics Alpha squad collaborating on dual-gripper pick-and-place robots! Ready for the upcoming National Cup.',
-    date: '1 week ago',
-    imageUrl: '/src/assets/images/hero_robotics_club_1790790599599.jpg',
-    likes: 275,
-    comments: 31,
-    tag: 'Junior Robotics',
+    caption: '🎖️ Cérémonie d’Honneur Solennelle : L’équipe de Discovery Club Junior reçue et félicitée sous les armoiries nationales tunisiennes par les hauts responsables de la Jeunesse et des Sports ! Fiers de porter haut les couleurs de la Tunisie.',
+    date: 'Il y a 3 jours',
+    imageUrl: fbMinisterHonor,
+    likes: 624,
+    comments: 142,
+    tag: '🇹🇳 Honneur National',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   },
   {
     id: 'fb-04',
-    caption: '💻 AI & Python cohort training computer vision models! Today students used OpenCV and Python to track hand coordinates in real time. The future of robotics is intelligent software.',
-    date: '2 weeks ago',
-    imageUrl: '/src/assets/images/coding_stem_workshop_1790790611938.jpg',
-    likes: 240,
-    comments: 28,
-    tag: 'AI for Kids',
+    caption: '🇦🇹 RoboCup Junior European Championship 2026 à la Marx Halle de Vienne, Autriche ! La délégation de Manouba sur le tapis rouge avec le drapeau national et la chéchia tunisienne parmi plus de 20 pays participants.',
+    date: 'Il y a 4 jours',
+    imageUrl: fbViennaRobocup,
+    likes: 445,
+    comments: 67,
+    tag: '🌍 Tournoi International',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-05',
+    caption: '🤖 Samedi après-midi au lab de Manouba : Les petits génies du club Junior Explorer (7-10 ans) construisent et programment leurs premiers rovers mécaniques ! Manipulation des engrenages, moteurs pas à pas et capteurs ultrasons.',
+    date: 'Il y a 5 jours',
+    imageUrl: fbKidsRobotLab,
+    likes: 384,
+    comments: 46,
+    tag: '🛠️ Ateliers Manouba',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-06',
+    caption: '⚡ Girls in STEM ! Nos jeunes ingénieures ont brillamment relevé le défi de navigation autonome avec détection d’obstacles. La robotique, le code et l’électronique sont pour toutes et tous chez Discovery Club Junior ! 🚀💡',
+    date: 'Il y a 1 semaine',
+    imageUrl: fbGirlsStem,
+    likes: 412,
+    comments: 53,
+    tag: '👧 Girls in Tech',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-07',
+    caption: '👕 C’est le jour de distribution des Capuches officielles "Discovery Junior" ! Chaque membre arbore fièrement son sweat bordeaux/marine brodé à son prénom et numéro. Prêts pour les tournois de robotique !',
+    date: 'Il y a 1 semaine',
+    imageUrl: fbHoodieCrew,
+    likes: 467,
+    comments: 82,
+    tag: '👕 Les Capuches',
+    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+  },
+  {
+    id: 'fb-08',
+    caption: '💻 Cohorte Ados (12-16 ans) : Algorithmes de vision par ordinateur avec OpenCV et ESP32 ! Suivi de ligne à haute vitesse et traitement d’images en temps réel pour le circuit de compétition.',
+    date: 'Il y a 2 semaines',
+    imageUrl: fbTeensAiLab,
+    likes: 298,
+    comments: 34,
+    tag: '🧠 IA & Vision',
     postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
   }
 ];

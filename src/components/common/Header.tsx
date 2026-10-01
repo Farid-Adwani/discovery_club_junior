@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
+import { CLUB_PHOTOS } from '../../data/initialData';
 import {
   ShieldCheck,
   GraduationCap,
@@ -67,8 +68,8 @@ export const Header: React.FC = () => {
               className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm shrink-0 bg-sky-50 flex items-center justify-center"
             >
               <img
-                src="/src/assets/images/duo_junior_mascot_1790795302958.jpg"
-                alt="Discovery Club Junior Mascot"
+                src={CLUB_PHOTOS.realFbLogo}
+                alt="Discovery Club Junior Official Logo"
                 className="w-full h-full object-cover"
               />
             </motion.div>

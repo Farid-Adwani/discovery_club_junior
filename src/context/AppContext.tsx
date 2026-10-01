@@ -12,7 +12,9 @@ import {
   SessionRecord,
   MaterialRequest,
   ClubEvent,
-  StudentAttendanceRecord
+  StudentAttendanceRecord,
+  FacebookPost,
+  FacebookComment
 } from '../types';
 import {
   INITIAL_STUDENTS,
@@ -24,6 +26,7 @@ import {
   INITIAL_SESSIONS,
   INITIAL_MATERIAL_REQUESTS,
   INITIAL_EVENTS,
+  FACEBOOK_POSTS,
   PRESET_ACCOUNTS
 } from '../data/initialData';
 import { db, auth, googleProvider, handleFirestoreError, OperationType, testConnection } from '../firebase';
@@ -86,6 +89,7 @@ interface AppContextType {
   sessions: SessionRecord[];
   materialRequests: MaterialRequest[];
   events: ClubEvent[];
+  facebookPosts: FacebookPost[];
 
   isWaitlistModalOpen: boolean;
   setIsWaitlistModalOpen: (open: boolean) => void;
@@ -150,27 +154,39 @@ interface AppContextType {
   updateHoodieStatus: (distributionId: string, status: HoodieDistribution['status']) => Promise<void>;
 
   // Curriculum management
+  addProgram: (program: Program) => Promise<void>;
+  updateProgram: (program: Program) => Promise<void>;
+  deleteProgram: (programId: string) => Promise<void>;
   addProgramObjective: (
     programId: string,
     objective: { week: number; title: string; description: string; hardware: string }
   ) => Promise<void>;
 
+  // Trainer management
+  addTrainer: (trainer: Trainer) => Promise<void>;
+  updateTrainer: (trainer: Trainer) => Promise<void>;
+
   // Event registration
   toggleEventRegistration: (eventId: string) => Promise<void>;
+
+  // Facebook & Community Feed
+  likeFacebookPost: (postId: string) => Promise<void>;
+  addFacebookPost: (post: Omit<FacebookPost, 'id' | 'likes' | 'comments'>) => Promise<void>;
+  deleteFacebookPost: (postId: string) => Promise<void>;
+  addFacebookComment: (postId: string, text: string, authorName?: string) => Promise<void>;
+  syncInitialDataToFirestore: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Current user state:
-  // Starts with null if not logged in, or loads saved auth
+  // Current user state
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('dcj_auth_user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Active view role is strictly derived from user's authenticated roles
-  // If user is null, role is always 'visitor'
+  // Active view role
   const [role, setRoleState] = useState<UserRole>(() => {
     if (!currentUser) return 'visitor';
     return currentUser.role;
@@ -230,13 +246,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Data states
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [programs, setPrograms] = useState<Program[]>(INITIAL_PROGRAMS);
-  const [trainers] = useState<Trainer[]>(INITIAL_TRAINERS);
+  const [trainers, setTrainers] = useState<Trainer[]>(INITIAL_TRAINERS);
   const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
   const [hoodieStock, setHoodieStock] = useState<Record<HoodieSize, number>>(INITIAL_HOODIE_STOCK);
   const [hoodieDistributions, setHoodieDistributions] = useState<HoodieDistribution[]>(INITIAL_HOODIE_DISTRIBUTIONS);
   const [sessions, setSessions] = useState<SessionRecord[]>(INITIAL_SESSIONS);
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>(INITIAL_MATERIAL_REQUESTS);
   const [events, setEvents] = useState<ClubEvent[]>(INITIAL_EVENTS);
+  const [facebookPosts, setFacebookPosts] = useState<FacebookPost[]>(FACEBOOK_POSTS);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     const id = Date.now().toString() + Math.random().toString().slice(2, 6);
@@ -246,7 +263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 4000);
   };
 
-  // Safe role switcher: Only allows roles the user actually has access to
+  // Safe role switcher
   const setRole = (newRole: UserRole) => {
     if (newRole === 'visitor') {
       setRoleState('visitor');
@@ -281,6 +298,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
+  // Seed all initial data helper
+  const seedFirestoreDatabase = async () => {
+    try {
+      // 1. Facebook Posts
+      const fbSnap = await getDocs(collection(db, 'facebook_posts'));
+      if (fbSnap.empty) {
+        for (const post of FACEBOOK_POSTS) {
+          await setDoc(doc(db, 'facebook_posts', post.id), post);
+        }
+      }
+
+      // 2. Programs
+      const progSnap = await getDocs(collection(db, 'programs'));
+      if (progSnap.empty) {
+        for (const prog of INITIAL_PROGRAMS) {
+          await setDoc(doc(db, 'programs', prog.id), prog);
+        }
+      }
+
+      // 3. Trainers
+      const trnSnap = await getDocs(collection(db, 'trainers'));
+      if (trnSnap.empty) {
+        for (const trn of INITIAL_TRAINERS) {
+          await setDoc(doc(db, 'trainers', trn.id), trn);
+        }
+      }
+
+      // 4. Students
+      const stdSnap = await getDocs(collection(db, 'students'));
+      if (stdSnap.empty) {
+        for (const s of INITIAL_STUDENTS) {
+          await setDoc(doc(db, 'students', s.id), s);
+        }
+      }
+
+      // 5. Groups
+      const grpSnap = await getDocs(collection(db, 'groups'));
+      if (grpSnap.empty) {
+        for (const g of INITIAL_GROUPS) {
+          await setDoc(doc(db, 'groups', g.id), g);
+        }
+      }
+
+      // 6. Sessions
+      const sessSnap = await getDocs(collection(db, 'sessions'));
+      if (sessSnap.empty) {
+        for (const sess of INITIAL_SESSIONS) {
+          await setDoc(doc(db, 'sessions', sess.id), sess);
+        }
+      }
+
+      // 7. Hoodie Stock
+      const stockSnap = await getDocs(collection(db, 'hoodie_stock'));
+      if (stockSnap.empty) {
+        for (const [size, count] of Object.entries(INITIAL_HOODIE_STOCK)) {
+          await setDoc(doc(db, 'hoodie_stock', size), { size, count });
+        }
+      }
+
+      // 8. Hoodie Distributions
+      const distSnap = await getDocs(collection(db, 'hoodie_distributions'));
+      if (distSnap.empty) {
+        for (const d of INITIAL_HOODIE_DISTRIBUTIONS) {
+          await setDoc(doc(db, 'hoodie_distributions', d.id), d);
+        }
+      }
+
+      // 9. Material Requests
+      const matSnap = await getDocs(collection(db, 'material_requests'));
+      if (matSnap.empty) {
+        for (const m of INITIAL_MATERIAL_REQUESTS) {
+          await setDoc(doc(db, 'material_requests', m.id), m);
+        }
+      }
+
+      // 10. Events
+      const evtSnap = await getDocs(collection(db, 'events'));
+      if (evtSnap.empty) {
+        for (const e of INITIAL_EVENTS) {
+          await setDoc(doc(db, 'events', e.id), e);
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore initial seeding error:', err);
+    }
+  };
+
+  const syncInitialDataToFirestore = async () => {
+    showToast('Synchronizing all Facebook posts, photos & club records to Firestore...');
+    try {
+      for (const post of FACEBOOK_POSTS) {
+        await setDoc(doc(db, 'facebook_posts', post.id), post);
+      }
+      for (const prog of INITIAL_PROGRAMS) {
+        await setDoc(doc(db, 'programs', prog.id), prog);
+      }
+      for (const trn of INITIAL_TRAINERS) {
+        await setDoc(doc(db, 'trainers', trn.id), trn);
+      }
+      for (const s of INITIAL_STUDENTS) {
+        await setDoc(doc(db, 'students', s.id), s);
+      }
+      for (const g of INITIAL_GROUPS) {
+        await setDoc(doc(db, 'groups', g.id), g);
+      }
+      for (const sess of INITIAL_SESSIONS) {
+        await setDoc(doc(db, 'sessions', sess.id), sess);
+      }
+      for (const [size, count] of Object.entries(INITIAL_HOODIE_STOCK)) {
+        await setDoc(doc(db, 'hoodie_stock', size), { size, count });
+      }
+      for (const d of INITIAL_HOODIE_DISTRIBUTIONS) {
+        await setDoc(doc(db, 'hoodie_distributions', d.id), d);
+      }
+      for (const m of INITIAL_MATERIAL_REQUESTS) {
+        await setDoc(doc(db, 'material_requests', m.id), m);
+      }
+      for (const e of INITIAL_EVENTS) {
+        await setDoc(doc(db, 'events', e.id), e);
+      }
+      showToast('All data successfully persisted in Firestore database!', 'success');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'syncInitialData');
+      showToast('Failed to sync to database', 'error');
+    }
+  };
+
   // Test connection & seed initial Firestore data if empty
   useEffect(() => {
     let isSubscribed = true;
@@ -290,57 +434,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!isSubscribed) return;
       setIsFirebaseConnected(ok);
 
-      try {
-        const stdSnap = await getDocs(collection(db, 'students'));
-        if (stdSnap.empty) {
-          for (const s of INITIAL_STUDENTS) {
-            await setDoc(doc(db, 'students', s.id), s);
-          }
-        }
-
-        const grpSnap = await getDocs(collection(db, 'groups'));
-        if (grpSnap.empty) {
-          for (const g of INITIAL_GROUPS) {
-            await setDoc(doc(db, 'groups', g.id), g);
-          }
-        }
-
-        const sessSnap = await getDocs(collection(db, 'sessions'));
-        if (sessSnap.empty) {
-          for (const sess of INITIAL_SESSIONS) {
-            await setDoc(doc(db, 'sessions', sess.id), sess);
-          }
-        }
-
-        const stockSnap = await getDocs(collection(db, 'hoodie_stock'));
-        if (stockSnap.empty) {
-          for (const [size, count] of Object.entries(INITIAL_HOODIE_STOCK)) {
-            await setDoc(doc(db, 'hoodie_stock', size), { size, count });
-          }
-        }
-
-        const distSnap = await getDocs(collection(db, 'hoodie_distributions'));
-        if (distSnap.empty) {
-          for (const d of INITIAL_HOODIE_DISTRIBUTIONS) {
-            await setDoc(doc(db, 'hoodie_distributions', d.id), d);
-          }
-        }
-
-        const matSnap = await getDocs(collection(db, 'material_requests'));
-        if (matSnap.empty) {
-          for (const m of INITIAL_MATERIAL_REQUESTS) {
-            await setDoc(doc(db, 'material_requests', m.id), m);
-          }
-        }
-
-        const evtSnap = await getDocs(collection(db, 'events'));
-        if (evtSnap.empty) {
-          for (const e of INITIAL_EVENTS) {
-            await setDoc(doc(db, 'events', e.id), e);
-          }
-        }
-      } catch (err) {
-        console.warn('Firestore initial seeding note:', err);
+      if (ok) {
+        await seedFirestoreDatabase();
       }
     }
 
@@ -351,8 +446,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Set up real-time onSnapshot listeners
+  // Set up real-time onSnapshot listeners across all collections
   useEffect(() => {
+    // 1. Facebook Posts real-time sync
+    const unsubFacebookPosts = onSnapshot(
+      collection(db, 'facebook_posts'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list: FacebookPost[] = [];
+          snapshot.forEach((d) => list.push(d.data() as FacebookPost));
+          // Keep chronological sorting
+          list.sort((a, b) => (a.id > b.id ? 1 : -1));
+          setFacebookPosts(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'facebook_posts')
+    );
+
+    // 2. Programs real-time sync
+    const unsubPrograms = onSnapshot(
+      collection(db, 'programs'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list: Program[] = [];
+          snapshot.forEach((d) => list.push(d.data() as Program));
+          setPrograms(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'programs')
+    );
+
+    // 3. Trainers real-time sync
+    const unsubTrainers = onSnapshot(
+      collection(db, 'trainers'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list: Trainer[] = [];
+          snapshot.forEach((d) => list.push(d.data() as Trainer));
+          setTrainers(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'trainers')
+    );
+
+    // 4. Students
     const unsubStudents = onSnapshot(
       collection(db, 'students'),
       (snapshot) => {
@@ -365,6 +502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.GET, 'students')
     );
 
+    // 5. Groups
     const unsubGroups = onSnapshot(
       collection(db, 'groups'),
       (snapshot) => {
@@ -377,6 +515,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.GET, 'groups')
     );
 
+    // 6. Sessions
     const unsubSessions = onSnapshot(
       collection(db, 'sessions'),
       (snapshot) => {
@@ -389,6 +528,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.GET, 'sessions')
     );
 
+    // 7. Hoodie Stock
     const unsubStock = onSnapshot(
       collection(db, 'hoodie_stock'),
       (snapshot) => {
@@ -406,6 +546,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.GET, 'hoodie_stock')
     );
 
+    // 8. Hoodie Distributions
     const unsubDist = onSnapshot(
       collection(db, 'hoodie_distributions'),
       (snapshot) => {
@@ -418,6 +559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.GET, 'hoodie_distributions')
     );
 
+    // 9. Material Requests
     const unsubMat = onSnapshot(
       collection(db, 'material_requests'),
       (snapshot) => {
@@ -430,6 +572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.GET, 'material_requests')
     );
 
+    // 10. Events
     const unsubEvents = onSnapshot(
       collection(db, 'events'),
       (snapshot) => {
@@ -443,6 +586,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     return () => {
+      unsubFacebookPosts();
+      unsubPrograms();
+      unsubTrainers();
       unsubStudents();
       unsubGroups();
       unsubSessions();
@@ -588,8 +734,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       studentName: data.childName,
       studentAge: data.childAge,
       programId: data.programId,
-      status: 'active', // Parent registered, actively enrolled
-      groupId: 'grp-rob-sat-am', // default assign to alpha cohort
+      status: 'active',
+      groupId: 'grp-rob-sat-am',
       registeredAt: new Date().toISOString().split('T')[0],
       standardMonthlyPrice: matchedProgram.pricePerMonth,
       paymentStatus: 'paid',
@@ -609,7 +755,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       childName: data.childName
     };
 
-    // Update local state
+    // Update local state immediately
     setStudents((prev) => [newStudent, ...prev]);
     setCurrentUser(newParentUser);
     setActiveParentStudentId(studentId);
@@ -629,7 +775,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Auth: Preset Switcher (strictly in the login modal for evaluator review)
+  // Auth: Preset Switcher
   const loginWithPreset = (preset: AppUser) => {
     setCurrentUser(preset);
     setRoleState(preset.role);
@@ -653,7 +799,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Signed out. Returned to Public Visitor portal.');
   };
 
-  // Real Firestore mutations
+  // Real Firestore mutations: Students & Waitlist
   const registerWaitlist = async (data: {
     parentName: string;
     parentPhone: string;
@@ -747,6 +893,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Group actions
   const createGroup = async (groupData: Omit<Group, 'id'>) => {
     const newGroup: Group = {
       ...groupData,
@@ -785,6 +932,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Session & Attendance
   const saveSessionAttendance = async (
     groupId: string,
     date: string,
@@ -826,6 +974,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Material requests
   const createMaterialRequest = async (data: {
     groupId: string;
     itemsNeeded: string;
@@ -871,6 +1020,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Inventory / Hoodies
   const addHoodieStock = async (size: HoodieSize, amount: number) => {
     const newCount = Math.max(0, (hoodieStock[size] || 0) + amount);
     setHoodieStock((prev) => ({
@@ -955,24 +1105,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Programs & Curriculum
+  const addProgram = async (program: Program) => {
+    setPrograms((prev) => [...prev, program]);
+    showToast(`Program "${program.title}" created in Firestore`);
+    try {
+      await setDoc(doc(db, 'programs', program.id), program);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `programs/${program.id}`);
+    }
+  };
+
+  const updateProgram = async (program: Program) => {
+    setPrograms((prev) => prev.map((p) => (p.id === program.id ? program : p)));
+    showToast(`Program "${program.title}" updated in Firestore`);
+    try {
+      await setDoc(doc(db, 'programs', program.id), program);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `programs/${program.id}`);
+    }
+  };
+
+  const deleteProgram = async (programId: string) => {
+    setPrograms((prev) => prev.filter((p) => p.id !== programId));
+    showToast(`Program deleted`, 'info');
+    try {
+      await deleteDoc(doc(db, 'programs', programId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `programs/${programId}`);
+    }
+  };
+
   const addProgramObjective = async (
     programId: string,
     objective: { week: number; title: string; description: string; hardware: string }
   ) => {
-    setPrograms((prev) =>
-      prev.map((prog) => {
-        if (prog.id === programId) {
-          return {
-            ...prog,
-            syllabus: [...prog.syllabus, objective]
-          };
-        }
-        return prog;
-      })
-    );
-    showToast(`Curriculum objective added to ${programId}`);
+    const target = programs.find((p) => p.id === programId);
+    if (!target) return;
+    const updatedSyllabus = [...target.syllabus, objective];
+    const updated = { ...target, syllabus: updatedSyllabus };
+
+    setPrograms((prev) => prev.map((prog) => (prog.id === programId ? updated : prog)));
+    showToast(`Curriculum objective added to ${target.title}`);
+
+    try {
+      await updateDoc(doc(db, 'programs', programId), {
+        syllabus: updatedSyllabus
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `programs/${programId}`);
+    }
   };
 
+  // Trainers
+  const addTrainer = async (trainer: Trainer) => {
+    setTrainers((prev) => [...prev, trainer]);
+    showToast(`Trainer ${trainer.name} registered in Firestore`);
+    try {
+      await setDoc(doc(db, 'trainers', trainer.id), trainer);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `trainers/${trainer.id}`);
+    }
+  };
+
+  const updateTrainer = async (trainer: Trainer) => {
+    setTrainers((prev) => prev.map((t) => (t.id === trainer.id ? trainer : t)));
+    showToast(`Trainer ${trainer.name} updated`);
+    try {
+      await setDoc(doc(db, 'trainers', trainer.id), trainer);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `trainers/${trainer.id}`);
+    }
+  };
+
+  // Events
   const toggleEventRegistration = async (eventId: string) => {
     const target = events.find((e) => e.id === eventId);
     if (!target) return;
@@ -991,6 +1197,102 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
+    }
+  };
+
+  // Facebook & Community Feed real-time Firestore mutations
+  const likeFacebookPost = async (postId: string) => {
+    const post = facebookPosts.find((p) => p.id === postId);
+    if (!post) return;
+
+    const userKey = currentUser?.uid || 'guest-visitor';
+    const currentLikes = post.likes;
+    const likedBy = post.likedBy || [];
+    const hasLiked = likedBy.includes(userKey);
+
+    const newLikes = hasLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1;
+    const newLikedBy = hasLiked ? likedBy.filter((u) => u !== userKey) : [...likedBy, userKey];
+
+    // Optimistic UI update
+    setFacebookPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, likes: newLikes, likedBy: newLikedBy } : p))
+    );
+
+    showToast(hasLiked ? 'Like removed' : '❤️ Liked Facebook post! Synced in Firestore.', 'success');
+
+    try {
+      await updateDoc(doc(db, 'facebook_posts', postId), {
+        likes: newLikes,
+        likedBy: newLikedBy
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `facebook_posts/${postId}`);
+    }
+  };
+
+  const addFacebookPost = async (postData: Omit<FacebookPost, 'id' | 'likes' | 'comments'>) => {
+    const newPost: FacebookPost = {
+      ...postData,
+      id: `fb-${Date.now().toString().slice(-5)}`,
+      likes: 0,
+      comments: 0,
+      likedBy: [],
+      commentsList: []
+    };
+
+    setFacebookPosts((prev) => [newPost, ...prev]);
+    showToast(`New Facebook post published to club feed!`);
+
+    try {
+      await setDoc(doc(db, 'facebook_posts', newPost.id), newPost);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `facebook_posts/${newPost.id}`);
+    }
+  };
+
+  const deleteFacebookPost = async (postId: string) => {
+    setFacebookPosts((prev) => prev.filter((p) => p.id !== postId));
+    showToast(`Post deleted from Facebook feed`, 'info');
+
+    try {
+      await deleteDoc(doc(db, 'facebook_posts', postId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `facebook_posts/${postId}`);
+    }
+  };
+
+  const addFacebookComment = async (postId: string, text: string, authorName?: string) => {
+    if (!text.trim()) return;
+    const post = facebookPosts.find((p) => p.id === postId);
+    if (!post) return;
+
+    const author = authorName || currentUser?.displayName || 'Club Supporter';
+    const newComment: FacebookComment = {
+      id: `cm-${Date.now().toString().slice(-4)}`,
+      author,
+      text: text.trim(),
+      date: 'À l’instant'
+    };
+
+    const currentComments = post.commentsList || [];
+    const updatedCommentsList = [...currentComments, newComment];
+    const newCount = (post.comments || 0) + 1;
+
+    setFacebookPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, comments: newCount, commentsList: updatedCommentsList } : p
+      )
+    );
+
+    showToast(`Comment added to Facebook post!`);
+
+    try {
+      await updateDoc(doc(db, 'facebook_posts', postId), {
+        comments: newCount,
+        commentsList: updatedCommentsList
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `facebook_posts/${postId}`);
     }
   };
 
@@ -1026,6 +1328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sessions,
         materialRequests,
         events,
+        facebookPosts,
         isWaitlistModalOpen,
         setIsWaitlistModalOpen,
         selectedProgramForWaitlist,
@@ -1047,8 +1350,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addHoodieStock,
         requestHoodieOrder,
         updateHoodieStatus,
+        addProgram,
+        updateProgram,
+        deleteProgram,
         addProgramObjective,
-        toggleEventRegistration
+        addTrainer,
+        updateTrainer,
+        toggleEventRegistration,
+        likeFacebookPost,
+        addFacebookPost,
+        deleteFacebookPost,
+        addFacebookComment,
+        syncInitialDataToFirestore
       }}
     >
       {children}

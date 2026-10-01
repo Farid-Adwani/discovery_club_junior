@@ -21,14 +21,13 @@ service cloud.firestore {
     // Connection test document
     match /test/connection {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if true;
     }
 
     // Users collection with RBAC
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow read: if true;
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
@@ -40,52 +39,55 @@ service cloud.firestore {
 
     // Students / Waitlist collection
     match /students/{studentId} {
-      // Anyone can create a waitlist application; signed in users can view and admin can manage
-      allow create: if true;
-      allow read: if true;
-      allow update, delete: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    // Programs collection
+    match /programs/{programId} {
+      allow read, write: if true;
+    }
+
+    // Trainers collection
+    match /trainers/{trainerId} {
+      allow read, write: if true;
     }
 
     // Cohort groups
     match /groups/{groupId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    // Programs
-    match /programs/{programId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Sessions & Attendance
     match /sessions/{sessionId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Hoodie Merchandise Distributions & Orders
     match /hoodie_distributions/{distributionId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Hoodie Stock
     match /hoodie_stock/{size} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Material requests
     match /material_requests/{requestId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Competitions & Events
     match /events/{eventId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
+    }
+
+    // Community Facebook Posts & Live Likes
+    match /facebook_posts/{postId} {
+      allow read, write: if true;
+      match /comments/{commentId} {
+        allow read, write: if true;
+      }
     }
   }
 }

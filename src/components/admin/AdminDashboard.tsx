@@ -23,9 +23,17 @@ import {
   ArrowRight,
   Flame,
   Star,
-  ShoppingBag
+  ShoppingBag,
+  Share2,
+  Heart,
+  MessageCircle,
+  ExternalLink,
+  Database,
+  RefreshCw,
+  Image as ImageIcon
 } from 'lucide-react';
-import { HoodieSize, Student, Group } from '../../types';
+import { HoodieSize, Student, Group, FacebookPost } from '../../types';
+import { CLUB_PHOTOS } from '../../data/initialData';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -37,6 +45,7 @@ export const AdminDashboard: React.FC = () => {
     hoodieDistributions,
     sessions,
     materialRequests,
+    facebookPosts,
     updateStudentStatus,
     updateStudentPrice,
     assignStudentToGroup,
@@ -47,11 +56,17 @@ export const AdminDashboard: React.FC = () => {
     updateHoodieStatus,
     addProgramObjective,
     updateMaterialRequestStatus,
-    navigateTo
+    navigateTo,
+    likeFacebookPost,
+    addFacebookPost,
+    deleteFacebookPost,
+    syncInitialDataToFirestore,
+    isFirebaseConnected,
+    showToast
   } = useApp();
 
   const [adminTab, setAdminTab] = useState<
-    'overview' | 'students' | 'groups' | 'attendance' | 'payments' | 'curriculum' | 'inventory'
+    'overview' | 'students' | 'groups' | 'attendance' | 'payments' | 'curriculum' | 'inventory' | 'facebook'
   >('overview');
 
   const [studentFilter, setStudentFilter] = useState<'all' | 'waitlist' | 'accepted' | 'active'>('all');
@@ -86,6 +101,26 @@ export const AdminDashboard: React.FC = () => {
   const [newObjTitle, setNewObjTitle] = useState('');
   const [newObjDesc, setNewObjDesc] = useState('');
   const [newObjHw, setNewObjHw] = useState('');
+
+  // Facebook post creation state
+  const [isAddPostOpen, setIsAddPostOpen] = useState(false);
+  const [newPostCaption, setNewPostCaption] = useState('');
+  const [newPostTag, setNewPostTag] = useState('🏆 Eurobot Champions');
+  const [newPostImageUrl, setNewPostImageUrl] = useState(CLUB_PHOTOS.fbEurobotChamps);
+  const adminFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleAdminFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setNewPostImageUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Computed metrics
   const activeStudents = students.filter((s) => s.status === 'active');
@@ -122,32 +157,48 @@ export const AdminDashboard: React.FC = () => {
       room: newGroupRoom,
       maxCapacity: Number(newGroupCap)
     });
-    setNewGroupName('');
+
     setIsAddGroupOpen(false);
+    setNewGroupName('');
   };
 
   const handleSavePriceOverride = () => {
     if (!editingStudentPrice) return;
-    updateStudentPrice(
-      editingStudentPrice.id,
-      customPriceVal > 0 ? customPriceVal : undefined,
-      paymentStatusVal
-    );
+    updateStudentPrice(editingStudentPrice.id, customPriceVal, paymentStatusVal);
     setEditingStudentPrice(null);
   };
 
-  const handleAddCurriculumSubmit = (e: React.FormEvent) => {
+  const handleAddCurriculumObjective = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newObjTitle || !newObjDesc) return;
+
     addProgramObjective(curriculumProgId, {
       week: Number(newObjWeek),
       title: newObjTitle,
       description: newObjDesc,
-      hardware: newObjHw || 'Sensors & Controllers'
+      hardware: newObjHw || 'Sensors & Circuit kit'
     });
+
     setNewObjTitle('');
     setNewObjDesc('');
     setNewObjHw('');
+  };
+
+  const handleCreateFacebookPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPostCaption.trim()) return;
+
+    await addFacebookPost({
+      caption: newPostCaption.trim(),
+      date: 'À l’instant',
+      imageUrl: newPostImageUrl,
+      tag: newPostTag,
+      postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
+    });
+
+    setIsAddPostOpen(false);
+    setNewPostCaption('');
+    showToast('Published Facebook post to Firestore database!', 'success');
   };
 
   return (
@@ -167,7 +218,23 @@ export const AdminDashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Firestore DB Status */}
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-600">
+            <span className={`w-2.5 h-2.5 rounded-full ${isFirebaseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{isFirebaseConnected ? 'Firestore Connected' : 'Connecting to DB...'}</span>
+          </div>
+
+          {/* Sync All Initial Data to Firestore */}
+          <button
+            onClick={syncInitialDataToFirestore}
+            className="px-3.5 py-2.5 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer text-sky-700"
+            title="Seed/Sync all Facebook posts and club data to Firestore"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sync DB</span>
+          </button>
+
           <button
             onClick={() => navigateTo('schedule-matrix')}
             className="px-4 py-2.5 btn-duo-secondary text-xs font-black flex items-center gap-2 cursor-pointer"
@@ -187,7 +254,8 @@ export const AdminDashboard: React.FC = () => {
           { id: 'attendance', label: 'Attendance Call Lists', icon: <ClipboardList className="w-4 h-4" /> },
           { id: 'payments', label: 'Payments & Tuition', icon: <DollarSign className="w-4 h-4" /> },
           { id: 'inventory', label: '“Les Capuches” Inventory', icon: <Package className="w-4 h-4" /> },
-          { id: 'curriculum', label: 'Curriculum Builder', icon: <BookOpen className="w-4 h-4" /> }
+          { id: 'curriculum', label: 'Curriculum Builder', icon: <BookOpen className="w-4 h-4" /> },
+          { id: 'facebook', label: `Facebook Feed (${facebookPosts.length})`, icon: <Share2 className="w-4 h-4" /> }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -228,295 +296,304 @@ export const AdminDashboard: React.FC = () => {
                 <DollarSign className="w-4 h-4 text-emerald-500" />
               </div>
               <div className="text-3xl font-black text-emerald-600 font-mono">
-                ${totalMonthlyRevenue}
+                {totalMonthlyRevenue.toLocaleString()} <span className="text-sm font-normal text-slate-400">DT/mo</span>
               </div>
               <div className="text-[11px] font-bold text-emerald-700">
-                Avg ${(totalMonthlyRevenue / (activeStudents.length || 1)).toFixed(0)} / student / mo
+                Avg. {Math.round(totalMonthlyRevenue / (activeStudents.length || 1))} DT / student
               </div>
             </div>
 
             <div className="duo-card duo-card-glow-yellow p-5 bg-white space-y-1 cursor-pointer">
               <div className="flex items-center justify-between text-xs font-black text-slate-400">
-                <span>LAB OCCUPANCY RATE</span>
-                <TrendingUp className="w-4 h-4 text-amber-500" />
+                <span>PENDING WAITLIST QUEUE</span>
+                <UserPlus className="w-4 h-4 text-amber-500" />
               </div>
-              <div className="text-3xl font-black text-amber-600 font-mono">
-                {occupancyRate}%
+              <div className="text-3xl font-black text-amber-500 font-mono">
+                {waitlistStudents.length}
               </div>
               <div className="text-[11px] font-bold text-amber-700">
-                {activeStudents.length} of {totalCapacity} seats filled
+                Awaiting director intake review
               </div>
             </div>
 
-            <div className="duo-card duo-card-glow-orange p-5 bg-white space-y-1 cursor-pointer">
+            <div className="duo-card duo-card-glow-purple p-5 bg-white space-y-1 cursor-pointer">
               <div className="flex items-center justify-between text-xs font-black text-slate-400">
-                <span>PENDING WAITLIST</span>
-                <UserPlus className="w-4 h-4 text-orange-500" />
+                <span>LAB OCCUPANCY RATE</span>
+                <TrendingUp className="w-4 h-4 text-purple-500" />
               </div>
-              <div className="text-3xl font-black text-orange-600 font-mono">
-                {waitlistStudents.length}
+              <div className="text-3xl font-black text-purple-600 font-mono">
+                {occupancyRate}%
               </div>
-              <div className="text-[11px] font-bold text-orange-700">
-                Queue awaiting confirmation
+              <div className="text-[11px] font-bold text-purple-700">
+                {activeStudents.length} of {totalCapacity} seats occupied
               </div>
             </div>
           </div>
 
-          {/* Quick Shortcuts & Material Requests */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Quick Action Alerts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Pending Waitlist Review Widget */}
+            <div className="duo-card p-6 bg-white space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-amber-500" />
+                  <span>Immediate Waitlist Applications ({waitlistStudents.length})</span>
+                </h3>
+                <button
+                  onClick={() => setAdminTab('students')}
+                  className="text-xs font-bold text-sky-600 hover:underline cursor-pointer"
+                >
+                  Manage all &rarr;
+                </button>
+              </div>
+
+              {waitlistStudents.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs font-medium">
+                  Queue is clear. No pending waitlist applications!
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {waitlistStudents.slice(0, 3).map((st) => (
+                    <div
+                      key={st.id}
+                      className="p-3.5 rounded-2xl bg-slate-50 border-2 border-slate-200 flex items-center justify-between gap-4"
+                    >
+                      <div>
+                        <div className="font-black text-slate-800 text-xs">
+                          {st.studentName} ({st.studentAge} yrs)
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          Parent: {st.parentName} · {st.parentPhone}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => updateStudentStatus(st.id, 'accepted')}
+                          className="px-3 py-1.5 btn-duo-green text-xs font-black cursor-pointer"
+                        >
+                          Admit
+                        </button>
+                        <button
+                          onClick={() => deleteStudent(st.id)}
+                          className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-500 text-xs font-bold cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Pending Material Requisitions Widget */}
             <div className="duo-card p-6 bg-white space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                   <Package className="w-4 h-4 text-sky-500" />
-                  <span>Trainer Equipment Requests</span>
+                  <span>Trainer Equipment Requisitions ({materialRequests.filter((r) => r.status === 'pending').length})</span>
                 </h3>
-                <span className="font-mono text-xs font-bold text-slate-400">
-                  {materialRequests.filter((r) => r.status === 'pending').length} Pending
-                </span>
+                <span className="text-xs font-bold text-slate-400">Manouba Lab Logistics</span>
               </div>
 
-              <div className="space-y-2.5">
-                {materialRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div>
-                      <div className="font-black text-slate-800">{req.groupName} · {req.trainerName}</div>
-                      <div className="text-slate-600 font-semibold">{req.itemsNeeded} ({req.quantity})</div>
-                      <div className="text-[10px] text-slate-400">Needed by {req.sessionDate}</div>
-                    </div>
-
-                    <div>
-                      {req.status === 'pending' ? (
-                        <button
-                          onClick={() => updateMaterialRequestStatus(req.id, 'approved')}
-                          className="px-3 py-1.5 btn-duo-green text-xs font-black cursor-pointer"
-                        >
-                          Approve
-                        </button>
-                      ) : req.status === 'approved' ? (
+              {materialRequests.filter((r) => r.status === 'pending').length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs font-medium">
+                  All trainer equipment requests fulfilled.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {materialRequests
+                    .filter((r) => r.status === 'pending')
+                    .map((req) => (
+                      <div
+                        key={req.id}
+                        className="p-3.5 rounded-2xl bg-slate-50 border-2 border-slate-200 flex items-center justify-between gap-4"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="font-black text-slate-800 text-xs">
+                            {req.itemsNeeded} ({req.quantity})
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-medium">
+                            Req by {req.trainerName} for {req.groupName} · Needed: {req.sessionDate}
+                          </div>
+                        </div>
                         <button
                           onClick={() => updateMaterialRequestStatus(req.id, 'delivered')}
-                          className="px-3 py-1.5 btn-duo-blue text-xs font-black cursor-pointer"
+                          className="px-3 py-1.5 btn-duo-blue text-xs font-black cursor-pointer shrink-0"
                         >
-                          Delivered
+                          Mark Delivered
                         </button>
-                      ) : (
-                        <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">
-                          ✓ Delivered
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="duo-card p-6 bg-white space-y-4">
-              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>Quick Operations</span>
-              </h3>
-
-              <div className="grid grid-cols-2 gap-3 text-xs font-black">
-                <button
-                  onClick={() => setAdminTab('students')}
-                  className="p-4 rounded-2xl bg-sky-50 border-2 border-sky-200 hover:border-sky-300 text-sky-800 text-left transition-all cursor-pointer space-y-1"
-                >
-                  <Users className="w-5 h-5 text-sky-600 mb-1" />
-                  <div>Review Waitlist Queue</div>
-                  <div className="text-[10px] text-sky-600 font-medium">{waitlistStudents.length} awaiting approval</div>
-                </button>
-
-                <button
-                  onClick={() => setAdminTab('inventory')}
-                  className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 hover:border-amber-300 text-amber-900 text-left transition-all cursor-pointer space-y-1"
-                >
-                  <Package className="w-5 h-5 text-amber-600 mb-1" />
-                  <div>Restock Club Hoodies</div>
-                  <div className="text-[10px] text-amber-700 font-medium">Log shipments & sizes</div>
-                </button>
-
-                <button
-                  onClick={() => setAdminTab('groups')}
-                  className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 hover:border-emerald-300 text-emerald-900 text-left transition-all cursor-pointer space-y-1"
-                >
-                  <Calendar className="w-5 h-5 text-emerald-600 mb-1" />
-                  <div>Manage Cohort Groups</div>
-                  <div className="text-[10px] text-emerald-700 font-medium">{groups.length} active classes</div>
-                </button>
-
-                <button
-                  onClick={() => navigateTo('schedule-matrix')}
-                  className="p-4 rounded-2xl bg-purple-50 border-2 border-purple-200 hover:border-purple-300 text-purple-900 text-left transition-all cursor-pointer space-y-1"
-                >
-                  <Sparkles className="w-5 h-5 text-purple-600 mb-1" />
-                  <div>Schedule Matrix</div>
-                  <div className="text-[10px] text-purple-700 font-medium">Automated room solver</div>
-                </button>
-              </div>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* 2. STUDENTS & WAITLIST TAB */}
+      {/* 2. STUDENTS / WAITLIST TAB */}
       {adminTab === 'students' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5">
-              {(['all', 'waitlist', 'accepted', 'active'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setStudentFilter(filter)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black capitalize transition-all cursor-pointer ${
-                    studentFilter === filter
-                      ? 'btn-duo-blue'
-                      : 'btn-duo-secondary'
-                  }`}
-                >
-                  {filter} ({students.filter((s) => filter === 'all' || s.status === filter).length})
-                </button>
-              ))}
+        <div className="duo-card p-6 bg-white space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search student or parent phone..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="pl-9 pr-4 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white w-64"
+                />
+              </div>
+
+              <div className="flex items-center gap-1">
+                {(['all', 'waitlist', 'accepted', 'active'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setStudentFilter(filter)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                      studentFilter === filter
+                        ? 'btn-duo-yellow'
+                        : 'btn-duo-secondary'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search students, parents, phone..."
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                className="pl-9 pr-3.5 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-sky-500 w-full sm:w-64"
-              />
+            <div className="text-xs font-bold text-slate-400">
+              Showing {filteredStudents.length} of {students.length} students
             </div>
           </div>
 
-          {/* Student Table in Clean Duo-Card */}
-          <div className="duo-card overflow-x-auto bg-white">
-            <table className="w-full text-left border-collapse text-xs font-medium">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-semibold">
               <thead>
-                <tr className="border-b-2 border-slate-100 bg-slate-50 text-slate-500 font-black uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4">Student & Age</th>
-                  <th className="py-3 px-4">Parent Contact</th>
-                  <th className="py-3 px-4">STEM Track</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Assigned Cohort</th>
-                  <th className="py-3 px-4 text-right">Tuition</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                <tr className="border-b-2 border-slate-200 text-slate-400 font-black">
+                  <th className="pb-3">Student Name</th>
+                  <th className="pb-3">Age</th>
+                  <th className="pb-3">Parent Info</th>
+                  <th className="pb-3">Track & Status</th>
+                  <th className="pb-3">Assigned Cohort</th>
+                  <th className="pb-3">Tuition Override</th>
+                  <th className="pb-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredStudents.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-400 text-xs font-medium">
-                      No student records found.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStudents.map((student) => {
-                    const prog = programs.find((p) => p.id === student.programId);
-                    const effectivePrice =
-                      student.customMonthlyPrice !== undefined
-                        ? student.customMonthlyPrice
-                        : student.standardMonthlyPrice;
+              <tbody className="divide-y divide-slate-100">
+                {filteredStudents.map((st) => {
+                  const program = programs.find((p) => p.id === st.programId);
+                  const assignedGroup = groups.find((g) => g.id === st.groupId);
 
-                    return (
-                      <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3.5 px-4">
-                          <div className="font-black text-slate-800">{student.studentName}</div>
-                          <div className="text-[11px] text-slate-400">
-                            {student.studentAge} yrs · Joined {student.registeredAt}
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-800">{student.parentName}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{student.parentPhone}</div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-bold text-sky-700">{prog?.title || student.programId}</span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                            student.status === 'active'
+                  return (
+                    <tr key={st.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 font-black text-slate-800">
+                        {st.studentName}
+                        {st.notes && (
+                          <span className="block text-[10px] text-slate-400 font-medium italic">
+                            {st.notes}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 text-slate-600">{st.studentAge} yrs</td>
+                      <td className="py-3">
+                        <div className="font-bold text-slate-700">{st.parentName}</div>
+                        <div className="text-slate-400 text-[11px] font-mono">{st.parentPhone}</div>
+                      </td>
+                      <td className="py-3">
+                        <div className="text-slate-800 font-black">{program?.title || st.programId}</div>
+                        <span
+                          className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            st.status === 'active'
                               ? 'bg-emerald-100 text-emerald-800'
-                              : student.status === 'accepted'
+                              : st.status === 'accepted'
                               ? 'bg-sky-100 text-sky-800'
                               : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {student.status}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
+                          }`}
+                        >
+                          {st.status}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        {assignedGroup ? (
+                          <div>
+                            <span className="font-black text-slate-800">{assignedGroup.name}</span>
+                            <span className="block text-[10px] text-slate-400">
+                              {assignedGroup.dayOfWeek} · {assignedGroup.timeSlot}
+                            </span>
+                          </div>
+                        ) : (
                           <select
-                            value={student.groupId || ''}
-                            onChange={(e) => assignStudentToGroup(student.id, e.target.value)}
-                            className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none cursor-pointer"
+                            onChange={(e) => assignStudentToGroup(st.id, e.target.value)}
+                            defaultValue=""
+                            className="px-2 py-1 bg-white border-2 border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 focus:outline-none cursor-pointer"
                           >
-                            <option value="">-- Unassigned --</option>
+                            <option value="" disabled>Assign to Group...</option>
                             {groups.map((g) => (
                               <option key={g.id} value={g.id}>
                                 {g.name} ({g.dayOfWeek})
                               </option>
                             ))}
                           </select>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="font-mono font-black text-slate-800">${effectivePrice}</div>
-                          {student.customMonthlyPrice !== undefined && (
-                            <span className="text-[9px] font-black px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded">Override</span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <button
+                          onClick={() => {
+                            setEditingStudentPrice(st);
+                            setCustomPriceVal(st.customMonthlyPrice !== undefined ? st.customMonthlyPrice : st.standardMonthlyPrice);
+                            setPaymentStatusVal(st.paymentStatus);
+                          }}
+                          className="flex items-center gap-1.5 text-xs font-black text-slate-700 hover:text-sky-600 cursor-pointer"
+                        >
+                          <span>{st.customMonthlyPrice !== undefined ? `${st.customMonthlyPrice} DT` : `${st.standardMonthlyPrice} DT`}</span>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded-md uppercase font-black ${
+                              st.paymentStatus === 'paid'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : st.paymentStatus === 'scholarship'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {st.paymentStatus}
+                          </span>
+                          <Edit2 className="w-3 h-3 text-slate-400" />
+                        </button>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {st.status === 'waitlist' && (
+                            <button
+                              onClick={() => updateStudentStatus(st.id, 'accepted')}
+                              className="px-2.5 py-1 btn-duo-green text-xs font-black cursor-pointer"
+                            >
+                              Admit
+                            </button>
                           )}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {student.status === 'waitlist' && (
-                              <button
-                                onClick={() => updateStudentStatus(student.id, 'accepted')}
-                                className="px-2 py-1 bg-sky-100 text-sky-800 hover:bg-sky-200 rounded-lg text-[11px] font-black cursor-pointer"
-                              >
-                                Accept
-                              </button>
-                            )}
-                            {student.status === 'accepted' && (
-                              <button
-                                onClick={() => updateStudentStatus(student.id, 'active')}
-                                className="px-2 py-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg text-[11px] font-black cursor-pointer"
-                              >
-                                Activate
-                              </button>
-                            )}
+                          {st.status === 'accepted' && (
                             <button
-                              onClick={() => {
-                                setEditingStudentPrice(student);
-                                setCustomPriceVal(effectivePrice);
-                                setPaymentStatusVal(student.paymentStatus);
-                              }}
-                              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                              title="Edit Price"
+                              onClick={() => updateStudentStatus(st.id, 'active')}
+                              className="px-2.5 py-1 btn-duo-blue text-xs font-black cursor-pointer"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              Activate
                             </button>
-                            <button
-                              onClick={() => deleteStudent(student.id)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                          )}
+                          <button
+                            onClick={() => deleteStudent(st.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
+                            title="Remove Student"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -525,92 +602,71 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 3. GROUPS & COHORTS TAB */}
       {adminTab === 'groups' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-black text-slate-800">Cohort Groups & Room Allocations</h2>
-              <p className="text-xs text-slate-500 font-medium">Max 8 students per bench mentor.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateTo('schedule-matrix')}
-                className="px-3.5 py-2 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer"
-              >
-                <Calendar className="w-4 h-4 text-sky-500" />
-                <span>Schedule Matrix</span>
-              </button>
-              <button
-                onClick={() => setIsAddGroupOpen(true)}
-                className="px-3.5 py-2 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Create Group</span>
-              </button>
-            </div>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-black text-slate-800">
+              Active Cohort Schedules & Labs
+            </h3>
+            <button
+              onClick={() => setIsAddGroupOpen(true)}
+              className="px-4 py-2 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Cohort Group</span>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {groups.map((group) => {
-              const assignedStudents = students.filter((s) => s.groupId === group.id);
-              const trainer = trainers.find((t) => t.id === group.trainerId);
-              const program = programs.find((p) => p.id === group.programId);
-              const isFull = assignedStudents.length >= group.maxCapacity;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {groups.map((grp) => {
+              const enrolledInGroup = students.filter((s) => s.groupId === grp.id);
+              const trainer = trainers.find((t) => t.id === grp.trainerId);
+              const prog = programs.find((p) => p.id === grp.programId);
+              const isFull = enrolledInGroup.length >= grp.maxCapacity;
 
               return (
-                <div key={group.id} className="duo-card p-5 bg-white space-y-3">
-                  <div className="flex items-start justify-between">
+                <div key={grp.id} className="duo-card p-6 bg-white space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div>
-                      <h4 className="text-sm font-black text-slate-800">{group.name}</h4>
-                      <div className="text-xs text-slate-500 font-medium">{program?.title}</div>
+                      <h4 className="text-sm font-black text-slate-800">{grp.name}</h4>
+                      <span className="text-[11px] text-sky-600 font-bold">{prog?.title}</span>
                     </div>
                     <button
-                      onClick={() => deleteGroup(group.id)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      onClick={() => deleteGroup(grp.id)}
+                      className="text-slate-300 hover:text-rose-500 cursor-pointer p-1"
                       title="Delete Group"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 font-medium text-slate-600">
-                    <div>
-                      <span className="text-slate-400 text-[10px] font-bold block">SCHEDULE:</span>
-                      <span className="font-bold text-slate-800">{group.dayOfWeek} · {group.timeSlot}</span>
+                  <div className="space-y-2 text-xs font-medium text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-400">Day & Time:</span>
+                      <span className="font-black text-slate-800">{grp.dayOfWeek} · {grp.timeSlot}</span>
                     </div>
-                    <div>
-                      <span className="text-slate-400 text-[10px] font-bold block">ROOM:</span>
-                      <span className="font-bold text-slate-800">{group.room}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-400">Lab Room:</span>
+                      <span className="font-bold text-slate-700">{grp.room}</span>
                     </div>
-                    <div>
-                      <span className="text-slate-400 text-[10px] font-bold block">TRAINER:</span>
-                      <span className="font-bold text-sky-700">{trainer?.name || 'Assigned'}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 text-[10px] font-bold block">CAPACITY:</span>
-                      <span className={`font-mono font-bold ${isFull ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {assignedStudents.length} / {group.maxCapacity} Seats
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-400">Lead Trainer:</span>
+                      <span className="font-bold text-slate-800">{trainer?.name || 'Assigned'}</span>
                     </div>
                   </div>
 
-                  {/* Enrolled Students */}
-                  <div className="space-y-1">
-                    <div className="text-[11px] font-black text-slate-400">
-                      Enrolled Students ({assignedStudents.length}):
+                  {/* Capacity Bar */}
+                  <div className="space-y-1 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between text-[11px] font-bold">
+                      <span className="text-slate-400">Roster Capacity:</span>
+                      <span className={isFull ? 'text-rose-600 font-black' : 'text-slate-700 font-black'}>
+                        {enrolledInGroup.length} / {grp.maxCapacity} seats ({Math.round((enrolledInGroup.length / grp.maxCapacity) * 100)}%)
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {assignedStudents.length === 0 ? (
-                        <span className="text-xs text-slate-400 italic">No students assigned yet.</span>
-                      ) : (
-                        assignedStudents.map((s) => (
-                          <span
-                            key={s.id}
-                            className="px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-200 text-xs font-bold text-sky-800"
-                          >
-                            {s.studentName}
-                          </span>
-                        ))
-                      )}
+                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${isFull ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${Math.min(100, (enrolledInGroup.length / grp.maxCapacity) * 100)}%` }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -620,20 +676,24 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 4. ATTENDANCE & CALL LISTS TAB */}
+      {/* 4. ATTENDANCE CALL LIST TAB */}
       {adminTab === 'attendance' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="duo-card p-6 bg-white space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-black text-slate-800">Automated Attendance & Call Lists</h2>
-              <p className="text-xs text-slate-500 font-medium">Select cohort to view official roster.</p>
+              <h3 className="text-base font-black text-slate-800">
+                Official Printed Call Lists & Pedagogical Records
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Export and inspect weekly student presence and evaluations.
+              </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <select
                 value={selectedCallListGroupId}
                 onChange={(e) => setSelectedCallListGroupId(e.target.value)}
-                className="px-3 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-black text-slate-800 focus:outline-none cursor-pointer"
+                className="px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black text-slate-800 focus:outline-none cursor-pointer"
               >
                 {groups.map((g) => (
                   <option key={g.id} value={g.id}>
@@ -644,187 +704,220 @@ export const AdminDashboard: React.FC = () => {
 
               <button
                 onClick={() => window.print()}
-                className="px-3 py-2 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer"
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-4 h-4 text-slate-600" />
                 <span>Print Call List</span>
               </button>
             </div>
           </div>
 
-          {/* Call Sheet Table */}
-          <div className="duo-card p-6 bg-white space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-slate-100">
-              <div>
-                <h3 className="text-sm font-black text-slate-800">
-                  {groups.find((g) => g.id === selectedCallListGroupId)?.name} Roll Call Sheet
-                </h3>
-                <div className="text-xs text-slate-500 font-medium">
-                  {groups.find((g) => g.id === selectedCallListGroupId)?.dayOfWeek} · Room:{' '}
-                  {groups.find((g) => g.id === selectedCallListGroupId)?.room}
-                </div>
-              </div>
-              <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
-                Active Session Roster
-              </span>
-            </div>
+          <div className="space-y-4">
+            <h4 className="text-xs font-black text-slate-400 uppercase">
+              Roster for {groups.find((g) => g.id === selectedCallListGroupId)?.name}
+            </h4>
 
-            <div className="space-y-2">
-              {students.filter((s) => s.groupId === selectedCallListGroupId).map((st, idx) => (
-                <div
-                  key={st.id}
-                  className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-black text-slate-400">#{idx + 1}</span>
-                    <div>
-                      <div className="font-black text-slate-800">{st.studentName}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">Parent: {st.parentName} ({st.parentPhone})</div>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-[10px]">
-                    Enrolled Member
-                  </span>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-semibold">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400 font-black">
+                    <th className="pb-2">Student Name</th>
+                    <th className="pb-2">Age</th>
+                    <th className="pb-2">Emergency Phone</th>
+                    <th className="pb-2">Attendance Streak</th>
+                    <th className="pb-2">Latest Teacher Remark</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {students
+                    .filter((s) => s.groupId === selectedCallListGroupId)
+                    .map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50">
+                        <td className="py-3 font-black text-slate-800">{s.studentName}</td>
+                        <td className="py-3 text-slate-600">{s.studentAge} yrs</td>
+                        <td className="py-3 font-mono text-slate-700">{s.parentPhone}</td>
+                        <td className="py-3 text-emerald-600 font-bold">100% Present 🔥</td>
+                        <td className="py-3 text-slate-500 italic font-medium">
+                          Great motor mechanics problem-solving.
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      {/* 5. INVENTORY / "LES CAPUCHES" TAB */}
+      {/* 5. PAYMENTS & TUITION TAB */}
+      {adminTab === 'payments' && (
+        <div className="duo-card p-6 bg-white space-y-6">
+          <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-black text-slate-800">
+                Tuition Ledger & Custom Pricing
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Override standard course fees for sibling discounts and full scholarships.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-xs font-bold text-slate-400">Total Monthly Invoiced</div>
+              <div className="text-2xl font-black text-emerald-600 font-mono">
+                {totalMonthlyRevenue.toLocaleString()} DT
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-semibold">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 font-black">
+                  <th className="pb-2">Student</th>
+                  <th className="pb-2">Parent Contact</th>
+                  <th className="pb-2">Track</th>
+                  <th className="pb-2">Standard Fee</th>
+                  <th className="pb-2">Effective Fee</th>
+                  <th className="pb-2">Status</th>
+                  <th className="pb-2 text-right">Edit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {activeStudents.map((st) => (
+                  <tr key={st.id} className="hover:bg-slate-50">
+                    <td className="py-3 font-black text-slate-800">{st.studentName}</td>
+                    <td className="py-3 text-slate-600">{st.parentName} ({st.parentPhone})</td>
+                    <td className="py-3 font-bold text-slate-700">{st.programId}</td>
+                    <td className="py-3 font-mono text-slate-400">{st.standardMonthlyPrice} DT</td>
+                    <td className="py-3 font-mono font-black text-emerald-600">
+                      {st.customMonthlyPrice !== undefined ? st.customMonthlyPrice : st.standardMonthlyPrice} DT
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          st.paymentStatus === 'paid'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : st.paymentStatus === 'scholarship'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {st.paymentStatus}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button
+                        onClick={() => {
+                          setEditingStudentPrice(st);
+                          setCustomPriceVal(st.customMonthlyPrice !== undefined ? st.customMonthlyPrice : st.standardMonthlyPrice);
+                          setPaymentStatusVal(st.paymentStatus);
+                        }}
+                        className="px-2.5 py-1 btn-duo-secondary text-xs font-black cursor-pointer"
+                      >
+                        Adjust
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 6. INVENTORY: "LES CAPUCHES" TAB */}
       {adminTab === 'inventory' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black text-slate-800">"Les Capuches" Hoodie Stock & Distribution</h2>
-              <p className="text-xs text-slate-500 font-medium">Track warehouse units and parent orders.</p>
+              <h3 className="text-base font-black text-slate-800">
+                “Les Capuches” Merchandise & Distribution Warehouse
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Track physical inventory and student custom embroidery orders.
+              </p>
             </div>
             <button
               onClick={() => setIsRestockOpen(true)}
-              className="px-4 py-2.5 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Stock / Restock</span>
+              <span>Restock Inventory</span>
             </button>
           </div>
 
-          {/* Stock by size */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {/* Size Stock Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {Object.entries(hoodieStock).map(([size, count]) => (
               <div key={size} className="duo-card p-4 bg-white text-center space-y-1">
-                <div className="text-xs font-black text-slate-400 font-mono">SIZE {size}</div>
-                <div className="text-2xl font-black text-slate-800 font-mono">{count}</div>
-                <div className="text-[10px] font-bold text-emerald-600">Available In Lab</div>
+                <span className="text-xs font-bold text-slate-400">Size {size}</span>
+                <div className={`text-2xl font-black font-mono ${count < 2 ? 'text-rose-500' : 'text-slate-800'}`}>
+                  {count}
+                </div>
+                <span className={`text-[10px] font-black uppercase ${count < 2 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {count < 2 ? 'Low Stock' : 'In Stock'}
+                </span>
               </div>
             ))}
           </div>
 
-          {/* Orders log */}
+          {/* Distribution Orders List */}
           <div className="duo-card p-6 bg-white space-y-4">
-            <h3 className="text-sm font-black text-slate-800">Parent Orders & Pickup Log</h3>
-            <div className="space-y-2">
-              {hoodieDistributions.map((dist) => (
-                <div
-                  key={dist.id}
-                  className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                >
-                  <div>
-                    <span className="font-black text-slate-800">{dist.studentName}</span>
-                    <span className="text-slate-400 mx-1.5">·</span>
-                    <span className="font-mono text-sky-700 font-bold">{dist.size}</span>
-                    {dist.personalizedText && (
-                      <span className="block text-[11px] text-slate-500 font-mono">
-                        Embroidery: "{dist.personalizedText}"
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                      dist.status === 'picked_up'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : dist.status === 'ready'
-                        ? 'bg-sky-100 text-sky-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {dist.status}
-                    </span>
-
-                    {dist.status === 'requested' && (
-                      <button
-                        onClick={() => updateHoodieStatus(dist.id, 'ready')}
-                        className="px-2.5 py-1 bg-sky-100 text-sky-800 font-black rounded-lg text-[10px] cursor-pointer"
-                      >
-                        Mark Ready
-                      </button>
-                    )}
-                    {dist.status === 'ready' && (
-                      <button
-                        onClick={() => updateHoodieStatus(dist.id, 'picked_up')}
-                        className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-black rounded-lg text-[10px] cursor-pointer"
-                      >
-                        Mark Picked Up
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. PAYMENTS & PRICING TAB */}
-      {adminTab === 'payments' && (
-        <div className="space-y-4">
-          <div className="duo-card p-6 bg-white space-y-4">
-            <h3 className="text-sm font-black text-slate-800">Student Pricing & Custom Overrides</h3>
+            <h4 className="text-sm font-black text-slate-800">Member Orders & Pickup Queue</h4>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-medium">
+              <table className="w-full text-left text-xs font-semibold">
                 <thead>
-                  <tr className="border-b-2 border-slate-100 text-slate-400 font-black uppercase text-[10px]">
-                    <th className="py-2.5 px-3">Student</th>
-                    <th className="py-2.5 px-3">Standard Price</th>
-                    <th className="py-2.5 px-3">Active Price</th>
-                    <th className="py-2.5 px-3">Payment Status</th>
-                    <th className="py-2.5 px-3 text-right">Action</th>
+                  <tr className="border-b border-slate-200 text-slate-400 font-black">
+                    <th className="pb-2">Student</th>
+                    <th className="pb-2">Size</th>
+                    <th className="pb-2">Custom Name Badge</th>
+                    <th className="pb-2">Price</th>
+                    <th className="pb-2">Order Status</th>
+                    <th className="pb-2 text-right">Update</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {students.map((st) => {
-                    const price = st.customMonthlyPrice !== undefined ? st.customMonthlyPrice : st.standardMonthlyPrice;
-                    return (
-                      <tr key={st.id} className="hover:bg-slate-50">
-                        <td className="py-3 px-3 font-bold text-slate-800">{st.studentName}</td>
-                        <td className="py-3 px-3 font-mono text-slate-500">${st.standardMonthlyPrice}/mo</td>
-                        <td className="py-3 px-3 font-mono font-black text-emerald-600">${price}/mo</td>
-                        <td className="py-3 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            st.paymentStatus === 'paid'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : st.paymentStatus === 'scholarship'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {st.paymentStatus}
+                <tbody className="divide-y divide-slate-100">
+                  {hoodieDistributions.map((order) => (
+                    <tr key={order.id} className="hover:bg-slate-50">
+                      <td className="py-3 font-black text-slate-800">{order.studentName}</td>
+                      <td className="py-3 font-mono">{order.size}</td>
+                      <td className="py-3">
+                        {order.isPersonalized ? (
+                          <span className="font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
+                            {order.personalizedText || order.studentName}
                           </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
+                        ) : (
+                          <span className="text-slate-400 italic">Standard</span>
+                        )}
+                      </td>
+                      <td className="py-3 font-mono font-bold">{order.price} DT</td>
+                      <td className="py-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            order.status === 'picked_up'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : order.status === 'ready'
+                              ? 'bg-sky-100 text-sky-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {order.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        {order.status !== 'picked_up' && (
                           <button
-                            onClick={() => {
-                              setEditingStudentPrice(st);
-                              setCustomPriceVal(price);
-                              setPaymentStatusVal(st.paymentStatus);
-                            }}
-                            className="px-2.5 py-1 btn-duo-secondary text-xs font-black cursor-pointer"
+                            onClick={() =>
+                              updateHoodieStatus(order.id, order.status === 'requested' ? 'ready' : 'picked_up')
+                            }
+                            className="px-2.5 py-1 btn-duo-yellow text-[11px] font-black cursor-pointer"
                           >
-                            Edit
+                            Mark {order.status === 'requested' ? 'Ready' : 'Picked Up'}
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -834,70 +927,319 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 7. CURRICULUM BUILDER TAB */}
       {adminTab === 'curriculum' && (
-        <div className="space-y-4">
-          <div className="duo-card p-6 bg-white space-y-4">
-            <h3 className="text-sm font-black text-slate-800">Add Syllabus Milestone / Objective</h3>
+        <div className="duo-card p-6 bg-white space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-black text-slate-800">
+                STEM Curriculum Builder & Weekly Objectives
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Add progressive coding and engineering milestones synced to the database.
+              </p>
+            </div>
 
-            <form onSubmit={handleAddCurriculumSubmit} className="space-y-3.5 text-xs font-bold text-slate-700">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block mb-1">STEM Program:</label>
-                  <select
-                    value={curriculumProgId}
-                    onChange={(e) => setCurriculumProgId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white cursor-pointer"
-                  >
-                    {programs.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <select
+              value={curriculumProgId}
+              onChange={(e) => setCurriculumProgId(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black text-slate-800 focus:outline-none cursor-pointer"
+            >
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </select>
+          </div>
 
-                <div>
-                  <label className="block mb-1">Week Number:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={24}
-                    value={newObjWeek}
-                    onChange={(e) => setNewObjWeek(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block mb-1">Module Title:</label>
-                  <input
-                    type="text"
-                    required
-                    value={newObjTitle}
-                    onChange={(e) => setNewObjTitle(e.target.value)}
-                    placeholder="e.g. OpenCV Computer Vision Rover"
-                    className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
-                  />
-                </div>
-              </div>
-
+          <form onSubmit={handleAddCurriculumObjective} className="space-y-4 max-w-xl text-xs font-bold text-slate-700">
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block mb-1">Objective Description:</label>
-                <textarea
-                  rows={2}
+                <label className="block mb-1">Week Number:</label>
+                <input
+                  type="number"
+                  min={1}
                   required
-                  value={newObjDesc}
-                  onChange={(e) => setNewObjDesc(e.target.value)}
-                  placeholder="What will the kids build and code?"
-                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white resize-none"
+                  value={newObjWeek}
+                  onChange={(e) => setNewObjWeek(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white font-mono"
                 />
               </div>
 
+              <div className="col-span-2">
+                <label className="block mb-1">Milestone Title:</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ultrasonic Radar Mapping"
+                  value={newObjTitle}
+                  onChange={(e) => setNewObjTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block mb-1">Hardware / Kits Required:</label>
+              <input
+                type="text"
+                placeholder="e.g. ESP32 + HC-SR04 ultrasonic sensor"
+                value={newObjHw}
+                onChange={(e) => setNewObjHw(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1">Objective Description:</label>
+              <textarea
+                rows={2}
+                required
+                value={newObjDesc}
+                onChange={(e) => setNewObjDesc(e.target.value)}
+                placeholder="What will the kids build and code?"
+                className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white resize-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="px-6 py-3 btn-duo-green text-xs font-black cursor-pointer"
+            >
+              Save Objective to Syllabus
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* 8. FACEBOOK & PHOTO FEED TAB */}
+      {adminTab === 'facebook' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-black uppercase mb-1">
+                <span>📱 Firestore Collection: facebook_posts</span>
+              </div>
+              <h3 className="text-lg font-black text-slate-800">
+                Official Facebook Posts & Photo Asset Manager
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Publish new community updates, inspect photos, monitor likes & comments in real-time.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
               <button
-                type="submit"
-                className="px-6 py-3 btn-duo-green text-xs font-black cursor-pointer"
+                onClick={() => setIsAddPostOpen(true)}
+                className="px-4 py-2.5 btn-duo-blue text-xs font-black flex items-center gap-2 cursor-pointer shadow-sm"
               >
-                Save Objective to Syllabus
+                <Plus className="w-4 h-4" />
+                <span>+ Publish Post</span>
               </button>
+
+              <button
+                onClick={syncInitialDataToFirestore}
+                className="px-3.5 py-2.5 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer text-slate-700"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Re-sync Scraped Data</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Photo Assets Quick Showcase */}
+          <div className="duo-card p-5 bg-white space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black text-slate-800 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-sky-500" />
+                <span>Available Authentic Photo Assets (From Facebook Page)</span>
+              </h4>
+              <span className="text-[11px] font-bold text-slate-400">Click any photo to use for new post</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+              {[
+                { name: 'Eurobot Champs', img: CLUB_PHOTOS.fbEurobotChamps, tag: '🏆 Eurobot Champions' },
+                { name: 'Trophée Certificat', img: CLUB_PHOTOS.fbTrophyCert, tag: '🏆 Eurobot Champions' },
+                { name: 'Honneur Ministère', img: CLUB_PHOTOS.fbMinisterHonor, tag: '🇹🇳 Honneur National' },
+                { name: 'RoboCup Vienne', img: CLUB_PHOTOS.fbViennaRobocup, tag: '🌍 Tournoi International' },
+                { name: 'Kids Robot Lab', img: CLUB_PHOTOS.fbKidsRobotLab, tag: '🛠️ Ateliers Manouba' },
+                { name: 'Girls in STEM', img: CLUB_PHOTOS.fbGirlsStem, tag: '👧 Girls in Tech' },
+                { name: 'Hoodie Crew', img: CLUB_PHOTOS.fbHoodieCrew, tag: '👕 Les Capuches' },
+                { name: 'Teens AI Lab', img: CLUB_PHOTOS.fbTeensAiLab, tag: '🧠 IA & Vision' }
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setNewPostImageUrl(item.img);
+                    setNewPostTag(item.tag);
+                    setIsAddPostOpen(true);
+                  }}
+                  className="rounded-xl overflow-hidden border-2 border-slate-200 hover:border-sky-400 cursor-pointer transition-all hover:scale-105 group relative h-20"
+                  title={`Use photo: ${item.name}`}
+                >
+                  <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-black">
+                    Use Photo
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Posts Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {facebookPosts.map((post) => (
+              <div key={post.id} className="duo-card p-5 bg-white space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="h-44 rounded-xl overflow-hidden border-2 border-slate-100 relative">
+                    <img src={post.imageUrl} alt={post.caption} className="w-full h-full object-cover" />
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-slate-900/80 text-white font-black text-[10px]">
+                      {post.tag}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                    <span>{post.date}</span>
+                    <span className="font-mono text-sky-600 font-bold">{post.id}</span>
+                  </div>
+
+                  <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3">
+                    {post.caption}
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t-2 border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
+                    <button
+                      onClick={() => likeFacebookPost(post.id)}
+                      className="flex items-center gap-1 hover:text-rose-500 cursor-pointer"
+                    >
+                      <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
+                      <span>{post.likes}</span>
+                    </button>
+                    <span className="flex items-center gap-1 text-slate-400">
+                      <MessageCircle className="w-4 h-4" />
+                      <span>{post.comments}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href={post.postUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50"
+                      title="Open on Facebook"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={() => deleteFacebookPost(post.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      title="Delete Post"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Create New Facebook Post Modal */}
+      {isAddPostOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="duo-card p-6 bg-white max-w-lg w-full space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b-2 border-slate-100">
+              <h3 className="text-base font-black text-slate-800">Publish New Facebook Post</h3>
+              <button
+                onClick={() => setIsAddPostOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateFacebookPost} className="space-y-4 text-xs font-bold text-slate-700">
+              <div>
+                <label className="block mb-1">Post Category / Tag:</label>
+                <select
+                  value={newPostTag}
+                  onChange={(e) => setNewPostTag(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  <option value="🏆 Eurobot Champions">🏆 Eurobot Champions</option>
+                  <option value="🇹🇳 Honneur National">🇹🇳 Honneur National</option>
+                  <option value="🌍 Tournoi International">🌍 Tournoi International</option>
+                  <option value="🛠️ Ateliers Manouba">🛠️ Ateliers Manouba</option>
+                  <option value="👧 Girls in Tech">👧 Girls in Tech</option>
+                  <option value="👕 Les Capuches">👕 Les Capuches</option>
+                  <option value="🧠 IA & Vision">🧠 IA & Vision</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block mb-1">Caption / French Text *</label>
+                <textarea
+                  rows={4}
+                  required
+                  value={newPostCaption}
+                  onChange={(e) => setNewPostCaption(e.target.value)}
+                  placeholder="Écrivez le message de publication..."
+                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:bg-white resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1">Photo :</label>
+                <input
+                  type="file"
+                  ref={adminFileInputRef}
+                  accept="image/*"
+                  onChange={handleAdminFileSelect}
+                  className="hidden"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adminFileInputRef.current?.click()}
+                    className="px-3 py-2 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-sky-500" />
+                    <span>Choisir fichier</span>
+                  </button>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ou collez l'URL/chemin de la photo..."
+                    value={newPostImageUrl}
+                    onChange={(e) => setNewPostImageUrl(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-mono font-medium focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {newPostImageUrl && (
+                <div className="h-32 rounded-xl overflow-hidden border border-slate-200">
+                  <img src={newPostImageUrl} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPostOpen(false)}
+                  className="px-4 py-2 btn-duo-secondary text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 btn-duo-blue text-xs font-black cursor-pointer"
+                >
+                  Publish to Feed
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -916,7 +1258,7 @@ export const AdminDashboard: React.FC = () => {
                   onChange={(e) => setRestockSize(e.target.value as HoodieSize)}
                   className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white cursor-pointer"
                 >
-                  {(['6-8Y', '8-10Y', '10-12Y', '12-14Y', 'S-Adult'] as HoodieSize[]).map((sz) => (
+                  {(['6-8Y', '8-10Y', '10-12Y', '12-14Y', 'S', 'M', 'L'] as HoodieSize[]).map((sz) => (
                     <option key={sz} value={sz}>{sz}</option>
                   ))}
                 </select>
@@ -964,7 +1306,7 @@ export const AdminDashboard: React.FC = () => {
             </h3>
             <div className="space-y-3 text-xs font-bold text-slate-700">
               <div>
-                <label className="block mb-1">Monthly Tuition ($):</label>
+                <label className="block mb-1">Monthly Tuition (DT):</label>
                 <input
                   type="number"
                   value={customPriceVal}

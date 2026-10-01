@@ -24,6 +24,13 @@ export interface AppUser {
   childName?: string;
 }
 
+export interface FacebookComment {
+  id: string;
+  author: string;
+  text: string;
+  date: string;
+}
+
 export interface FacebookPost {
   id: string;
   caption: string;
@@ -33,6 +40,8 @@ export interface FacebookPost {
   comments: number;
   tag: string;
   postUrl: string;
+  likedBy?: string[];
+  commentsList?: FacebookComment[];
 }
 
 export type StudentStatus = 'waitlist' | 'accepted' | 'active';

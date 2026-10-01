@@ -15,9 +15,14 @@ import {
   BookOpen,
   Smile,
   Flame,
-  Award
+  Award,
+  Heart,
+  MessageCircle,
+  ExternalLink,
+  Camera
 } from 'lucide-react';
 import { HoodieSize } from '../../types';
+import { CLUB_PHOTOS } from '../../data/initialData';
 
 export const ParentPortal: React.FC = () => {
   const {
@@ -28,9 +33,12 @@ export const ParentPortal: React.FC = () => {
     sessions,
     hoodieStock,
     hoodieDistributions,
+    facebookPosts,
+    likeFacebookPost,
     activeParentStudentId,
     setActiveParentStudentId,
-    requestHoodieOrder
+    requestHoodieOrder,
+    currentUser
   } = useApp();
 
   // Selected student
@@ -94,7 +102,7 @@ export const ParentPortal: React.FC = () => {
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase mb-1">
             <HeartHandshake className="w-4 h-4" />
-            <span>Parent Family Portal</span>
+            <span>Parent Family Portal · Live Database</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
             {activeStudent?.studentName}'s Learning Journey
@@ -223,22 +231,33 @@ export const ParentPortal: React.FC = () => {
                               : 'bg-rose-100 text-rose-800 border border-rose-300'
                           }`}
                         >
-                          {myRecord?.status || 'present'}
+                          {myRecord?.status || 'Unmarked'}
                         </span>
                       </div>
 
-                      {myRecord?.remarks && (
-                        <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 font-medium">
-                          <strong className="text-slate-800 block mb-0.5 font-bold">Trainer Remark:</strong>
-                          "{myRecord.remarks}"
+                      {myRecord?.pedagogicalRemark && (
+                        <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200 font-medium">
+                          <span className="font-black text-slate-800">Trainer Remark: </span>
+                          "{myRecord.pedagogicalRemark}"
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
                         <span>Date: {sess.date}</span>
-                        <div className="flex items-center gap-1 text-amber-500 font-black">
-                          <span>Rating:</span>
-                          <span className="font-mono">{myRecord?.rating || 5}/5 ⭐</span>
+                        <div className="flex items-center gap-1 text-amber-500 font-bold">
+                          <span>Participation:</span>
+                          <div className="flex gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3.5 h-3.5 ${
+                                  i < (myRecord?.rating || 5)
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'text-slate-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -252,50 +271,38 @@ export const ParentPortal: React.FC = () => {
         {/* Right Column: "Les Capuches" Hoodie Order */}
         <div className="lg:col-span-5 space-y-6">
           <div className="duo-card p-6 bg-white space-y-5">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black uppercase mb-1">
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>Club Apparel Shop</span>
+            <div className="flex items-center justify-between pb-3 border-b-2 border-slate-100">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-rose-500" />
+                <h3 className="text-base font-black text-slate-800">
+                  “Les Capuches” Official Club Hoodie
+                </h3>
               </div>
-              <h3 className="text-lg font-black text-slate-800 tracking-tight">
-                Order Official "Les Capuches" Hoodie
-              </h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Embroidered with your child's name for lab sessions & competitions!
-              </p>
+              <span className="text-xs font-bold text-slate-400">Merchandise</span>
             </div>
 
-            {/* Live Hoodie Preview */}
-            <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3 relative overflow-hidden">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-sky-400">DISCOVERY JUNIOR OFFICIAL HOODIE</span>
-                <span className="font-mono text-emerald-400 font-bold">$35 / piece</span>
-              </div>
-
-              <div className="h-28 flex items-center justify-center text-center">
-                <div className="space-y-1">
-                  <div className="w-12 h-12 mx-auto rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-2xl">
-                    👕
-                  </div>
-                  <div className="text-sm font-black text-white tracking-widest uppercase">
-                    {isPersonalized && customEmbroideryText ? customEmbroideryText : activeStudent?.studentName}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono">SIZE: {selectedSize}</div>
-                </div>
+            {/* Real photo of the hoodie crew */}
+            <div className="rounded-2xl overflow-hidden border-2 border-slate-200 relative h-36">
+              <img
+                src={CLUB_PHOTOS.fbHoodieCrew}
+                alt="Students wearing Discovery hoodies"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex items-end p-2.5 text-white">
+                <span className="text-[11px] font-black">Official Club Hoodie · 32 DT</span>
               </div>
             </div>
 
-            {/* Order Form */}
             <form onSubmit={handleOrderHoodie} className="space-y-4 text-xs font-bold text-slate-700">
               <div>
-                <label className="block mb-1.5">Select Size:</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {(['6-8Y', '8-10Y', '10-12Y', '12-14Y', 'S-Adult'] as HoodieSize[]).map((sz) => (
+                <label className="block mb-1.5 text-slate-600">Select Size:</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['6-8Y', '8-10Y', '10-12Y', '12-14Y', 'S', 'M', 'L'] as HoodieSize[]).map((sz) => (
                     <button
                       key={sz}
                       type="button"
                       onClick={() => setSelectedSize(sz)}
-                      className={`py-2 rounded-xl text-center text-xs font-black border-2 transition-all cursor-pointer ${
+                      className={`py-2 text-xs font-black rounded-xl border-2 transition-all cursor-pointer ${
                         selectedSize === sz
                           ? 'bg-sky-50 border-sky-500 text-sky-800 border-b-4 border-b-sky-600'
                           : 'bg-white border-slate-200 border-b-4 border-b-slate-200 hover:border-slate-300'
@@ -315,7 +322,7 @@ export const ParentPortal: React.FC = () => {
                     onChange={(e) => setIsPersonalized(e.target.checked)}
                     className="w-4 h-4 rounded text-sky-600 focus:ring-0"
                   />
-                  <span>Add custom name embroidery badge (+$5)</span>
+                  <span>Add custom name embroidery badge (+6 DT)</span>
                 </label>
 
                 {isPersonalized && (
@@ -334,7 +341,7 @@ export const ParentPortal: React.FC = () => {
                 className="w-full py-3.5 btn-duo-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
                 <ShoppingBag className="w-4 h-4" />
-                <span>Submit Hoodie Request (${isPersonalized ? '40' : '35'})</span>
+                <span>Submit Hoodie Request ({isPersonalized ? '38' : '32'} DT)</span>
               </button>
             </form>
 
@@ -363,6 +370,62 @@ export const ParentPortal: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Club Life & Facebook Highlights Gallery for Parents */}
+      <div className="duo-card p-6 bg-white space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b-2 border-slate-100">
+          <div className="flex items-center gap-2">
+            <Camera className="w-5 h-5 text-sky-500" />
+            <h3 className="text-base font-black text-slate-800">
+              Club Life & Competition Highlights from Facebook
+            </h3>
+          </div>
+          <span className="text-xs font-bold text-slate-400">Direct from Manouba Lab</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {facebookPosts.slice(0, 4).map((post) => {
+            const userKey = currentUser?.uid || 'guest-visitor';
+            const isLiked = post.likedBy?.includes(userKey);
+
+            return (
+              <div key={post.id} className="rounded-2xl border-2 border-slate-200 overflow-hidden bg-white flex flex-col justify-between">
+                <div>
+                  <div className="h-40 overflow-hidden relative">
+                    <img src={post.imageUrl} alt={post.caption} className="w-full h-full object-cover" />
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-slate-900/80 text-white font-black text-[10px]">
+                      {post.tag}
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-xs text-slate-700 font-medium line-clamp-2">{post.caption}</p>
+                  </div>
+                </div>
+
+                <div className="p-3 pt-0 flex items-center justify-between text-xs font-bold text-slate-500 border-t border-slate-100">
+                  <button
+                    onClick={() => likeFacebookPost(post.id)}
+                    className="flex items-center gap-1 hover:text-rose-500 cursor-pointer pt-2"
+                  >
+                    <Heart className={`w-4 h-4 ${isLiked ? 'text-rose-500 fill-rose-500' : 'text-slate-400'}`} />
+                    <span>{post.likes}</span>
+                  </button>
+
+                  <a
+                    href={post.postUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sky-600 hover:underline text-[11px] font-black flex items-center gap-1 pt-2"
+                  >
+                    <span>Facebook</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
