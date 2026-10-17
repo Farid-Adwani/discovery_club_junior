@@ -16,6 +16,8 @@ export default defineConfig(() => {
       proxy: {
         '/api': 'http://localhost:8080',
       },
+      // Allow access through Cloudflare quick tunnels (testing on phone)
+      allowedHosts: ['.trycloudflare.com'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

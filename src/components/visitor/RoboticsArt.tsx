@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { motion, useInView, useReducedMotion } from 'motion/react';
+import { useT } from '../../i18n';
+import { visitorMessages } from '../../i18n/messages/visitor';
 
 // Animated robotics / electronics / mechanics illustrations for the landing page.
 // Brand colors come from the logo: crimson #c11e3d, maroon #6a0d1f, charcoal #191919.
@@ -144,6 +146,7 @@ export const CircuitBackground: React.FC<{ className?: string }> = ({ className 
 /** The club logo mounted in a gear train with electronic parts orbiting around it. */
 export const LogoMechanism: React.FC<{ logoSrc: string }> = ({ logoSrc }) => {
   const reduce = useReducedMotion();
+  const t = useT(visitorMessages);
   return (
     <div className="relative mx-auto w-[300px] h-[300px] sm:w-[420px] sm:h-[420px]">
       {/* big ring gear (36 teeth) behind the logo */}
@@ -195,7 +198,7 @@ export const LogoMechanism: React.FC<{ logoSrc: string }> = ({ logoSrc }) => {
       <div className="absolute inset-[22%] rounded-full bg-white shadow-[0_0_0_6px_rgba(193,30,61,0.25),0_0_60px_rgba(193,30,61,0.35)] overflow-hidden flex items-center justify-center">
         <motion.img
           src={logoSrc}
-          alt="Discovery Club Junior logo"
+          alt={t('logoAlt')}
           className="w-[92%] h-[92%] object-contain"
           animate={reduce ? undefined : { scale: [1, 1.03, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
@@ -355,7 +358,7 @@ export const CodeTyper: React.FC<{ className?: string }> = ({ className }) => {
     return () => clearInterval(t);
   }, [reduce]);
   return (
-    <div className={`rounded-xl bg-[#0f0f0f] p-3 font-mono text-[11px] leading-relaxed text-slate-300 ${className || ''}`}>
+    <div dir="ltr" className={`rounded-xl bg-[#0f0f0f] p-3 font-mono text-[11px] leading-relaxed text-slate-300 ${className || ''}`}>
       <div className="flex gap-1.5 mb-2">
         <span className="w-2 h-2 rounded-full bg-sky-600" />
         <span className="w-2 h-2 rounded-full bg-amber-400" />

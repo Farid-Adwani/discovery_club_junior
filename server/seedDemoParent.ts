@@ -6,15 +6,16 @@
 // Login: parent1@example.com / Parent1234
 // Every document written here has `demo: true`, so it is easy to find and remove.
 import { FieldValue } from 'firebase-admin/firestore';
-import { adminAuth, db } from './firebaseAdmin';
-import type { Group, Program, SessionRecord, StudentAttendanceRecord, Student, Trainer } from '../src/types';
+import { db } from './firebaseAdmin';
+import { deleteAccount, findAccountByEmail, upsertAccount } from './auth';
+import type { Group, SessionRecord, StudentAttendanceRecord, Student, Trainer } from '../src/types';
 
 const EMAIL = 'parent1@example.com';
 const PASSWORD = 'Parent1234';
 const PARENT_NAME = 'Sonia Ben Ali';
 const PARENT_PHONE = '+216 98 765 432';
 
-const DAY_INDEX: Record<Group['dayOfWeek'], number> = { Sunday: 0, Wednesday: 3, Saturday: 6 };
+import { DAY_INDEX } from '../src/utils/schedule';
 
 /** The last `count` dates (YYYY-MM-DD) falling on `day`, oldest first, up to today. */
 function pastWeekdays(day: Group['dayOfWeek'], count: number): string[] {
@@ -41,8 +42,9 @@ const REMARKS = [
 ];
 
 async function removeDemo() {
-  const user = await adminAuth.getUserByEmail(EMAIL).catch(() => null);
-  for (const name of ['students', 'sessions', 'hoodie_distributions']) {
+  const account = await findAccountByEmail(EMAIL);
+  const user = account ? { uid: account.id } : null;
+  for (const name of ['students', 'sessions', 'hoodie_distributions', 'staff_members']) {
     const snap = await db.collection(name).where('demo', '==', true).get();
     for (const d of snap.docs) await d.ref.delete();
     console.log(`${name.padEnd(22)} ${snap.size} demo documents deleted`);
@@ -53,21 +55,22 @@ async function removeDemo() {
     for (const e of events.docs) {
       await e.ref.update({ registeredUids: FieldValue.arrayRemove(user.uid), spotsLeft: FieldValue.increment(1) });
     }
-    await adminAuth.deleteUser(user.uid);
+    await deleteAccount(user.uid);
     console.log(`account                deleted (${EMAIL})`);
   }
 }
+
+/** Session topics for the demo weeks */
+const DEMO_TOPICS = ['Mechanics & Motors', 'Sensors & Calibration', 'Autonomous Navigation', 'Team Challenge'];
 
 async function createDemo() {
   // Start clean so the script can be re-run safely
   await removeDemo();
 
-  const [programsSnap, groupsSnap, trainersSnap] = await Promise.all([
-    db.collection('programs').get(),
+  const [groupsSnap, trainersSnap] = await Promise.all([
     db.collection('groups').get(),
     db.collection('trainers').get()
   ]);
-  const programs = new Map(programsSnap.docs.map((d) => [d.id, d.data() as Program]));
   const groups = new Map(
     groupsSnap.docs.map((d) => {
       const g = d.data() as Group & { trainerId?: string };
@@ -87,10 +90,10 @@ async function createDemo() {
   }
 
   // 1. Account + profile
-  const user = await adminAuth.createUser({ email: EMAIL, password: PASSWORD, displayName: PARENT_NAME, emailVerified: true });
+  const { account } = await upsertAccount(EMAIL, PASSWORD);
+  const user = { uid: account.id };
 
-  const priceOf = (groupIds: string[]) =>
-    [...new Set(groupIds.map((g) => groups.get(g)!.programId))].reduce((sum, p) => sum + (programs.get(p)?.pricePerMonth || 0), 0);
+  const priceOf = (groupIds: string[]) => groupIds.reduce((sum, g) => sum + (Number(groups.get(g)!.pricePerMonth) || 0), 0);
 
   type KidBase = Pick<Student, 'id' | 'studentName' | 'studentAge' | 'groupIds' | 'status' | 'paymentStatus' | 'registeredAt' | 'notes'>;
   const kidBases: KidBase[] = [
@@ -99,7 +102,7 @@ async function createDemo() {
       studentName: 'Yassine Ben Ali',
       studentAge: 10,
       groupIds: ['grp-rob-sat-am', 'grp-ai-sun-am'],
-      status: 'active',
+      status: 'accepted',
       paymentStatus: 'paid',
       registeredAt: '2026-06-14',
       notes: 'Loves building LEGO rovers. Allergic to peanuts.'
@@ -131,7 +134,6 @@ async function createDemo() {
     parentName: PARENT_NAME,
     parentPhone: PARENT_PHONE,
     parentEmail: EMAIL,
-    programId: k.groupIds.length ? groups.get(k.groupIds[0])!.programId : '',
     standardMonthlyPrice: priceOf(k.groupIds),
     demo: true as const
   }));
@@ -155,14 +157,12 @@ async function createDemo() {
 
   for (const groupId of new Set(kids.flatMap((k) => k.groupIds))) {
     const group = groups.get(groupId)!;
-    const program = programs.get(group.programId);
     const members = kids.filter((k) => k.groupIds.includes(groupId));
     const dates = pastWeekdays(group.dayOfWeek, 6);
 
     dates.forEach((date, w) => {
       const trainer = trainers.get(group.trainerIds[w % group.trainerIds.length]);
-      const syllabus = program?.syllabus || [];
-      const topic = syllabus.length ? syllabus[w % syllabus.length] : undefined;
+      const topic = DEMO_TOPICS[w % DEMO_TOPICS.length];
       const records: Record<string, StudentAttendanceRecord> = {};
 
       for (const kid of members) {
@@ -183,8 +183,8 @@ async function createDemo() {
         id: `sess-demo-${groupId}-${date}`,
         groupId,
         date,
-        weekNumber: (topic?.week ?? w + 1),
-        topicTaught: topic?.title || 'Robotics workshop',
+        weekNumber: w + 1,
+        topicTaught: topic,
         isSyllabusValidated: true,
         validatedAt: `${date} 18:00`,
         trainerNotes: 'Great energy in the lab today.',
@@ -202,13 +202,13 @@ async function createDemo() {
     studentId: 'std-demo-yassine',
     studentName: 'Yassine Ben Ali',
     parentName: PARENT_NAME,
+    productId: 'prod-club-hoodie',
+    productName: 'Official Club Hoodie',
     size: '10-12Y',
-    isPersonalized: true,
-    personalizedText: 'YASSINE #07',
     status: 'picked_up',
     requestedAt: '2026-09-06',
     pickedUpAt: '2026-09-13',
-    price: 38,
+    price: 32,
     demo: true
   });
 

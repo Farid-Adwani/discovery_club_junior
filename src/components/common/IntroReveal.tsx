@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CLUB_PHOTOS } from '../../data/initialData';
 import { Gear, Oscilloscope } from '../visitor/RoboticsArt';
+import { useT } from '../../i18n';
+import { commonMessages } from '../../i18n/messages/common';
 
 // Start-up "boot sequence" in scenes: mechanics → electronics → coding → robotics,
 // then the logo assembles and the screen splits open like two doors.
@@ -21,10 +23,10 @@ const T = {
 };
 
 const MODULES = [
-  { key: 'mechanics', label: 'Mechanics' },
-  { key: 'electronics', label: 'Electronics' },
-  { key: 'coding', label: 'Coding' },
-  { key: 'robotics', label: 'Robotics' }
+  { key: 'mechanics', label: 'modMechanics' },
+  { key: 'electronics', label: 'modElectronics' },
+  { key: 'coding', label: 'modCoding' },
+  { key: 'robotics', label: 'modRobotics' }
 ] as const;
 
 type ModuleKey = (typeof MODULES)[number]['key'];
@@ -38,10 +40,17 @@ function shouldPlayIntro(): boolean {
   }
 }
 
+// Plays on every page load that starts on the home page (App only mounts it there)
 const PLAY = typeof window !== 'undefined' && shouldPlayIntro();
+
+/** At most once per page load: leaving the home page and coming back doesn't replay it (a refresh does) */
+let alreadyPlayed = false;
 
 /** Seconds the page should wait before running its own entrance animations. */
 export const INTRO_DELAY = PLAY ? T.open + 0.15 : 0;
+
+/** Delay for a page mounting now: none once the intro has already played (e.g. coming back to the home page) */
+export const getIntroDelay = () => (alreadyPlayed ? 0 : INTRO_DELAY);
 
 const TRACES = [
   'M0 120 H260 L330 190 H600',
@@ -314,7 +323,7 @@ const FLOATING_GLYPHS = [
 const CodingScene = () => {
   let charIndex = 0;
   return (
-    <div style={{ perspective: '1000px' }}>
+    <div dir="ltr" style={{ perspective: '1000px' }}>
       <motion.div
         className="relative"
         style={preserve3d}
@@ -449,12 +458,14 @@ const SCENES: Record<ModuleKey, React.FC> = {
 /* ---------------- intro ---------------- */
 
 export const IntroReveal: React.FC = () => {
-  const [visible, setVisible] = useState(PLAY);
+  const t = useT(commonMessages);
+  const [visible, setVisible] = useState(PLAY && !alreadyPlayed);
   const [phase, setPhase] = useState<Phase>('boot');
   const [percent, setPercent] = useState(0);
 
   useEffect(() => {
-    if (!PLAY) return;
+    if (!visible) return;
+    alreadyPlayed = true;
     const timers = [
       setTimeout(() => setPhase('mechanics'), T.mechanics * 1000),
       setTimeout(() => setPhase('electronics'), T.electronics * 1000),
@@ -548,17 +559,17 @@ export const IntroReveal: React.FC = () => {
             <div className="absolute left-0 right-0 bottom-[34%] h-[2px] bg-gradient-to-r from-transparent via-sky-600/80 to-transparent shadow-[0_0_40px_8px_rgba(193,30,61,0.35)] pointer-events-none" />
 
             {/* HUD corners */}
-            <div className="absolute top-5 left-6 font-mono text-[10px] sm:text-xs text-white/40 tracking-widest">DCJ-OS v26 · ROBOTICS LAB</div>
-            <div className="absolute top-5 right-6 font-mono text-[10px] sm:text-xs text-sky-500 tracking-widest">{percent}%</div>
+            <div className="absolute top-5 start-6 font-mono text-[10px] sm:text-xs text-white/40 tracking-widest">DCJ-OS v26 · ROBOTICS LAB</div>
+            <div className="absolute top-5 end-6 font-mono text-[10px] sm:text-xs text-sky-500 tracking-widest">{percent}%</div>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 skip();
               }}
-              className="absolute bottom-5 right-6 font-mono text-[10px] sm:text-xs text-white/50 hover:text-white tracking-widest border border-white/15 hover:border-white/40 rounded-full px-3 py-1.5 cursor-pointer"
+              className="absolute bottom-5 end-6 font-mono text-[10px] sm:text-xs text-white/50 hover:text-white tracking-widest border border-white/15 hover:border-white/40 rounded-full px-3 py-1.5 cursor-pointer"
             >
-              SKIP ›
+              {t('skip')} <span className="inline-block rtl:rotate-180">›</span>
             </button>
 
             {/* stage */}
@@ -573,7 +584,7 @@ export const IntroReveal: React.FC = () => {
                       animate={{ x: -80 }}
                       transition={{ duration: 1.3, ease: 'linear' }}
                     >
-                      {MODULES[sceneIndex].label.toUpperCase()}
+                      {t(MODULES[sceneIndex].label).toUpperCase()}
                     </motion.div>
                     <div className="scale-[0.6] sm:scale-100">
                       <Scene />
@@ -587,7 +598,7 @@ export const IntroReveal: React.FC = () => {
                         animate={{ letterSpacing: '0.25em', opacity: 1 }}
                         transition={{ duration: 0.5 }}
                       >
-                        {MODULES[sceneIndex].label.toUpperCase()}
+                        {t(MODULES[sceneIndex].label).toUpperCase()}
                       </motion.span>
                     </div>
                   </motion.div>
@@ -671,7 +682,7 @@ export const IntroReveal: React.FC = () => {
                       }`}
                     >
                       {loaded ? '✓ ' : active ? '▸ ' : '· '}
-                      {m.label.toUpperCase()}
+                      {t(m.label).toUpperCase()}
                     </span>
                   );
                 })}

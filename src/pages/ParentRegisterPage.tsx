@@ -15,7 +15,13 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { SignInLoader } from '../components/common/SignInLoader';
+import { useT } from '../i18n';
+import { authMessages } from '../i18n/messages/auth';
+import { PHONE_PATTERN } from '../utils/contact';
+import { ageOf } from '../utils/age';
+import { toISODate } from '../utils/schedule';
 
 export const ParentRegisterPage: React.FC = () => {
   const {
@@ -24,8 +30,18 @@ export const ParentRegisterPage: React.FC = () => {
     isFirebaseConnected
   } = useApp();
 
-  type ChildForm = { name: string; age: number; notes: string };
-  const emptyChild = (): ChildForm => ({ name: '', age: 9, notes: '' });
+  const t = useT(authMessages);
+
+  type ChildForm = { name: string; birthDate: string; notes: string };
+  const emptyChild = (): ChildForm => ({ name: '', birthDate: '', notes: '' });
+  // Children from 3 to 22 years old (same rule as the server)
+  const yearsAgo = (n: number) => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - n);
+    return toISODate(d);
+  };
+  const minBirth = yearsAgo(22);
+  const maxBirth = yearsAgo(3);
 
   const [parentName, setParentName] = useState('');
   const [parentEmail, setRegEmail] = useState('');
@@ -53,7 +69,7 @@ export const ParentRegisterPage: React.FC = () => {
       parentPhone: phone,
       children: filledChildren.map((c) => ({
         name: c.name.trim(),
-        age: Number(c.age),
+        birthDate: c.birthDate,
         notes: c.notes.trim() || undefined
       }))
     });
@@ -62,23 +78,24 @@ export const ParentRegisterPage: React.FC = () => {
 
   return (
     <div className="min-h-[85vh] py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto flex flex-col justify-center relative">
+      <AnimatePresence>{isSubmitting && <SignInLoader title={t('creatingAccount')} />}</AnimatePresence>
       {/* Top back navigation */}
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => navigateTo('home')}
           className="inline-flex items-center gap-2 text-xs font-black text-slate-500 hover:text-sky-600 transition-colors cursor-pointer group"
         >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Home</span>
+          <ArrowLeft className="w-4 h-4 rtl:rotate-180 group-hover:-translate-x-1 rtl:group-hover:translate-x-1 transition-transform" />
+          <span>{t('backHome')}</span>
         </button>
 
         <div className="text-xs font-bold text-slate-500">
-          Already registered?{' '}
+          {t('alreadyRegistered')}{' '}
           <button
             onClick={() => navigateTo('login')}
             className="text-sky-600 font-black hover:underline cursor-pointer"
           >
-            Sign in here &rarr;
+            {t('signInHere')}
           </button>
         </div>
       </div>
@@ -89,65 +106,65 @@ export const ParentRegisterPage: React.FC = () => {
           <div className="relative mx-auto w-28 h-28">
             <img
               src={CLUB_PHOTOS.clubAvatar}
-              alt="Discovery Club Junior logo"
+              alt={t('logoAlt')}
               className="bg-white w-28 h-28 rounded-3xl object-cover border-4 border-emerald-100 shadow-sm"
             />
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-black text-xs border-2 border-white shadow-sm">
+            <div className="absolute -bottom-1 -end-1 w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-black text-xs border-2 border-white shadow-sm">
               ✓
             </div>
           </div>
 
           <div className="duo-speech-bubble text-center space-y-1.5">
             <div className="text-xs font-black uppercase text-emerald-600 tracking-wider">
-              Parent Portal Perks 🌟
+              {t('perksBadge')}
             </div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight leading-snug">
-              Track Your Kid's Robotics Superpowers!
+              {t('perksTitle')}
             </h1>
             <p className="text-xs text-slate-600 font-medium leading-relaxed">
-              No stress, full transparency. Here is what you get as a Discovery Junior parent:
+              {t('perksText')}
             </p>
           </div>
 
-          <div className="space-y-2.5 text-left text-xs">
+          <div className="space-y-2.5 text-start text-xs">
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5">
               <span className="text-lg">📅</span>
               <div>
-                <strong className="text-emerald-900 block font-black">Live Attendance Check</strong>
-                <span className="text-emerald-700 font-medium">See session dates, arrivals, and weekly syllabus topics.</span>
+                <strong className="text-emerald-900 block font-black">{t('perkAttendanceTitle')}</strong>
+                <span className="text-emerald-700 font-medium">{t('perkAttendanceText')}</span>
               </div>
             </div>
 
             <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 flex items-start gap-2.5">
               <span className="text-lg">⭐</span>
               <div>
-                <strong className="text-sky-900 block font-black">Trainer Feedback & Stars</strong>
-                <span className="text-sky-700 font-medium">Read constructive notes from certified STEM trainers.</span>
+                <strong className="text-sky-900 block font-black">{t('perkFeedbackTitle')}</strong>
+                <span className="text-sky-700 font-medium">{t('perkFeedbackText')}</span>
               </div>
             </div>
 
             <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5">
               <span className="text-lg">🧥</span>
               <div>
-                <strong className="text-amber-900 block font-black">Official Club Hoodie Shop</strong>
-                <span className="text-amber-700 font-medium">Order "Les Capuches" with your child's embroidered name.</span>
+                <strong className="text-amber-900 block font-black">{t('perkShopTitle')}</strong>
+                <span className="text-amber-700 font-medium">{t('perkShopText')}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Side: Step-by-Step Friendly Form */}
-        <div className="lg:col-span-7 duo-card p-6 sm:p-10 space-y-6 bg-white">
+        <div className="order-first lg:order-none lg:col-span-7 duo-card p-6 sm:p-10 space-y-6 bg-white">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-600 uppercase tracking-wider mb-1">
               <HeartHandshake className="w-4 h-4" />
-              <span>Easy Parent Registration</span>
+              <span>{t('easyRegistration')}</span>
             </div>
             <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-              Let's Get Your Family Started!
+              {t('registerTitle')}
             </h2>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Takes less than 1 minute. An account is created immediately.
+              {t('registerSubtitle')}
             </p>
           </div>
 
@@ -156,27 +173,30 @@ export const ParentRegisterPage: React.FC = () => {
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 text-xs font-black text-slate-700 uppercase tracking-wider">
                 <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-black">1</span>
-                <span>Parent / Guardian Information</span>
+                <span>{t('step1')}</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-slate-700 font-black mb-1">Parent Full Name *</label>
+                  <label className="block text-slate-700 font-black mb-1">{t('parentNameLabel')}</label>
                   <input
                     type="text"
                     required
                     value={parentName}
                     onChange={(e) => setParentName(e.target.value)}
-                    placeholder="e.g. Sonia Khelifi"
+                    placeholder={t('parentNamePlaceholder')}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-black mb-1">Phone Number *</label>
+                  <label className="block text-slate-700 font-black mb-1">{t('phoneLabel')}</label>
                   <input
                     type="tel"
+                    dir="ltr"
                     required
+                    pattern={PHONE_PATTERN}
+                    title={t('invalidPhone')}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+216 98 123 456"
@@ -187,7 +207,7 @@ export const ParentRegisterPage: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-slate-700 font-black mb-1">Email (Your Login ID) *</label>
+                  <label className="block text-slate-700 font-black mb-1">{t('regEmailLabel')}</label>
                   <input
                     type="email"
                     required
@@ -199,14 +219,14 @@ export const ParentRegisterPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-black mb-1">Password (min. 6 characters) *</label>
+                  <label className="block text-slate-700 font-black mb-1">{t('regPasswordLabel')}</label>
                   <input
                     type="password"
                     required
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Create a password"
+                    placeholder={t('regPasswordPlaceholder')}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
                   />
                 </div>
@@ -217,17 +237,17 @@ export const ParentRegisterPage: React.FC = () => {
             <div className="space-y-3.5 pt-4 border-t-2 border-slate-100">
               <div className="flex items-center gap-2 text-xs font-black text-slate-700 uppercase tracking-wider">
                 <span className="w-6 h-6 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs font-black">2</span>
-                <span>Meet Your Future Robotics Star!</span>
+                <span>{t('step2')}</span>
               </div>
 
               <p className="text-[11px] text-slate-500 font-medium">
-                No need to pick a course now — our team will place each child in the right group and contact you.
+                {t('noCourseNeeded')}
               </p>
 
               {children.map((child, idx) => (
                 <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border-2 border-slate-200 space-y-3">
                   <div className="flex items-center justify-between text-xs font-black text-slate-600">
-                    <span>Child {idx + 1}</span>
+                    <span>{t('childN', { n: idx + 1 })}</span>
                     {children.length > 1 && (
                       <button
                         type="button"
@@ -235,47 +255,52 @@ export const ParentRegisterPage: React.FC = () => {
                         className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-600 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Remove</span>
+                        <span>{t('remove')}</span>
                       </button>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div className="col-span-2">
-                      <label className="block text-slate-700 font-black mb-1">Child's Name *</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs">
+                    <div className="sm:col-span-3">
+                      <label className="block text-slate-700 font-black mb-1">{t('childNameLabel')}</label>
                       <input
                         type="text"
                         required
                         value={child.name}
                         onChange={(e) => updateChild(idx, { name: e.target.value })}
-                        placeholder="e.g. Yassine, Nour, Adam..."
+                        placeholder={t('childNamePlaceholder')}
                         className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 text-xs font-semibold"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-slate-700 font-black mb-1">Age (6-22) *</label>
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-700 font-black mb-1">{t('ageLabel')}</label>
                       <input
-                        type="number"
-                        min={6}
-                        max={22}
+                        type="date"
                         required
-                        value={child.age}
-                        onChange={(e) => updateChild(idx, { age: Number(e.target.value) })}
-                        className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 font-black focus:outline-none focus:border-sky-500 text-xs text-center"
+                        min={minBirth}
+                        max={maxBirth}
+                        value={child.birthDate}
+                        onChange={(e) => updateChild(idx, { birthDate: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none focus:border-sky-500 text-xs"
                       />
+                      {child.birthDate && (
+                        <p className="mt-1 text-[11px] font-bold text-emerald-700">
+                          {t('ageComputed', { age: ageOf({ birthDate: child.birthDate, studentAge: 0 }) })}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-slate-700 font-black text-xs mb-1">
-                      Any special notes for trainers? (Optional)
+                      {t('notesLabel')}
                     </label>
                     <textarea
                       rows={2}
                       value={child.notes}
                       onChange={(e) => updateChild(idx, { notes: e.target.value })}
-                      placeholder="e.g. Loves building LEGO, preferred session day..."
+                      placeholder={t('notesPlaceholder')}
                       className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-xs font-semibold resize-none"
                     />
                   </div>
@@ -288,7 +313,7 @@ export const ParentRegisterPage: React.FC = () => {
                 className="w-full py-2.5 rounded-2xl border-2 border-dashed border-sky-300 text-sky-600 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-sky-50 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Add another child</span>
+                <span>{t('addChild')}</span>
               </button>
             </div>
 
@@ -299,20 +324,20 @@ export const ParentRegisterPage: React.FC = () => {
                 disabled={isSubmitting}
                 className="w-full py-4 btn-duo-green text-sm font-black flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
-                <span>{isSubmitting ? 'Creating Family Account...' : 'Complete & Open Parent Portal 🚀'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>{isSubmitting ? t('creatingAccount') : t('completeRegister')}</span>
+                <ArrowRight className="w-4 h-4 rtl:rotate-180" />
               </button>
             </div>
           </form>
 
           {/* Footer note */}
           <div className="pt-4 border-t-2 border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
-            <span>Already registered?</span>
+            <span>{t('alreadyRegistered')}</span>
             <button
               onClick={() => navigateTo('login')}
               className="text-sky-600 font-black hover:underline cursor-pointer"
             >
-              Sign In to Your Space &rarr;
+              {t('signInToSpace')}
             </button>
           </div>
         </div>

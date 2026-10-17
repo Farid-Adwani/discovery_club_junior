@@ -1,14 +1,13 @@
 import { db } from './firebaseAdmin';
 import {
-  INITIAL_PROGRAMS,
   INITIAL_TRAINERS,
   INITIAL_GROUPS,
   INITIAL_EVENTS,
   FACEBOOK_POSTS,
-  INITIAL_HOODIE_STOCK,
+  INITIAL_PRODUCTS,
   INITIAL_STUDENTS,
   INITIAL_SESSIONS,
-  INITIAL_HOODIE_DISTRIBUTIONS,
+  INITIAL_ORDERS,
   INITIAL_MATERIAL_REQUESTS
 } from '../src/data/initialData';
 
@@ -27,14 +26,13 @@ async function writeCollection(name: string, docs: Doc[], overwrite: boolean) {
 }
 
 /**
- * Public club content: programs, trainers, groups, events, posts, hoodie stock.
- * With `demo`, also writes the sample students, sessions, hoodie orders and material requests.
+ * Public club content: trainers, classes, events, posts, shop products.
+ * With `demo`, also writes the sample students, sessions, shop orders and material requests.
  * Without `overwrite`, a collection that already has documents is left untouched.
  */
 export async function seedDatabase({ overwrite = false, demo = false } = {}) {
   const written: Record<string, number> = {};
 
-  written.programs = await writeCollection('programs', INITIAL_PROGRAMS.map((p) => ({ id: p.id, data: { ...p } })), overwrite);
   written.trainers = await writeCollection(
     'trainers',
     INITIAL_TRAINERS.map((t) => ({ id: t.id, data: { ...t, email: t.email.toLowerCase() } })),
@@ -51,11 +49,7 @@ export async function seedDatabase({ overwrite = false, demo = false } = {}) {
     FACEBOOK_POSTS.map((p) => ({ id: p.id, data: { likedBy: [], commentsList: [], ...p } })),
     overwrite
   );
-  written.hoodie_stock = await writeCollection(
-    'hoodie_stock',
-    Object.entries(INITIAL_HOODIE_STOCK).map(([size, count]) => ({ id: size, data: { size, count } })),
-    overwrite
-  );
+  written.products = await writeCollection('products', INITIAL_PRODUCTS.map((p) => ({ id: p.id, data: { ...p } })), overwrite);
 
   if (demo) {
     written.students = await writeCollection(
@@ -66,7 +60,7 @@ export async function seedDatabase({ overwrite = false, demo = false } = {}) {
     written.sessions = await writeCollection('sessions', INITIAL_SESSIONS.map((s) => ({ id: s.id, data: { ...s } })), overwrite);
     written.hoodie_distributions = await writeCollection(
       'hoodie_distributions',
-      INITIAL_HOODIE_DISTRIBUTIONS.map((h) => ({ id: h.id, data: { ...h } })),
+      INITIAL_ORDERS.map((h) => ({ id: h.id, data: { ...h } })),
       overwrite
     );
     written.material_requests = await writeCollection(

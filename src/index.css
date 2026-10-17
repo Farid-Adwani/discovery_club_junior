@@ -140,6 +140,27 @@
   box-shadow: none;
 }
 
+/* Destructive actions (delete) */
+.btn-duo-red {
+  background-color: #dc2626;
+  border-bottom: 4px solid #991b1b;
+  color: #ffffff;
+  font-weight: 800;
+  border-radius: 1rem;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.btn-duo-red:hover {
+  background-color: #ef4444;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(220, 38, 38, 0.35);
+}
+.btn-duo-red:active {
+  border-bottom-width: 0px;
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
 .btn-duo-blue {
   background-color: #191919;
   border-bottom: 4px solid #000000;
@@ -516,5 +537,37 @@
 }
 .data-table tbody tr { transition: background-color 0.15s ease; }
 .data-table tbody tr:hover { background-color: #fdf2f4; }
-.data-table tbody td:first-child, .data-table thead th:first-child { padding-left: 0.75rem; }
-.data-table tbody td:last-child, .data-table thead th:last-child { padding-right: 0.75rem; }
+.data-table tbody td:first-child, .data-table thead th:first-child { padding-inline-start: 0.75rem; }
+.data-table tbody td:last-child, .data-table thead th:last-child { padding-inline-end: 0.75rem; }
+/* On phones wide tables keep readable columns and scroll sideways inside their panel */
+@media (max-width: 767px) {
+  .data-table { min-width: 640px; }
+}
+
+/* Arabic: a font with Arabic glyphs; layout flips through dir="rtl" on <html> */
+html[lang='ar'] body {
+  font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+/* Phone numbers and emails are always typed left to right, also on the Arabic page */
+input[type='tel'],
+input[type='email'] {
+  direction: ltr;
+}
+
+/* payments: the month title fades in when the month changes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- printed attendance sheet ----------
+   The sheet is rendered at the end of <body> and hidden on screen; when printing, it is the only thing shown. */
+.print-sheet { display: none; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body:has(> .print-sheet) { background: #fff !important; }
+  body:has(> .print-sheet) > *:not(.print-sheet) { display: none !important; }
+  .print-sheet { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-sheet tr { break-inside: avoid; }
+}

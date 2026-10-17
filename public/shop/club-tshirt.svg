@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" role="img" aria-label="Discovery Club Junior T-shirt">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdf2f4"/>
+      <stop offset="1" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d4264a"/>
+      <stop offset="1" stop-color="#a5172f"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="600" height="600" fill="url(#bg)"/>
+  <ellipse cx="300" cy="545" rx="170" ry="16" fill="#191919" opacity="0.12"/>
+
+  <!-- T-shirt body -->
+  <path d="M215 95 L140 120 L60 200 L120 265 L165 225 L165 520 Q300 540 435 520 L435 225 L480 265 L540 200 L460 120 L385 95
+           Q370 150 300 150 Q230 150 215 95 Z"
+        fill="url(#shirt)" stroke="#6a0d1f" stroke-width="6" stroke-linejoin="round"/>
+  <!-- collar -->
+  <path d="M215 95 Q230 150 300 150 Q370 150 385 95 Q365 128 300 128 Q235 128 215 95 Z" fill="#6a0d1f"/>
+  <!-- sleeve hems -->
+  <path d="M60 200 L120 265" stroke="#6a0d1f" stroke-width="14" stroke-linecap="round"/>
+  <path d="M540 200 L480 265" stroke="#6a0d1f" stroke-width="14" stroke-linecap="round"/>
+  <!-- side seams -->
+  <path d="M165 225 L165 515 M435 225 L435 515" stroke="#6a0d1f" stroke-width="3" opacity="0.4"/>
+
+  <!-- Chest print: robot head -->
+  <g transform="translate(300 290)">
+    <line x1="0" y1="-78" x2="0" y2="-56" stroke="#c9a227" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="0" cy="-84" r="9" fill="#c9a227"/>
+    <rect x="-62" y="-56" width="124" height="96" rx="22" fill="#ffffff"/>
+    <rect x="-74" y="-28" width="12" height="36" rx="5" fill="#ffffff"/>
+    <rect x="62" y="-28" width="12" height="36" rx="5" fill="#ffffff"/>
+    <circle cx="-26" cy="-14" r="14" fill="#191919"/>
+    <circle cx="26" cy="-14" r="14" fill="#191919"/>
+    <circle cx="-22" cy="-18" r="4.5" fill="#c9a227"/>
+    <circle cx="30" cy="-18" r="4.5" fill="#c9a227"/>
+    <path d="M-24 18 Q0 34 24 18" stroke="#191919" stroke-width="6" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Chest print: wordmark -->
+  <text x="300" y="388" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif"
+        font-size="40" font-weight="900" fill="#ffffff" letter-spacing="3">DISCOVERY</text>
+  <text x="300" y="424" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif"
+        font-size="22" font-weight="800" fill="#f5d77a" letter-spacing="8">CLUB JUNIOR</text>
+  <text x="300" y="460" text-anchor="middle" font-family="'JetBrains Mono', monospace"
+        font-size="13" font-weight="600" fill="#ffffff" opacity="0.75" letter-spacing="1.5">ROBOTICS · STEM · MANOUBA</text>
+</svg>

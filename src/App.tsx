@@ -6,6 +6,9 @@
 import React, { useState } from 'react';
 import { CLUB_PHOTOS } from './data/initialData';
 import { AppProvider, useApp } from './context/AppContext';
+import { LanguageProvider, useT } from './i18n';
+import { ConfirmProvider } from './components/common/ConfirmProvider';
+import { commonMessages } from './i18n/messages/common';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
@@ -16,15 +19,23 @@ import { TrainerPortal } from './components/trainer/TrainerPortal';
 import { ParentPortal } from './components/parent/ParentPortal';
 import { LoginPage } from './pages/LoginPage';
 import { ParentRegisterPage } from './pages/ParentRegisterPage';
-import { ScheduleMatrixPage } from './pages/ScheduleMatrixPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShieldAlert, LogIn, ArrowLeft, UserPlus, Sparkles, Lock, KeyRound } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { currentPage, navigateTo, currentUser } = useApp();
+  const { currentPage, navigateTo, currentUser, isRestoringSession } = useApp();
+  const t = useT(commonMessages);
 
   // Route security gate: check if user is authorized for protected portal pages
   const renderPage = () => {
+    // After a refresh on a protected page, wait for the saved sign-in instead of showing "access denied"
+    if (isRestoringSession && ['admin', 'trainer', 'parent'].includes(currentPage)) {
+      return (
+        <div key="page-restoring" className="min-h-[60vh] flex items-center justify-center" role="status" aria-live="polite">
+          <span className="w-10 h-10 rounded-full border-4 border-rose-200 border-t-rose-600 animate-spin" />
+        </div>
+      );
+    }
     switch (currentPage) {
       case 'login':
         return <LoginPage key="page-login" />;
@@ -32,24 +43,12 @@ const AppContent: React.FC = () => {
       case 'register-parent':
         return <ParentRegisterPage key="page-register-parent" />;
 
-      case 'schedule-matrix':
-        if (!currentUser || (!currentUser.roles.includes('admin') && !currentUser.roles.includes('trainer'))) {
-          return (
-            <AccessDeniedGate
-              title="Trainer & Admin Timetable Matrix"
-              description="This view checks schedule conflicts for all classes and rooms. Please sign in as an Administrator or Trainer."
-              requiredRole="admin"
-            />
-          );
-        }
-        return <ScheduleMatrixPage key="page-schedule-matrix" />;
-
       case 'admin':
         if (!currentUser || !currentUser.roles.includes('admin')) {
           return (
             <AccessDeniedGate
-              title="Admin Space Needs Sign In"
-              description="Welcome! To view student rosters, approve waitlists, and manage lab hoodies, please sign in with an Admin account."
+              title={t('gateAdminTitle')}
+              description={t('gateAdminDesc')}
               requiredRole="admin"
             />
           );
@@ -60,8 +59,8 @@ const AppContent: React.FC = () => {
         if (!currentUser || !currentUser.roles.includes('trainer')) {
           return (
             <AccessDeniedGate
-              title="Trainer Space Needs Sign In"
-              description="Hello Trainer! Sign in to validate syllabus steps, mark attendance, and grade your awesome robotics builders."
+              title={t('gateTrainerTitle')}
+              description={t('gateTrainerDesc')}
               requiredRole="trainer"
             />
           );
@@ -72,8 +71,8 @@ const AppContent: React.FC = () => {
         if (!currentUser || !currentUser.roles.includes('parent')) {
           return (
             <AccessDeniedGate
-              title="Parent Portal Needs Sign In"
-              description="Welcome Parents! Sign in or register in 30 seconds to track your child's weekly attendance, remarks, and order club hoodies."
+              title={t('gateParentTitle')}
+              description={t('gateParentDesc')}
               requiredRole="parent"
               allowRegister
             />
@@ -88,7 +87,8 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col relative overflow-x-clip">
+      {/* overflow-x-clip, not hidden: "hidden" makes this a scroll box and the header would stop staying on top */}
       {/* Top Header with Brand, Navigation & Live Auth State */}
       <Header />
 
@@ -107,8 +107,8 @@ const AppContent: React.FC = () => {
         </AnimatePresence>
       </main>
 
-      {/* Start-up reveal animation (once per session) */}
-      <IntroReveal />
+      {/* Start-up reveal animation: home page only, once per visit */}
+      {currentPage === 'home' && <IntroReveal />}
 
       {/* Global Notifications */}
       <ToastContainer />
@@ -134,6 +134,7 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
   allowRegister
 }) => {
   const { navigateTo } = useApp();
+  const t = useT(commonMessages);
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4 py-16">
@@ -147,10 +148,10 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
         <div className="relative mx-auto w-24 h-24">
           <img
             src={CLUB_PHOTOS.clubAvatar}
-            alt="Discovery Club Junior logo"
+            alt={t('logoAlt')}
             className="bg-white w-24 h-24 rounded-full object-cover shadow-md border-4 border-white"
           />
-          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center text-slate-900 shadow-sm">
+          <div className="absolute -bottom-1 -end-1 w-8 h-8 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center text-slate-900 shadow-sm">
             <Lock className="w-4 h-4" />
           </div>
         </div>
@@ -158,7 +159,7 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
         {/* Speech Bubble text */}
         <div className="duo-speech-bubble text-center space-y-2">
           <div className="text-xs font-black uppercase tracking-wider text-emerald-600">
-            Hold on there, Friend! 🤖
+            {t('gateHoldOn')}
           </div>
           <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">
             {title}
@@ -175,7 +176,7 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
             className="w-full py-3.5 px-6 btn-duo-green flex items-center justify-center gap-2 cursor-pointer text-sm"
           >
             <LogIn className="w-4 h-4" />
-            <span>Sign In to Continue</span>
+            <span>{t('gateSignIn')}</span>
           </button>
 
           {allowRegister && (
@@ -184,7 +185,7 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
               className="w-full py-3.5 px-6 btn-duo-blue flex items-center justify-center gap-2 cursor-pointer text-sm"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Register as a Parent (Instant)</span>
+              <span>{t('gateRegister')}</span>
             </button>
           )}
 
@@ -192,8 +193,8 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
             onClick={() => navigateTo('home')}
             className="w-full py-3 px-6 btn-duo-secondary flex items-center justify-center gap-2 cursor-pointer text-xs"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Public Fun Page</span>
+            <ArrowLeft className="w-3.5 h-3.5 rtl:rotate-180" />
+            <span>{t('gateBack')}</span>
           </button>
         </div>
       </motion.div>
@@ -203,8 +204,12 @@ const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <LanguageProvider>
+      <ConfirmProvider>
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
+      </ConfirmProvider>
+    </LanguageProvider>
   );
 }

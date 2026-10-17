@@ -1,10 +1,13 @@
 import React from 'react';
 import { CLUB_PHOTOS } from '../../data/initialData';
 import { useApp } from '../../context/AppContext';
+import { useT } from '../../i18n';
+import { commonMessages } from '../../i18n/messages/common';
 import { ExternalLink, Heart, MapPin, Phone, Mail, Clock, Sparkles } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { navigateTo } = useApp();
+  const t = useT(commonMessages);
 
   return (
     <footer className="border-t-2 border-slate-200 bg-white text-slate-600 text-xs">
@@ -15,7 +18,7 @@ export const Footer: React.FC = () => {
             <div className="flex items-center gap-3">
               <img
                 src={CLUB_PHOTOS.clubAvatar}
-                alt="Discovery Club Junior logo"
+                alt={t('logoAlt')}
                 className="bg-white w-10 h-10 rounded-2xl object-cover border-2 border-slate-200"
               />
               <span className="text-base font-black tracking-tight text-slate-800">
@@ -23,7 +26,7 @@ export const Footer: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium leading-relaxed">
-              Igniting the passion for robotics, coding, electronics, and AI in children and teenagers. Training the creators of tomorrow in Manouba, Tunisia! 🤖✨
+              {t('footerTagline')}
             </p>
             <div className="pt-1">
               <a
@@ -32,7 +35,7 @@ export const Footer: React.FC = () => {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-black transition-colors cursor-pointer"
               >
-                <span>Follow on Facebook</span>
+                <span>{t('followFacebook')}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -40,14 +43,14 @@ export const Footer: React.FC = () => {
 
           {/* Quick Spaces */}
           <div className="space-y-3">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Club Portals</h4>
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">{t('clubPortals')}</h4>
             <ul className="space-y-2 text-xs font-bold text-slate-600">
               <li>
                 <button
                   onClick={() => navigateTo('home')}
                   className="hover:text-sky-600 transition-colors cursor-pointer"
                 >
-                  Public Website & Admissions
+                  {t('portalPublic')}
                 </button>
               </li>
               <li>
@@ -55,7 +58,7 @@ export const Footer: React.FC = () => {
                   onClick={() => navigateTo('register-parent')}
                   className="hover:text-emerald-600 transition-colors cursor-pointer"
                 >
-                  Parent Portal Registration
+                  {t('portalRegister')}
                 </button>
               </li>
               <li>
@@ -63,7 +66,7 @@ export const Footer: React.FC = () => {
                   onClick={() => navigateTo('login')}
                   className="hover:text-sky-600 transition-colors cursor-pointer"
                 >
-                  Member Sign In (RBAC)
+                  {t('portalSignIn')}
                 </button>
               </li>
             </ul>
@@ -71,31 +74,30 @@ export const Footer: React.FC = () => {
 
           {/* STEM Pathways */}
           <div className="space-y-3">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Learning Tracks</h4>
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">{t('learningTracks')}</h4>
             <ul className="space-y-2 text-xs font-medium text-slate-500">
-              <li>🤖 Junior Robotics Explorer (Ages 6-9)</li>
-              <li>⚡ Electronics & Microcontrollers (Ages 10-14)</li>
-              <li>💻 Creative Coding & Kids AI (Ages 11-16)</li>
-              <li>🏆 Competitive Robotics Squad (Ages 12-17)</li>
-              <li>👕 Official "Les Capuches" Club Hoodies</li>
+              <li>{t('track1')}</li>
+              <li>{t('track2')}</li>
+              <li>{t('track3')}</li>
+              <li>{t('track4')}</li>
             </ul>
           </div>
 
           {/* Campus Info */}
           <div className="space-y-3">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Campus Location</h4>
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">{t('campusLocation')}</h4>
             <div className="space-y-2 text-xs font-medium text-slate-600">
               <div className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                <span>Manouba STEM Hub, Tunisia</span>
+                <span>{t('campusAddress')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-                <span>Wed: 2pm - 6pm · Sat/Sun: 9am - 5pm</span>
+                <span>{t('openingHours')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span>+216 55 987 654</span>
+                <span dir="ltr">+216 55 987 654</span>
               </div>
             </div>
           </div>
@@ -103,10 +105,10 @@ export const Footer: React.FC = () => {
 
         <div className="pt-8 border-t-2 border-slate-100 mt-8 flex flex-col sm:flex-row items-center justify-between text-xs font-bold text-slate-400 gap-3">
           <div>
-            &copy; {new Date().getFullYear()} Discovery Club Junior. Built with joy for young makers.
+            {t('copyright', { year: new Date().getFullYear() })}
           </div>
           <div className="flex items-center gap-2 text-emerald-600 font-black">
-            <span>Happy Learning & Creating! 🚀</span>
+            <span>{t('happyLearning')}</span>
           </div>
         </div>
       </div>

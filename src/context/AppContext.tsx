@@ -4,35 +4,39 @@ import {
   AppPage,
   AppUser,
   Student,
-  Program,
   Trainer,
   Group,
-  HoodieSize,
-  HoodieDistribution,
+  Product,
+  ProductOrder,
+  ScheduleItem,
+  StaffMember,
+  AdminProfile,
   SessionRecord,
   MaterialRequest,
   ClubEvent,
   StudentAttendanceRecord,
-  FacebookPost
+  FacebookPost,
+  PaymentRecord,
+  PaymentMethod,
+  SessionGuest
 } from '../types';
 import {
-  INITIAL_PROGRAMS,
   INITIAL_TRAINERS,
   INITIAL_GROUPS,
-  INITIAL_HOODIE_STOCK,
   INITIAL_EVENTS,
   FACEBOOK_POSTS
 } from '../data/initialData';
-import { auth, googleProvider } from '../firebase';
-import { api } from '../api';
-import {
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  signOut as firebaseSignOut,
-  onAuthStateChanged
-} from 'firebase/auth';
+import { api, ApiError } from '../api';
+import { clearSessionToken, getSessionToken, setSessionToken } from '../session';
+import { translate } from '../i18n';
+import { toastMessages } from '../i18n/messages/toasts';
+
+const tt = (key: keyof (typeof toastMessages)['en'], vars?: Record<string, string | number>) =>
+  translate(toastMessages, key, vars);
+
+const ROLE_KEYS = { admin: 'roleAdmin', trainer: 'roleTrainer', parent: 'roleParent', visitor: 'roleVisitor' } as const;
+const STUDENT_STATUS_KEYS = { waitlist: 'statusWaitlist', accepted: 'statusAccepted', active: 'statusActive' } as const;
+const ORDER_STATUS_KEYS = { requested: 'orderRequested', ready: 'orderReady', picked_up: 'orderPickedUp', cancelled: 'orderCancelled' } as const;
 
 interface Toast {
   id: string;
@@ -41,16 +45,20 @@ interface Toast {
 }
 
 interface ClubData {
-  programs: Program[];
   trainers: Trainer[];
   groups: Group[];
   events: ClubEvent[];
   facebookPosts: FacebookPost[];
-  hoodieStock: Partial<Record<HoodieSize, number>>;
+  products: Product[];
   students: Student[];
   sessions: SessionRecord[];
-  hoodieDistributions: HoodieDistribution[];
+  orders: ProductOrder[];
   materialRequests: MaterialRequest[];
+  scheduleItems?: ScheduleItem[];
+  payments?: PaymentRecord[];
+  deletedStudents?: Student[];
+  staffMembers?: StaffMember[];
+  adminProfiles?: AdminProfile[];
 }
 
 interface AppContextType {
@@ -61,14 +69,13 @@ interface AppContextType {
   navigateTo: (page: AppPage) => void;
   currentUser: AppUser | null;
   setCurrentUser: (user: AppUser | null) => void;
-  loginWithGoogle: () => Promise<void>;
   loginWithEmailPassword: (email: string, pass: string) => Promise<boolean>;
   registerParentAccount: (data: {
     parentName: string;
     parentEmail: string;
     password: string;
     parentPhone: string;
-    children: { name: string; age: number; notes?: string }[];
+    children: { name: string; birthDate: string; notes?: string }[];
   }) => Promise<void>;
   logout: () => Promise<void>;
   isLoginModalOpen: boolean;
@@ -82,36 +89,70 @@ interface AppContextType {
   setActiveParentStudentId: (id: string) => void;
 
   students: Student[];
-  programs: Program[];
   trainers: Trainer[];
   groups: Group[];
-  hoodieStock: Record<HoodieSize, number>;
-  hoodieDistributions: HoodieDistribution[];
+  /** Admins and workers (not trainers), for the team birthdays; only loaded for the team */
+  staffMembers: StaffMember[];
+  /** Admin accounts (name, photo, date of birth), for the team birthdays; only loaded for the team */
+  adminProfiles: AdminProfile[];
+  /** The signed-in user edits their own name / photo (data URL, null = remove) / date of birth (null = remove) */
+  updateMyProfile: (data: { displayName?: string; photo?: string | null; birthDate?: string | null }) => Promise<boolean>;
+  /** Courses, events, meetings and class cancellations the admin added to students' weeks */
+  scheduleItems: ScheduleItem[];
+  /** Admin: every product. Everyone else: only products on sale. */
+  products: Product[];
+  orders: ProductOrder[];
   sessions: SessionRecord[];
   materialRequests: MaterialRequest[];
   events: ClubEvent[];
   facebookPosts: FacebookPost[];
 
 
+  /** Reload everything from the server (after changes made outside these helpers) */
+  refreshData: () => Promise<void>;
   toasts: Toast[];
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   /** True once the backend API has answered */
   isFirebaseConnected: boolean;
+  /** True while a saved sign-in is being restored after a page load (protected pages wait for it) */
+  isRestoringSession: boolean;
 
   // Student actions
   updateStudentStatus: (studentId: string, status: Student['status']) => Promise<void>;
-  updateStudentPrice: (studentId: string, customPrice?: number, paymentStatus?: Student['paymentStatus']) => Promise<void>;
+  /** customPrice: a number = custom fee, null = follow the class prices, undefined = unchanged */
+  updateStudentPrice: (studentId: string, customPrice?: number | null, paymentStatus?: Student['paymentStatus']) => Promise<void>;
+  /** Admin: monthly payment records of every child */
+  payments: PaymentRecord[];
+  /** Admin: save what a child owes / paid for a month (YYYY-MM). Returns true on success. */
+  savePayment: (
+    month: string,
+    studentId: string,
+    data: { amountDue: number; amountPaid: number; method?: PaymentMethod; paidAt?: string; note?: string; scholarship?: boolean }
+  ) => Promise<boolean>;
+  /** Admin: mark children fully paid for a month */
+  markPaymentsPaid: (month: string, studentIds: string[], method?: PaymentMethod) => Promise<boolean>;
+  /** Admin: remove a month's record (back to unpaid) */
+  resetPayment: (month: string, studentId: string) => Promise<boolean>;
   /** Adds the child to a class (children can be in several classes) */
   assignStudentToGroup: (studentId: string, groupId: string) => Promise<void>;
   removeStudentFromGroup: (studentId: string, groupId: string) => Promise<void>;
   deleteStudent: (studentId: string) => Promise<void>;
+  /** Admin: deleted children (the trash), newest first */
+  deletedStudents: (Student & { deletedAt?: string })[];
+  /** Admin: take a child out of the trash */
+  restoreStudent: (studentId: string) => Promise<boolean>;
   /** Parent or admin: set (data URL) or remove (null) a child's profile photo */
   updateStudentPhoto: (studentId: string, photo: string | null) => Promise<void>;
+  /** Parent: change the phone and contact email the club uses (all their children). Returns true on success. */
+  updateParentContact: (studentId: string, parentPhone: string, parentEmail: string) => Promise<boolean>;
+  /** Parent or admin: notes for trainers; '' removes them. Returns true on success. */
+  updateStudentNotes: (studentId: string, notes: string) => Promise<boolean>;
 
   // Group actions
-  createGroup: (group: Omit<Group, 'id'>) => Promise<void>;
-  updateGroup: (group: Group) => Promise<void>;
-  deleteGroup: (groupId: string) => Promise<void>;
+  /** Return true when saved */
+  createGroup: (group: Omit<Group, 'id'>) => Promise<boolean>;
+  updateGroup: (group: Group) => Promise<boolean>;
+  deleteGroup: (groupId: string) => Promise<boolean>;
 
   // Session & Attendance
   saveSessionAttendance: (
@@ -121,8 +162,9 @@ interface AppContextType {
     topicTaught: string,
     records: Record<string, StudentAttendanceRecord>,
     validateSyllabus: boolean,
-    trainerNotes?: string
-  ) => Promise<void>;
+    trainerNotes?: string,
+    extras?: { extraStudentIds?: string[]; guests?: SessionGuest[] }
+  ) => Promise<boolean>;
 
   // Material requests
   createMaterialRequest: (data: {
@@ -134,26 +176,25 @@ interface AppContextType {
   }) => Promise<void>;
   updateMaterialRequestStatus: (requestId: string, status: MaterialRequest['status']) => Promise<void>;
 
-  // Inventory / Hoodies ("Les Capuches")
-  addHoodieStock: (size: HoodieSize, amount: number) => Promise<void>;
-  requestHoodieOrder: (data: {
-    studentId: string;
-    studentName: string;
-    parentName: string;
-    size: HoodieSize;
-    isPersonalized: boolean;
-    personalizedText?: string;
-  }) => Promise<void>;
-  updateHoodieStatus: (distributionId: string, status: HoodieDistribution['status']) => Promise<void>;
+  // Team (admin)
+  saveStaffMember: (member: Omit<StaffMember, 'id' | 'createdAt'> & { id?: string }) => Promise<boolean>;
+  deleteStaffMember: (id: string) => Promise<boolean>;
+  setTrainerBirthDate: (trainerId: string, birthDate: string | null) => Promise<boolean>;
 
-  // Curriculum management
-  addProgram: (program: Program) => Promise<void>;
-  updateProgram: (program: Program) => Promise<void>;
-  deleteProgram: (programId: string) => Promise<void>;
-  addProgramObjective: (
-    programId: string,
-    objective: { week: number; title: string; description: string; hardware: string }
-  ) => Promise<void>;
+  // Weekly schedule (admin)
+  addScheduleItem: (item: Omit<ScheduleItem, 'id' | 'createdAt'>) => Promise<boolean>;
+  deleteScheduleItem: (itemId: string) => Promise<boolean>;
+  removeStudentFromScheduleItem: (itemId: string, studentId: string) => Promise<boolean>;
+  removeTrainerFromScheduleItem: (itemId: string, trainerId: string) => Promise<boolean>;
+
+  // Club shop
+  saveProduct: (product: Omit<Product, 'stock' | 'createdAt'>) => Promise<void>;
+  setProductActive: (productId: string, isActive: boolean) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  addProductStock: (productId: string, size: string, amount: number) => Promise<void>;
+  /** Returns true when the order was saved */
+  placeOrder: (data: { studentId: string; studentName: string; productId: string; size: string }) => Promise<boolean>;
+  updateOrderStatus: (orderId: string, status: ProductOrder['status']) => Promise<void>;
 
   // Trainer management
   addTrainer: (trainer: Trainer) => Promise<void>;
@@ -167,46 +208,69 @@ interface AppContextType {
   addFacebookPost: (post: Omit<FacebookPost, 'id' | 'likes' | 'comments'>) => Promise<void>;
   deleteFacebookPost: (postId: string) => Promise<void>;
   addFacebookComment: (postId: string, text: string, authorName?: string) => Promise<void>;
-  syncInitialDataToFirestore: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// The current page lives in the address bar (#/admin, #/login…) so a refresh reopens the same page
+const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent'];
+const PORTALS: AppPage[] = ['admin', 'trainer', 'parent'];
+
+function pageFromHash(): AppPage {
+  // "#/admin/students" -> "admin" (the admin dashboard keeps its open section in the rest)
+  const name = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+  return (PAGES as string[]).includes(name) ? (name as AppPage) : 'home';
+}
+
+const hashFor = (page: AppPage) => (page === 'home' ? '' : `#/${page}`);
+
 const REFRESH_INTERVAL_MS = 30_000;
 
 function authErrorMessage(err: unknown): string {
-  const code = (err as { code?: string })?.code || '';
-  switch (code) {
-    case 'auth/invalid-credential':
-    case 'auth/wrong-password':
-    case 'auth/user-not-found':
-      return 'Wrong email or password.';
-    case 'auth/email-already-in-use':
-      return 'An account with this email already exists. Please sign in instead.';
-    case 'auth/weak-password':
-      return 'Password must be at least 6 characters.';
-    case 'auth/invalid-email':
-      return 'Please enter a valid email address.';
-    case 'auth/popup-closed-by-user':
-    case 'auth/cancelled-popup-request':
-      return 'Google sign-in was cancelled.';
-    case 'auth/operation-not-allowed':
-    case 'auth/configuration-not-found':
-      return 'This sign-in method is not enabled in Firebase yet.';
-    case 'auth/unauthorized-domain':
-      return 'This website address is not authorized in Firebase Authentication settings.';
-    case 'auth/too-many-requests':
-      return 'Too many attempts. Please wait a moment and try again.';
-    default:
-      return err instanceof Error ? err.message : 'Sign-in failed.';
+  if (err instanceof ApiError) {
+    if (err.status === 401) return tt('wrongCredentials');
+    if (err.status === 409) return tt('emailInUse');
+    if (err.status === 429) return tt('tooManyRequests');
+    if (err.status === 403) return tt('staffEmail');
   }
+  return err instanceof Error ? err.message : tt('signInFailed');
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Current user state (Firebase keeps the session; the profile comes from /api/me)
+  // Current user state (the session token is kept in the browser; the profile comes from /api/me)
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [role, setRoleState] = useState<UserRole>('visitor');
-  const [currentPage, setCurrentPageState] = useState<AppPage>('home');
+  const [currentPage, setCurrentPageState] = useState<AppPage>(pageFromHash);
+  const [role, setRoleState] = useState<UserRole>(() =>
+    PORTALS.includes(currentPage) ? (currentPage as UserRole) : 'visitor'
+  );
+  const [isRestoringSession, setIsRestoringSession] = useState(() => !!getSessionToken());
+
+  // Keep the address bar in sync with the page (new history entry, so Back works)
+  const pageFromHistory = useRef(false);
+  useEffect(() => {
+    if (pageFromHistory.current) {
+      pageFromHistory.current = false;
+      return;
+    }
+    if (pageFromHash() !== currentPage || (currentPage === 'home' && window.location.hash)) {
+      window.history.pushState(null, '', hashFor(currentPage) || window.location.pathname + window.location.search);
+    }
+  }, [currentPage]);
+  // Browser Back / Forward
+  useEffect(() => {
+    const onPop = () => {
+      const page = pageFromHash();
+      if (page === currentPageRef.current) return;
+      pageFromHistory.current = true;
+      setCurrentPageState(page);
+      setRoleState(PORTALS.includes(page) ? (page as UserRole) : 'visitor');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  // Read by the auth listener, which is created once and would otherwise see the first value
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
 
   const setCurrentPage = (page: AppPage) => {
     setCurrentPageState(page);
@@ -218,7 +282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (dest === 'admin') {
       if (!currentUser || !currentUser.roles.includes('admin')) {
-        showToast('Administrator credentials required. Please sign in.', 'error');
+        showToast(tt('needAdmin'), 'error');
         setCurrentPageState('login');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
@@ -226,7 +290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRoleState('admin');
     } else if (dest === 'trainer') {
       if (!currentUser || !currentUser.roles.includes('trainer')) {
-        showToast('Trainer account required. Please sign in.', 'error');
+        showToast(tt('needTrainer'), 'error');
         setCurrentPageState('login');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
@@ -234,7 +298,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRoleState('trainer');
     } else if (dest === 'parent') {
       if (!currentUser || !currentUser.roles.includes('parent')) {
-        showToast('Please sign in or register to access the Parent Portal.', 'info');
+        showToast(tt('needParent'), 'info');
         setCurrentPageState('login');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
@@ -265,11 +329,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Data states. Public content starts with the built-in defaults until the API answers;
   // private data (students, attendance, orders) only ever comes from the API.
   const [students, setStudents] = useState<Student[]>([]);
-  const [programs, setPrograms] = useState<Program[]>(INITIAL_PROGRAMS);
   const [trainers, setTrainers] = useState<Trainer[]>(INITIAL_TRAINERS);
   const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
-  const [hoodieStock, setHoodieStock] = useState<Record<HoodieSize, number>>(INITIAL_HOODIE_STOCK);
-  const [hoodieDistributions, setHoodieDistributions] = useState<HoodieDistribution[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<ProductOrder[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [deletedStudents, setDeletedStudents] = useState<(Student & { deletedAt?: string })[]>([]);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [adminProfiles, setAdminProfiles] = useState<AdminProfile[]>([]);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
   const [events, setEvents] = useState<ClubEvent[]>(INITIAL_EVENTS);
@@ -291,7 +359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (!currentUser) {
-      showToast('Please sign in or register to access this space', 'info');
+      showToast(tt('needSignInSpace'), 'info');
       setAuthModalInitialTab(newRole === 'parent' ? 'register-parent' : 'login');
       setIsLoginModalOpen(true);
       return;
@@ -299,9 +367,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (currentUser.roles.includes(newRole)) {
       setRoleState(newRole);
-      showToast(`Navigated to ${newRole.toUpperCase()} space`);
+      showToast(tt('navigatedTo', { role: tt(ROLE_KEYS[newRole]).toUpperCase() }));
     } else {
-      showToast(`Access restricted: Your account does not have ${newRole.toUpperCase()} privileges`, 'error');
+      showToast(tt('accessRestricted', { role: tt(ROLE_KEYS[newRole]).toUpperCase() }), 'error');
     }
   };
 
@@ -316,15 +384,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const data = await api<ClubData>('/data');
       if (seq !== refreshSeq.current) return;
-      if (data.programs.length) setPrograms(data.programs);
       setTrainers(data.trainers);
       setGroups(data.groups);
       setEvents(data.events);
       setFacebookPosts(data.facebookPosts);
-      setHoodieStock({ ...INITIAL_HOODIE_STOCK, ...data.hoodieStock });
+      setProducts(data.products || []);
       setStudents(data.students);
       setSessions(data.sessions);
-      setHoodieDistributions(data.hoodieDistributions);
+      setOrders(data.orders || []);
+      setScheduleItems(data.scheduleItems || []);
+      setPayments(data.payments || []);
+      setDeletedStudents(data.deletedStudents || []);
+      setStaffMembers(data.staffMembers || []);
+      setAdminProfiles(data.adminProfiles || []);
       setMaterialRequests(data.materialRequests);
       setIsFirebaseConnected(true);
     } catch (err) {
@@ -336,7 +408,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadProfile = async (): Promise<AppUser | null> => {
     const seq = ++profileSeq.current;
-    const profile = auth.currentUser ? await api<AppUser>('/me') : null;
+    let profile: AppUser | null = null;
+    if (getSessionToken()) {
+      try {
+        profile = await api<AppUser>('/me');
+      } catch (err) {
+        // Expired or revoked session: forget it
+        if (err instanceof ApiError && err.status === 401) clearSessionToken();
+        else throw err;
+      }
+    }
     if (seq !== profileSeq.current) return profile;
 
     setCurrentUser(profile);
@@ -355,31 +436,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (successMessage) showToast(successMessage);
       return true;
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Something went wrong', 'error');
+      showToast(err instanceof Error ? err.message : tt('somethingWrong'), 'error');
       return false;
     } finally {
       await refresh();
     }
   };
 
-  const requireSignIn = (action: string) => {
+  const requireSignIn = (message: string) => {
     if (currentUser) return true;
-    showToast(`Please sign in to ${action}.`, 'info');
+    showToast(message, 'info');
     return false;
   };
 
-  // Sign-in state (also restores the session after a page reload)
+  // Restores the session after a page reload
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async () => {
+    (async () => {
       try {
-        await loadProfile();
+        const profile = await loadProfile();
+        // A parent who comes back already signed in goes straight to their space
+        // (unless they already moved away from the home page while it loaded)
+        if (profile?.role === 'parent' && currentPageRef.current === 'home') openPortalFor(profile);
       } catch (err) {
         console.warn('Could not load profile:', err);
         setCurrentUser(null);
+      } finally {
+        setIsRestoringSession(false);
       }
       await refresh();
-    });
-    return () => unsubAuth();
+    })();
   }, []);
 
   // Periodic refresh so changes made by others show up without reloading
@@ -392,29 +477,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ---------- auth ----------
 
-  const finishSignIn = async (welcome: string) => {
-    const profile = await loadProfile();
-    await refresh();
+  const finishSignIn = async (token: string, welcome: 'welcomeBack' | 'accountCreated') => {
+    setSessionToken(token);
+    const [profile] = await Promise.all([loadProfile(), refresh()]);
     setIsLoginModalOpen(false);
     if (profile) {
-      showToast(`${welcome}, ${profile.displayName}!`);
+      showToast(tt(welcome, { name: profile.displayName }));
       openPortalFor(profile);
-    }
-  };
-
-  const loginWithGoogle = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-      await finishSignIn('Welcome');
-    } catch (err) {
-      showToast(authErrorMessage(err), 'error');
     }
   };
 
   const loginWithEmailPassword = async (email: string, pass: string): Promise<boolean> => {
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), pass);
-      await finishSignIn('Welcome back');
+      const { token } = await api<{ token: string }>('/auth/login', { method: 'POST', body: { email: email.trim(), password: pass } });
+      await finishSignIn(token, 'welcomeBack');
       return true;
     } catch (err) {
       showToast(authErrorMessage(err), 'error');
@@ -429,19 +505,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     parentEmail: string;
     password: string;
     parentPhone: string;
-    children: { name: string; age: number; notes?: string }[];
+    children: { name: string; birthDate: string; notes?: string }[];
   }) => {
+    const form = { parentName: data.parentName, parentPhone: data.parentPhone, children: data.children };
     try {
-      // Already signed in (e.g. with Google): just add the children to this account
-      if (!auth.currentUser) {
-        const cred = await createUserWithEmailAndPassword(auth, data.parentEmail.trim(), data.password);
-        sendEmailVerification(cred.user).catch(() => {});
+      if (currentUser) {
+        // Already signed in: just add the children to this account
+        await api('/parents/register', { method: 'POST', body: form });
+        await finishSignIn(getSessionToken() || '', 'accountCreated');
+      } else {
+        const { token } = await api<{ token: string }>('/auth/register', {
+          method: 'POST',
+          body: { ...form, email: data.parentEmail.trim(), password: data.password }
+        });
+        await finishSignIn(token, 'accountCreated');
       }
-      await api('/parents/register', {
-        method: 'POST',
-        body: { parentName: data.parentName, parentPhone: data.parentPhone, children: data.children }
-      });
-      await finishSignIn('Account created! Welcome to the Parent Portal');
     } catch (err) {
       showToast(authErrorMessage(err), 'error');
     }
@@ -449,14 +527,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = async () => {
     try {
-      await firebaseSignOut(auth);
+      await api('/auth/logout', { method: 'POST' });
     } catch {
-      // Ignored
+      // Signed out locally anyway
     }
+    clearSessionToken();
     setCurrentUser(null);
     setRoleState('visitor');
-    navigateTo('home');
-    showToast('Signed out. Returned to Public Visitor portal.');
+    navigateTo('login');
+    showToast(tt('signedOut'));
+    refresh();
   };
 
   // ---------- students & waitlist ----------
@@ -464,59 +544,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateStudentStatus = async (studentId: string, status: Student['status']) => {
     await mutate(
       () => api(`/admin/students/${studentId}`, { method: 'PATCH', body: { status } }),
-      `Updated student status to ${status.toUpperCase()}`
+      tt('studentStatusUpdated', { status: tt(STUDENT_STATUS_KEYS[status]).toUpperCase() })
     );
   };
 
-  const updateStudentPrice = async (studentId: string, customPrice?: number, paymentStatus?: Student['paymentStatus']) => {
+  const updateStudentPrice = async (studentId: string, customPrice?: number | null, paymentStatus?: Student['paymentStatus']) => {
     await mutate(
       () =>
         api(`/admin/students/${studentId}`, {
           method: 'PATCH',
           body: { customMonthlyPrice: customPrice, paymentStatus }
         }),
-      'Pricing updated'
+      tt('pricingUpdated')
     );
   };
+
+  const savePayment: AppContextType['savePayment'] = (month, studentId, data) =>
+    mutate(() => api(`/admin/payments/${month}/${studentId}`, { method: 'PUT', body: data }), tt('paymentSaved'));
+
+  const markPaymentsPaid: AppContextType['markPaymentsPaid'] = (month, studentIds, method = 'cash') =>
+    mutate(
+      () => api(`/admin/payments/${month}/mark-paid`, { method: 'POST', body: { studentIds, method } }),
+      tt('paymentsMarkedPaid', { count: studentIds.length })
+    );
+
+  const resetPayment: AppContextType['resetPayment'] = (month, studentId) =>
+    mutate(() => api(`/admin/payments/${month}/${studentId}`, { method: 'DELETE' }), tt('paymentReset'));
 
   const assignStudentToGroup = async (studentId: string, groupId: string) => {
     await mutate(
       () => api(`/admin/students/${studentId}/classes`, { method: 'POST', body: { groupId } }),
-      'Child added to class'
+      tt('childAdded')
     );
   };
 
   const removeStudentFromGroup = async (studentId: string, groupId: string) => {
     await mutate(
       () => api(`/admin/students/${studentId}/classes/${groupId}`, { method: 'DELETE' }),
-      'Child removed from class'
+      tt('childRemoved')
     );
   };
 
+  const restoreStudent = async (studentId: string) => {
+    let dropped: string[] = [];
+    const ok = await mutate(async () => {
+      ({ droppedClasses: dropped } = await api<{ droppedClasses: string[] }>(`/admin/students/${studentId}/restore`, { method: 'POST' }));
+    });
+    if (ok) showToast(dropped.length ? tt('studentRestoredFull', { classes: dropped.join(', ') }) : tt('studentRestored'), dropped.length ? 'info' : 'success');
+    return ok;
+  };
+
   const deleteStudent = async (studentId: string) => {
-    await mutate(() => api(`/admin/students/${studentId}`, { method: 'DELETE' }), 'Student record removed');
+    await mutate(() => api(`/admin/students/${studentId}`, { method: 'DELETE' }), tt('studentRemoved'));
   };
 
   const updateStudentPhoto = async (studentId: string, photo: string | null) => {
     await mutate(
       () => api(`/students/${studentId}/photo`, { method: 'PUT', body: { photo } }),
-      photo ? 'Profile photo updated' : 'Profile photo removed'
+      photo ? tt('photoUpdated') : tt('photoRemoved')
     );
   };
 
+  const updateStudentNotes = async (studentId: string, notes: string) =>
+    mutate(() => api(`/students/${studentId}/notes`, { method: 'PUT', body: { notes } }), tt('notesUpdated'));
+
+  const updateParentContact = async (studentId: string, parentPhone: string, parentEmail: string) =>
+    mutate(
+      () => api('/parents/contact', { method: 'PUT', body: { studentId, parentPhone, parentEmail } }),
+      tt('contactUpdated')
+    );
+
   // ---------- groups ----------
 
-  const createGroup = async (groupData: Omit<Group, 'id'>) => {
-    await mutate(() => api('/admin/groups', { method: 'POST', body: groupData }), `New class "${groupData.name}" created`);
-  };
+  const createGroup = async (groupData: Omit<Group, 'id'>) =>
+    mutate(() => api('/admin/groups', { method: 'POST', body: groupData }), tt('classCreated', { name: groupData.name }));
 
-  const updateGroup = async (updatedGroup: Group) => {
-    await mutate(() => api(`/admin/groups/${updatedGroup.id}`, { method: 'PUT', body: updatedGroup }), 'Class updated');
-  };
+  const updateGroup = async (updatedGroup: Group) =>
+    mutate(() => api(`/admin/groups/${updatedGroup.id}`, { method: 'PUT', body: updatedGroup }), tt('classUpdated'));
 
-  const deleteGroup = async (groupId: string) => {
-    await mutate(() => api(`/admin/groups/${groupId}`, { method: 'DELETE' }), 'Class deleted');
-  };
+  const deleteGroup = async (groupId: string) =>
+    mutate(() => api(`/admin/groups/${groupId}`, { method: 'DELETE' }), tt('classDeleted'));
 
   // ---------- sessions & attendance ----------
 
@@ -527,17 +634,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     topicTaught: string,
     records: Record<string, StudentAttendanceRecord>,
     validateSyllabus: boolean,
-    trainerNotes?: string
-  ) => {
-    await mutate(
+    trainerNotes?: string,
+    extras: { extraStudentIds?: string[]; guests?: SessionGuest[] } = {}
+  ) =>
+    mutate(
       () =>
         api('/sessions', {
           method: 'POST',
-          body: { groupId, date, weekNumber, topicTaught, records, validateSyllabus, trainerNotes }
+          body: { groupId, date, weekNumber, topicTaught, records, validateSyllabus, trainerNotes, ...extras }
         }),
-      `Session attendance and evaluations saved for ${date}!`
+      tt('attendanceSaved', { date })
     );
-  };
 
   // ---------- material requests ----------
 
@@ -550,121 +657,144 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }) => {
     await mutate(
       () => api('/material-requests', { method: 'POST', body: { ...data, trainerId: activeTrainerId } }),
-      'Equipment request sent to administration'
+      tt('equipmentSent')
     );
   };
 
   const updateMaterialRequestStatus = async (requestId: string, status: MaterialRequest['status']) => {
     await mutate(
       () => api(`/admin/material-requests/${requestId}`, { method: 'PATCH', body: { status } }),
-      'Equipment request updated'
+      tt('equipmentUpdated')
     );
   };
 
-  // ---------- hoodies ----------
+  // ---------- own profile ----------
 
-  const addHoodieStock = async (size: HoodieSize, amount: number) => {
-    await mutate(() => api(`/admin/hoodie-stock/${size}`, { method: 'POST', body: { amount } }), `Stock for size ${size} updated`);
+  const updateMyProfile = async (data: { displayName?: string; photo?: string | null; birthDate?: string | null }) => {
+    const ok = await mutate(() => api('/me/profile', { method: 'PUT', body: data }), tt('profileSaved'));
+    if (ok) await loadProfile().catch(() => {});
+    return ok;
   };
 
-  const requestHoodieOrder = async (data: {
-    studentId: string;
-    studentName: string;
-    parentName: string;
-    size: HoodieSize;
-    isPersonalized: boolean;
-    personalizedText?: string;
-  }) => {
-    await mutate(
+  // ---------- team ----------
+
+  const saveStaffMember = async (member: Omit<StaffMember, 'id' | 'createdAt'> & { id?: string }) =>
+    mutate(
       () =>
-        api('/hoodie-orders', {
-          method: 'POST',
-          body: {
-            studentId: data.studentId,
-            size: data.size,
-            isPersonalized: data.isPersonalized,
-            personalizedText: data.personalizedText
-          }
-        }),
-      `Club hoodie order registered for ${data.studentName}!`
+        member.id
+          ? api(`/admin/staff/${member.id}`, { method: 'PUT', body: member })
+          : api('/admin/staff', { method: 'POST', body: member }),
+      tt('teamMemberSaved', { name: member.name })
+    );
+
+  const deleteStaffMember = async (id: string) =>
+    mutate(() => api(`/admin/staff/${id}`, { method: 'DELETE' }), tt('teamMemberDeleted'));
+
+  const setTrainerBirthDate = async (trainerId: string, birthDate: string | null) =>
+    mutate(() => api(`/admin/trainers/${trainerId}/birth-date`, { method: 'PATCH', body: { birthDate } }), tt('birthDateSaved'));
+
+  // ---------- weekly schedule ----------
+
+  const addScheduleItem = async (item: Omit<ScheduleItem, 'id' | 'createdAt'>) =>
+    mutate(
+      () => api('/admin/schedule-items', { method: 'POST', body: item }),
+      tt(item.kind === 'cancellation' ? 'classCancelledForDay' : 'scheduleItemAdded')
+    );
+
+  const deleteScheduleItem = async (itemId: string) =>
+    mutate(() => api(`/admin/schedule-items/${itemId}`, { method: 'DELETE' }), tt('scheduleItemRemoved'));
+
+  const removeTrainerFromScheduleItem = async (itemId: string, trainerId: string) =>
+    mutate(() => api(`/admin/schedule-items/${itemId}/trainers/${trainerId}`, { method: 'DELETE' }), tt('scheduleItemRemoved'));
+
+  const removeStudentFromScheduleItem = async (itemId: string, studentId: string) =>
+    mutate(
+      () => api(`/admin/schedule-items/${itemId}/students/${studentId}`, { method: 'DELETE' }),
+      tt('scheduleItemRemoved')
+    );
+
+  // ---------- club shop ----------
+
+  const saveProduct = async (product: Omit<Product, 'stock' | 'createdAt'>) => {
+    await mutate(() => api(`/admin/products/${product.id}`, { method: 'PUT', body: product }), tt('productSaved', { name: product.name }));
+  };
+
+  const setProductActive = async (productId: string, isActive: boolean) => {
+    await mutate(
+      () => api(`/admin/products/${productId}/active`, { method: 'PATCH', body: { isActive } }),
+      isActive ? tt('productOnSale') : tt('productHidden')
     );
   };
 
-  const updateHoodieStatus = async (distributionId: string, status: HoodieDistribution['status']) => {
+  const deleteProduct = async (productId: string) => {
+    await mutate(() => api(`/admin/products/${productId}`, { method: 'DELETE' }), tt('productDeleted'));
+  };
+
+  const addProductStock = async (productId: string, size: string, amount: number) => {
+    await mutate(() => api(`/admin/products/${productId}/stock`, { method: 'POST', body: { size, amount } }), tt('stockUpdated'));
+  };
+
+  // The new order is shown as soon as the server confirms it; the full reload (stock etc.) runs in the background
+  const placeOrder = async (data: { studentId: string; studentName: string; productId: string; size: string }) => {
+    try {
+      const order = await api<ProductOrder>('/orders', {
+        method: 'POST',
+        body: { studentId: data.studentId, productId: data.productId, size: data.size }
+      });
+      setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
+      showToast(tt('orderRegistered', { name: data.studentName }));
+      void refresh();
+      return true;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : tt('somethingWrong'), 'error');
+      void refresh();
+      return false;
+    }
+  };
+
+  const updateOrderStatus = async (orderId: string, status: ProductOrder['status']) => {
     await mutate(
-      () => api(`/admin/hoodie-orders/${distributionId}`, { method: 'PATCH', body: { status } }),
-      `Hoodie order marked ${status.replace('_', ' ').toUpperCase()}`
-    );
-  };
-
-  // ---------- programs & curriculum ----------
-
-  const addProgram = async (program: Program) => {
-    await mutate(() => api(`/admin/programs/${program.id}`, { method: 'PUT', body: program }), `Program "${program.title}" created`);
-  };
-
-  const updateProgram = async (program: Program) => {
-    await mutate(() => api(`/admin/programs/${program.id}`, { method: 'PUT', body: program }), `Program "${program.title}" updated`);
-  };
-
-  const deleteProgram = async (programId: string) => {
-    await mutate(() => api(`/admin/programs/${programId}`, { method: 'DELETE' }), 'Program deleted');
-  };
-
-  const addProgramObjective = async (
-    programId: string,
-    objective: { week: number; title: string; description: string; hardware: string }
-  ) => {
-    await mutate(
-      () => api(`/admin/programs/${programId}/objectives`, { method: 'POST', body: objective }),
-      'Curriculum objective added'
+      () => api(`/admin/orders/${orderId}`, { method: 'PATCH', body: { status } }),
+      tt('orderMarked', { status: tt(ORDER_STATUS_KEYS[status]).toUpperCase() })
     );
   };
 
   // ---------- trainers ----------
 
   const addTrainer = async (trainer: Trainer) => {
-    await mutate(() => api(`/admin/trainers/${trainer.id}`, { method: 'PUT', body: trainer }), `Trainer ${trainer.name} added`);
+    await mutate(() => api(`/admin/trainers/${trainer.id}`, { method: 'PUT', body: trainer }), tt('trainerAdded', { name: trainer.name }));
   };
 
   const updateTrainer = async (trainer: Trainer) => {
-    await mutate(() => api(`/admin/trainers/${trainer.id}`, { method: 'PUT', body: trainer }), `Trainer ${trainer.name} updated`);
+    await mutate(() => api(`/admin/trainers/${trainer.id}`, { method: 'PUT', body: trainer }), tt('trainerUpdated', { name: trainer.name }));
   };
 
   // ---------- events ----------
 
   const toggleEventRegistration = async (eventId: string) => {
-    if (!requireSignIn('register for events')) return;
-    await mutate(() => api(`/events/${eventId}/rsvp`, { method: 'POST' }), 'Event registration updated');
+    if (!requireSignIn(tt('signInToRsvp'))) return;
+    await mutate(() => api(`/events/${eventId}/rsvp`, { method: 'POST' }), tt('rsvpUpdated'));
   };
 
   // ---------- community feed ----------
 
   const likeFacebookPost = async (postId: string) => {
-    if (!requireSignIn('like posts')) return;
+    if (!requireSignIn(tt('signInToLike'))) return;
     await mutate(() => api(`/posts/${postId}/like`, { method: 'POST' }));
   };
 
   const addFacebookPost = async (postData: Omit<FacebookPost, 'id' | 'likes' | 'comments'>) => {
-    await mutate(() => api('/admin/posts', { method: 'POST', body: postData }), 'New post published to the club feed!');
+    await mutate(() => api('/admin/posts', { method: 'POST', body: postData }), tt('postPublished'));
   };
 
   const deleteFacebookPost = async (postId: string) => {
-    await mutate(() => api(`/admin/posts/${postId}`, { method: 'DELETE' }), 'Post deleted');
+    await mutate(() => api(`/admin/posts/${postId}`, { method: 'DELETE' }), tt('postDeleted'));
   };
 
   // The author name always comes from the signed-in account
   const addFacebookComment = async (postId: string, text: string, _authorName?: string) => {
-    if (!text.trim() || !requireSignIn('comment')) return;
-    await mutate(() => api(`/posts/${postId}/comments`, { method: 'POST', body: { text } }), 'Comment added!');
-  };
-
-  // Admin button: rewrite the default club content (programs, trainers, posts…) in the database
-  const syncInitialDataToFirestore = async () => {
-    await mutate(
-      () => api('/admin/seed', { method: 'POST', body: { overwrite: true } }),
-      'Default club content written to the database'
-    );
+    if (!text.trim() || !requireSignIn(tt('signInToComment'))) return;
+    await mutate(() => api(`/posts/${postId}/comments`, { method: 'POST', body: { text } }), tt('commentAdded'));
   };
 
   return (
@@ -677,7 +807,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         navigateTo,
         currentUser,
         setCurrentUser,
-        loginWithGoogle,
         loginWithEmailPassword,
         registerParentAccount,
         logout,
@@ -690,11 +819,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeParentStudentId,
         setActiveParentStudentId,
         students,
-        programs,
         trainers,
         groups,
-        hoodieStock,
-        hoodieDistributions,
+        products,
+        orders,
+        scheduleItems,
+        staffMembers,
+        adminProfiles,
+        updateMyProfile,
+        saveStaffMember,
+        deleteStaffMember,
+        setTrainerBirthDate,
+        addScheduleItem,
+        deleteScheduleItem,
+        removeStudentFromScheduleItem,
+        removeTrainerFromScheduleItem,
         sessions,
         materialRequests,
         events,
@@ -702,25 +841,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toasts,
         showToast,
         isFirebaseConnected,
+        isRestoringSession,
         updateStudentStatus,
         updateStudentPrice,
+        payments,
+        refreshData: refresh,
+        savePayment,
+        markPaymentsPaid,
+        resetPayment,
+        deletedStudents,
+        restoreStudent,
         assignStudentToGroup,
         removeStudentFromGroup,
         deleteStudent,
         updateStudentPhoto,
+        updateParentContact,
+        updateStudentNotes,
         createGroup,
         updateGroup,
         deleteGroup,
         saveSessionAttendance,
         createMaterialRequest,
         updateMaterialRequestStatus,
-        addHoodieStock,
-        requestHoodieOrder,
-        updateHoodieStatus,
-        addProgram,
-        updateProgram,
-        deleteProgram,
-        addProgramObjective,
+        saveProduct,
+        setProductActive,
+        deleteProduct,
+        addProductStock,
+        placeOrder,
+        updateOrderStatus,
         addTrainer,
         updateTrainer,
         toggleEventRegistration,
@@ -728,7 +876,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addFacebookPost,
         deleteFacebookPost,
         addFacebookComment,
-        syncInitialDataToFirestore
       }}
     >
       {children}
