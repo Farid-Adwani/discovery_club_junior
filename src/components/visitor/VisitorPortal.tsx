@@ -4,6 +4,7 @@ import {
   Bot,
   Cpu,
   Trophy,
+  Globe2,
   Calendar,
   MapPin,
   Clock,
@@ -39,7 +40,8 @@ import { weekdayName } from '../../utils/schedule';
 import { CATEGORY_EMOJI } from '../../utils/shop';
 import { motion, AnimatePresence } from 'motion/react';
 import { getIntroDelay } from '../common/IntroReveal';
-import { CircuitBackground, CodeTyper, CountUp, Gear, LogoMechanism, Oscilloscope, Reveal, RobotArm } from './RoboticsArt';
+import { CircuitBackground, CodeTyper, CountUp, Gear, Oscilloscope, Reveal, RobotArm } from './RoboticsArt';
+import { HeroCollage } from './HeroCollage';
 import { useT, useLanguage } from '../../i18n';
 import { visitorMessages } from '../../i18n/messages/visitor';
 
@@ -69,6 +71,8 @@ export const VisitorPortal: React.FC = () => {
 
   const [postFilter, setPostFilter] = useState<string>('all');
   const [lightboxPost, setLightboxPost] = useState<FacebookPost | null>(null);
+  // The feed starts with 6 posts so the page doesn't end in a very long list
+  const [showAllPosts, setShowAllPosts] = useState(false);
   const [commentInput, setCommentInput] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
 
@@ -257,6 +261,8 @@ export const VisitorPortal: React.FC = () => {
       {/* 1. HERO: circuit board, gear train and the club logo */}
       <section className="relative overflow-hidden bg-[#141414] text-white">
         <CircuitBackground className="absolute inset-0 w-full h-full" />
+        {/* Keeps the circuit lines from crossing the headline */}
+        <div className="absolute inset-y-0 start-0 w-full lg:w-[68%] bg-gradient-to-r rtl:bg-gradient-to-l from-[#141414] via-[#141414]/90 to-transparent pointer-events-none" />
         <div className="absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-sky-600/25 blur-[120px] pointer-events-none" />
         <div className="absolute -bottom-48 right-0 w-[560px] h-[560px] rounded-full bg-sky-900/40 blur-[120px] pointer-events-none" />
 
@@ -354,14 +360,20 @@ export const VisitorPortal: React.FC = () => {
               </div>
             </div>
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85, rotate: -8 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ duration: 1, delay: introDelay + 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="lg:col-span-5 py-6"
-            >
-              <LogoMechanism logoSrc={CLUB_PHOTOS.clubLogo} />
-            </motion.div>
+            <div className="lg:col-span-5 py-2">
+              <HeroCollage
+                photos={[beltPhotos[0], beltPhotos[3], beltPhotos[2], beltPhotos[5], beltPhotos[10]]}
+                back={[CLUB_PHOTOS.eurobotSpainTrophyCert, CLUB_PHOTOS.robocupEgyptTeam]}
+                logo={CLUB_PHOTOS.clubLogo}
+                logoAlt="Discovery Club Junior"
+                delay={introDelay}
+                chips={[
+                  { icon: <Trophy className="w-4 h-4 text-amber-500" />, text: t('chipTrophy') },
+                  { icon: <Globe2 className="w-4 h-4 text-[#c11e3d]" />, text: t('chipWorld') },
+                  { icon: <Users className="w-4 h-4 text-slate-700" />, text: t('chipAges') }
+                ]}
+              />
+            </div>
           </div>
 
           {/* live counters */}
@@ -752,7 +764,7 @@ export const VisitorPortal: React.FC = () => {
 
         {/* Facebook Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {filteredFacebookPosts.map((post) => {
+          {(showAllPosts ? filteredFacebookPosts : filteredFacebookPosts.slice(0, 6)).map((post) => {
             const userKey = currentUser?.uid || 'guest-visitor';
             const isLiked = post.likedBy?.includes(userKey);
 
@@ -843,6 +855,16 @@ export const VisitorPortal: React.FC = () => {
             );
           })}
         </div>
+        {filteredFacebookPosts.length > 6 && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => setShowAllPosts((v) => !v)}
+              className="px-6 py-3 btn-duo-secondary text-sm font-black flex items-center gap-2 cursor-pointer"
+            >
+              {showAllPosts ? t('showLessPosts') : t('showMorePosts', { count: filteredFacebookPosts.length - 6 })}
+            </button>
+          </div>
+        )}
 
         {/* Lightbox Photo Preview & Interactive Commenting Modal */}
         <AnimatePresence>

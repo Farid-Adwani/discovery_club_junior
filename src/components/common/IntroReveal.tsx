@@ -40,10 +40,19 @@ function shouldPlayIntro(): boolean {
   }
 }
 
-// Plays on every page load that starts on the home page (App only mounts it there)
-const PLAY = typeof window !== 'undefined' && shouldPlayIntro();
+const SEEN_KEY = 'dcj-intro-seen';
+const seenThisSession = () => {
+  try {
+    return sessionStorage.getItem(SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
-/** At most once per page load: leaving the home page and coming back doesn't replay it (a refresh does) */
+// Plays once per visit (browser session) when it starts on the home page (App only mounts it there);
+// coming back, refreshing or opening another page of the site doesn't replay it
+const PLAY = typeof window !== 'undefined' && shouldPlayIntro() && !seenThisSession();
+
 let alreadyPlayed = false;
 
 /** Seconds the page should wait before running its own entrance animations. */
@@ -466,6 +475,11 @@ export const IntroReveal: React.FC = () => {
   useEffect(() => {
     if (!visible) return;
     alreadyPlayed = true;
+    try {
+      sessionStorage.setItem(SEEN_KEY, '1');
+    } catch {
+      // storage blocked: it may play again on the next load
+    }
     const timers = [
       setTimeout(() => setPhase('mechanics'), T.mechanics * 1000),
       setTimeout(() => setPhase('electronics'), T.electronics * 1000),
