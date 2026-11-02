@@ -103,6 +103,13 @@
   html {
     scroll-behavior: smooth;
   }
+  /* Wide screens: sizes are in rem, so the whole site grows with the window instead of
+     staying 1280 px wide in the middle (16 px at 1920 px wide, about 21 px on a 2560 px monitor) */
+  @media (min-width: 1921px) {
+    html {
+      font-size: clamp(16px, 0.833vw, 22px);
+    }
+  }
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     background-color: #f8fafc;
