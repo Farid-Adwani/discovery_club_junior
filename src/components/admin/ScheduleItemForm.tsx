@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { ScheduleItem } from '../../types';
 import { useT } from '../../i18n';
 import { scheduleMessages } from '../../i18n/messages/schedule';
+import { ModalPortal } from '../common/ModalPortal';
 
 type AddableKind = Exclude<ScheduleItem['kind'], 'cancellation'>;
 const KINDS: AddableKind[] = ['course', 'event', 'meeting', 'other'];
@@ -54,78 +56,89 @@ export const ScheduleItemForm: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-center justify-center p-4" onClick={onClose}>
-      <form
-        onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
-        className="duo-card bg-white w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto text-xs font-bold text-slate-700"
-      >
-        <h4 className="text-base font-black text-slate-900">{t('addToSchedule')}</h4>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block mb-1">{t('type')}</label>
-            <select value={kind} onChange={(e) => setKind(e.target.value as AddableKind)} className={`${inputCls} cursor-pointer`}>
-              {KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {t(`kind_${k}`)}
-                </option>
-              ))}
-            </select>
+    <ModalPortal>
+      <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-center justify-center p-4" onClick={onClose}>
+        <form
+          role="dialog"
+          aria-modal="true"
+          onSubmit={submit}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl border-2 border-slate-200 shadow-2xl overflow-hidden text-xs font-bold text-slate-700"
+        >
+          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-slate-100">
+            <h4 className="text-base font-black text-slate-900">{t('addToSchedule')}</h4>
+            <button type="button" onClick={onClose} aria-label={t('cancel')} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <div>
-            <label className="block mb-1">{t('repeat')}</label>
-            <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as 'once' | 'weekly')} className={`${inputCls} cursor-pointer`}>
-              <option value="once">{t('once')}</option>
-              <option value="weekly">{t('everyWeek')}</option>
-            </select>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block mb-1">{t('type')}</label>
+                <select value={kind} onChange={(e) => setKind(e.target.value as AddableKind)} className={`${inputCls} cursor-pointer`}>
+                  {KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {t(`kind_${k}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block mb-1">{t('repeat')}</label>
+                <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as 'once' | 'weekly')} className={`${inputCls} cursor-pointer`}>
+                  <option value="once">{t('once')}</option>
+                  <option value="weekly">{t('everyWeek')}</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block mb-1">{t('titleLabel')}</label>
+              <input required maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('titlePlaceholder')} className={inputCls} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-3 sm:col-span-1">
+                <label className="block mb-1">{recurrence === 'weekly' ? t('firstDate') : t('date')}</label>
+                <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="block mb-1">{t('start')}</label>
+                <input type="time" required value={startTime} onChange={(e) => setStartTime(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="block mb-1">{t('end')}</label>
+                <input type="time" required value={endTime} onChange={(e) => setEndTime(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block mb-1">{t('location')}</label>
+              <input maxLength={120} value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
+            </div>
+
+            <div>
+              <label className="block mb-1">{t('notes')}</label>
+              <textarea rows={2} maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
+            </div>
+
+            {children}
+
+            {error && <p className="text-[11px] font-bold text-rose-600">{error}</p>}
           </div>
-        </div>
 
-        <div>
-          <label className="block mb-1">{t('titleLabel')}</label>
-          <input required maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('titlePlaceholder')} className={inputCls} />
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-3 sm:col-span-1">
-            <label className="block mb-1">{recurrence === 'weekly' ? t('firstDate') : t('date')}</label>
-            <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-slate-500 hover:bg-slate-100 cursor-pointer">
+              {t('cancel')}
+            </button>
+            <button type="submit" disabled={isSaving || !canSave} className="px-5 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
+              {t('add')}
+            </button>
           </div>
-          <div>
-            <label className="block mb-1">{t('start')}</label>
-            <input type="time" required value={startTime} onChange={(e) => setStartTime(e.target.value)} className={inputCls} />
-          </div>
-          <div>
-            <label className="block mb-1">{t('end')}</label>
-            <input type="time" required value={endTime} onChange={(e) => setEndTime(e.target.value)} className={inputCls} />
-          </div>
-        </div>
-
-        <div>
-          <label className="block mb-1">{t('location')}</label>
-          <input maxLength={120} value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
-        </div>
-
-        <div>
-          <label className="block mb-1">{t('notes')}</label>
-          <textarea rows={2} maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
-        </div>
-
-        {children}
-
-        {error && <p className="text-[11px] font-bold text-rose-600">{error}</p>}
-
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
-            {t('cancel')}
-          </button>
-          <button type="submit" disabled={isSaving || !canSave} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
-            {t('add')}
-          </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </ModalPortal>
   );
 };
 

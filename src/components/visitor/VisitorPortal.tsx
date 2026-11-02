@@ -1,179 +1,82 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Bot,
   Cpu,
   Trophy,
   Globe2,
-  Calendar,
   MapPin,
   Clock,
   ArrowRight,
-  CheckCircle2,
-  ExternalLink,
-  ChevronRight,
   Zap,
   Users,
-  BookOpen,
-  MessageCircle,
-  Share2,
-  Sparkles,
   HeartHandshake,
   UserPlus,
-  LogIn,
-  Star,
-  Award,
-  Smile,
-  Flame,
-  Heart,
-  Volume2,
-  Send,
-  Eye,
-  Camera,
-  Plus,
-  Upload,
-  Image as ImageIcon
+  Phone,
+  Mail,
+  Quote,
+  ChevronDown,
+  Send
 } from 'lucide-react';
-import { CLUB_STATS, CLUB_ACHIEVEMENTS_TIMELINE, CLUB_PHOTOS } from '../../data/initialData';
-import { CLASS_DEFAULT_IMAGE, FacebookPost, WEEK_DAYS, WeekDay } from '../../types';
+import { CLUB_PHOTOS, INITIAL_TRAINERS } from '../../data/initialData';
+import { SITE_CONTENT, hasMap, mapsLink, publishedFaq, whatsappLink } from '../../data/siteContent';
+import { CLASS_DEFAULT_IMAGE, WEEK_DAYS, WeekDay } from '../../types';
 import { weekdayName } from '../../utils/schedule';
 import { CATEGORY_EMOJI } from '../../utils/shop';
-import { motion, AnimatePresence } from 'motion/react';
-import { getIntroDelay } from '../common/IntroReveal';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { useIntroOpened } from '../common/IntroReveal';
+import { WhatsAppIcon } from './WhatsAppButton';
+import { photoSrcSet } from './photo';
 import { CircuitBackground, CodeTyper, CountUp, Gear, Oscilloscope, Reveal, RobotArm } from './RoboticsArt';
 import { HeroCollage } from './HeroCollage';
 import { useT, useLanguage } from '../../i18n';
 import { visitorMessages } from '../../i18n/messages/visitor';
+import type { LandingSection } from '../../data/landing';
 
 
 export const VisitorPortal: React.FC = () => {
-  // Wait for the start-up intro only when it is playing right now
-  const [introDelay] = useState(getIntroDelay);
+  // The hero waits for the start-up intro (if it is playing) and animates in as soon as it opens or is skipped
+  const introOpened = useIntroOpened();
+  const reduceMotion = useReducedMotion();
   const {
     groups,
-    events,
-    toggleEventRegistration,
     navigateTo,
-    showToast,
-    facebookPosts,
-    likeFacebookPost,
-    addFacebookPost,
-    addFacebookComment,
-    currentUser,
-    products
+    products,
+    landing,
+    trainers
   } = useApp();
-  const t = useT(visitorMessages);
-  const { dir, locale } = useLanguage();
+  const tDefault = useT(visitorMessages);
+  const { dir, locale, lang } = useLanguage();
+  // Texts the admin changed in Admin → Landing page win over the default wording
+  const t = ((key, vars) => {
+    const custom = landing.text?.[lang]?.[key];
+    return custom ? custom.replace(/\{(\w+)\}/g, (m: string, name: string) => (vars && name in vars ? String(vars[name]) : m)) : tDefault(key, vars);
+  }) as typeof tDefault;
   // Admins receive hidden products too; the public page only shows what is on sale
   const productsOnSale = products.filter((p) => p.isActive);
 
   const [dayFilter, setDayFilter] = useState<'all' | WeekDay>('all');
+  const [trial, setTrial] = useState({ parent: '', child: '', age: '', cls: '', phone: '' });
 
-  const [postFilter, setPostFilter] = useState<string>('all');
-  const [lightboxPost, setLightboxPost] = useState<FacebookPost | null>(null);
-  // The feed starts with 6 posts so the page doesn't end in a very long list
-  const [showAllPosts, setShowAllPosts] = useState(false);
-  const [commentInput, setCommentInput] = useState('');
-  const [commentAuthor, setCommentAuthor] = useState('');
-
-  // Upload Photo Modal State
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [uploadCaption, setUploadCaption] = useState('');
-  const [uploadTag, setUploadTag] = useState('🛠️ Ateliers Manouba');
-  const [uploadImagePreview, setUploadImagePreview] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Filter Facebook posts based on selected category
-  const filteredFacebookPosts = facebookPosts.filter((p) => {
-    if (postFilter === 'all') return true;
-    if (postFilter === 'champions') return p.tag.includes('Eurobot') || p.tag.includes('Champions');
-    if (postFilter === 'workshops') return p.tag.includes('Atelier') || p.tag.includes('Makers') || p.tag.includes('Sciences');
-    if (postFilter === 'girls') return p.tag.includes('Girls');
-    if (postFilter === 'hoodies') return p.tag.includes('Capuches');
-    if (postFilter === 'ia') return p.tag.includes('IA') || p.tag.includes('Vision');
-    return true;
-  });
-
-  // Dynamic countdown timer to next STEM Olympiad
-  const [timeLeft, setTimeLeft] = useState({
-    days: 38,
-    hours: 14,
-    minutes: 22,
-    seconds: 45
-  });
-
+  // Countdown to the next challenge (date set in Admin → Landing page, 9:00 that day)
+  const countdownTarget = (() => {
+    const [y, m, d] = (landing.countdownDate || '').split('-').map(Number);
+    return y && m && d ? new Date(y, m - 1, d, 9).getTime() : 0;
+  })();
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        } else if (prev.days > 0) {
-          return { ...prev, days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
-        }
-        return prev;
-      });
-    }, 1000);
+    if (!countdownTarget) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setUploadImagePreview(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleUploadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uploadImagePreview) {
-      showToast(t('toastSelectPhoto'), 'error');
-      return;
-    }
-    if (!uploadCaption.trim()) {
-      showToast(t('toastEnterCaption'), 'error');
-      return;
-    }
-
-    await addFacebookPost({
-      caption: uploadCaption.trim(),
-      date: 'À l’instant',
-      imageUrl: uploadImagePreview,
-      tag: uploadTag,
-      postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-    });
-
-    setIsUploadModalOpen(false);
-    setUploadCaption('');
-    setUploadImagePreview('');
-    showToast(t('toastPhotoAdded'), 'success');
-  };
-
-  const handleCommentSubmit = async (e: React.FormEvent, postId: string) => {
-    e.preventDefault();
-    if (!commentInput.trim()) return;
-
-    await addFacebookComment(
-      postId,
-      commentInput,
-      commentAuthor.trim() || currentUser?.displayName || t('defaultCommentAuthor')
-    );
-    setCommentInput('');
-
-    // Keep active lightbox updated
-    if (lightboxPost && lightboxPost.id === postId) {
-      const updated = facebookPosts.find((p) => p.id === postId);
-      if (updated) setLightboxPost(updated);
-    }
+  }, [countdownTarget]);
+  const secondsLeft = Math.max(0, Math.floor((countdownTarget - now) / 1000));
+  // Hidden by the admin; the countdown also hides without a date to come
+  const show = (section: LandingSection) => !landing.hidden?.includes(section) && (section !== 'countdown' || countdownTarget > now);
+  const timeLeft = {
+    days: Math.floor(secondsLeft / 86400),
+    hours: Math.floor(secondsLeft / 3600) % 24,
+    minutes: Math.floor(secondsLeft / 60) % 60,
+    seconds: secondsLeft % 60
   };
 
   // Public classes, sorted by day of the week then start time
@@ -182,7 +85,8 @@ export const VisitorPortal: React.FC = () => {
     .filter((g) => dayFilter === 'all' || g.dayOfWeek === dayFilter)
     .sort((a, b) => WEEK_DAYS.indexOf(a.dayOfWeek) - WEEK_DAYS.indexOf(b.dayOfWeek) || a.timeSlot.localeCompare(b.timeSlot));
 
-  const isAdmin = !!currentUser?.roles.includes('admin');
+  const shownClassesAll = [...groups].sort((a, b) => WEEK_DAYS.indexOf(a.dayOfWeek) - WEEK_DAYS.indexOf(b.dayOfWeek) || a.timeSlot.localeCompare(b.timeSlot));
+
   const goRegister = () => navigateTo('register-parent');
   const scrollToSection = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
@@ -190,11 +94,12 @@ export const VisitorPortal: React.FC = () => {
   const HERO_WORDS = t('heroWords').split('|');
   const [heroWordIdx, setHeroWordIdx] = useState(0);
   useEffect(() => {
+    if (reduceMotion) return;
     const timer = setInterval(() => setHeroWordIdx((i) => (i + 1) % HERO_WORDS.length), 2200);
     return () => clearInterval(timer);
-  }, []);
+  }, [reduceMotion]);
 
-  // Photo conveyor belt: every club photo, linked to its post when there is one
+  // Photo conveyor belt: the club's photos
   const beltPhotos = [
     { img: CLUB_PHOTOS.eurobotSpainChampions, title: t('belt1Title'), tag: t('belt1Tag') },
     { img: CLUB_PHOTOS.eurobotSpainTrophyCert, title: t('belt2Title'), tag: '📜 Alcalá de Henares' },
@@ -211,14 +116,51 @@ export const VisitorPortal: React.FC = () => {
     { img: CLUB_PHOTOS.internationalFriendsThailand, title: t('belt13Title'), tag: t('belt13Tag') },
     { img: CLUB_PHOTOS.airportDepartureTunis, title: t('belt14Title'), tag: '✈️ Tunis-Carthage' },
     { img: CLUB_PHOTOS.airportDeparturePalestine, title: t('belt15Title'), tag: t('belt15Tag') }
-  ].map((p) => ({ ...p, post: facebookPosts.find((fp) => fp.imageUrl === p.img) }));
-
-  const stats = [
-    { value: CLUB_STATS.activeStudents, suffix: '+', label: t('statBuilders') },
-    { value: CLUB_STATS.workshopsCompleted, suffix: '+', label: t('statWorkshops') },
-    { value: CLUB_STATS.projectsBuilt, suffix: '+', label: t('statRobots') },
-    { value: CLUB_STATS.competitionsWon, suffix: '', label: t('statTrophies') }
   ];
+
+  // Counters set in Admin → Landing page; one without a number is not shown
+  const stats = [
+    { value: landing.stats?.builders ?? 0, suffix: '+', label: t('statBuilders') },
+    { value: landing.stats?.workshops ?? 0, suffix: '+', label: t('statWorkshops') },
+    { value: landing.stats?.robots ?? 0, suffix: '+', label: t('statRobots') },
+    { value: landing.stats?.trophies ?? 0, suffix: '', label: t('statTrophies') }
+  ].filter((s) => s.value > 0);
+
+  // Content from src/data/siteContent.ts: a section shows only once it has something real in it
+  const { contact, address } = SITE_CONTENT;
+  const achievements = SITE_CONTENT.achievements;
+  const faq = publishedFaq();
+  const testimonials = SITE_CONTENT.testimonials;
+  // The built-in demo trainers are never shown: only the ones loaded from the club's data
+  const coaches = SITE_CONTENT.coaches.length
+    ? SITE_CONTENT.coaches.map((c) => ({ name: c.name, role: c.role[lang], photo: c.photo }))
+    : (trainers === INITIAL_TRAINERS ? [] : trainers).map((tr) => ({ name: tr.name, role: tr.specialty || tr.specialization, photo: tr.avatar }));
+  const waHref = whatsappLink(t('whatsappHello'));
+  const canBookTrial = !!(contact.whatsapp || contact.email);
+  const hasContact = canBookTrial || !!contact.phone || hasMap();
+  const goTrial = () => scrollToSection('contact');
+
+  // The trial request goes out as a prefilled WhatsApp message (or an email): nothing is stored on the site
+  const sendTrial = (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = t('trialMessage', {
+      parent: trial.parent.trim(),
+      child: trial.child.trim(),
+      age: trial.age,
+      cls: trial.cls || t('trialAnyClass'),
+      phone: trial.phone.trim()
+    });
+    const href = contact.whatsapp
+      ? whatsappLink(text)
+      : `mailto:${contact.email}?subject=${encodeURIComponent(t('trialSubject'))}&body=${encodeURIComponent(text)}`;
+    window.open(href, '_blank', 'noopener');
+  };
+  const inputClass =
+    'w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-500 focus:outline-none focus:border-sky-600 focus:bg-white';
+
+  const ageLabel = (min?: number, max?: number) =>
+    min && max ? t('ageRange', { min, max }) : min ? t('agePlus', { min }) : max ? t('ageRange', { min: 3, max }) : '';
+  const levelLabel = { beginner: t('levelBeginner'), intermediate: t('levelIntermediate'), advanced: t('levelAdvanced') };
 
   const steps = [
     {
@@ -266,13 +208,16 @@ export const VisitorPortal: React.FC = () => {
         <div className="absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-sky-600/25 blur-[120px] pointer-events-none" />
         <div className="absolute -bottom-48 right-0 w-[560px] h-[560px] rounded-full bg-sky-900/40 blur-[120px] pointer-events-none" />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10 md:pt-20">
+        <div
+          key={introOpened ? 'shown' : 'waiting'}
+          className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10 md:pt-20 ${introOpened ? '' : 'invisible'}`}
+        >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-7 space-y-7">
               <motion.div
                 initial={{ opacity: 0, y: -12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: introDelay }}
+                transition={{ delay: 0 }}
                 className="flex flex-wrap items-center gap-2"
               >
                 <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-black tracking-wide backdrop-blur">
@@ -280,7 +225,7 @@ export const VisitorPortal: React.FC = () => {
                   {t('heroBadgeEurobot')}
                 </span>
                 <a
-                  href="https://www.facebook.com/DiscoveryClubJunior/"
+                  href={contact.facebook}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 transition-colors"
@@ -293,12 +238,13 @@ export const VisitorPortal: React.FC = () => {
               <motion.h1
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: introDelay + 0.1 }}
+                transition={{ duration: 0.7, delay: 0.1 }}
                 className="text-4xl sm:text-5xl lg:text-[4.2rem] font-black tracking-tight leading-[1.05]"
               >
                 {t('heroLine1')} <br className="hidden sm:inline" />
                 {t('heroBeforeWord') && <>{t('heroBeforeWord')} </>}
-                <span className="relative inline-flex overflow-hidden align-bottom text-sky-500 pb-1">
+                <span className="sr-only">{HERO_WORDS[0]}</span>
+                <span className="relative inline-flex overflow-hidden align-bottom text-sky-500 pb-1" aria-hidden="true">
                   <AnimatePresence mode="popLayout" initial={false}>
                     <motion.span
                       key={HERO_WORDS[heroWordIdx]}
@@ -320,8 +266,8 @@ export const VisitorPortal: React.FC = () => {
               <motion.p
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: introDelay + 0.25 }}
-                className="text-base sm:text-lg text-white/65 font-medium leading-relaxed max-w-xl"
+                transition={{ duration: 0.7, delay: 0.25 }}
+                className="text-base sm:text-lg text-white/75 font-medium leading-relaxed max-w-xl"
               >
                 {t('heroIntro')}
               </motion.p>
@@ -329,7 +275,7 @@ export const VisitorPortal: React.FC = () => {
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: introDelay + 0.4 }}
+                transition={{ duration: 0.7, delay: 0.4 }}
                 className="flex flex-wrap items-center gap-4"
               >
                 <motion.button
@@ -342,6 +288,17 @@ export const VisitorPortal: React.FC = () => {
                   <span>{t('registerChild')}</span>
                   <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                 </motion.button>
+                {canBookTrial && show('contact') && (
+                  <motion.button
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={goTrial}
+                    className="px-7 py-4 rounded-2xl bg-white text-[#191919] text-sm font-black hover:bg-white/90 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <Send className="w-4 h-4 text-sky-600 rtl:-scale-x-100" />
+                    <span>{t('tryFree')}</span>
+                  </motion.button>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.97 }}
@@ -353,7 +310,7 @@ export const VisitorPortal: React.FC = () => {
                 </motion.button>
               </motion.div>
 
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-white/50">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-white/70">
                 <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-sky-500" /> {t('heroLocation')}</span>
                 <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-sky-500" /> {t('heroHardware')}</span>
                 <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-sky-500" /> {t('heroPodiums')}</span>
@@ -366,7 +323,7 @@ export const VisitorPortal: React.FC = () => {
                 back={[CLUB_PHOTOS.eurobotSpainTrophyCert, CLUB_PHOTOS.robocupEgyptTeam]}
                 logo={CLUB_PHOTOS.clubLogo}
                 logoAlt="Discovery Club Junior"
-                delay={introDelay}
+                delay={0}
                 chips={[
                   { icon: <Trophy className="w-4 h-4 text-amber-500" />, text: t('chipTrophy') },
                   { icon: <Globe2 className="w-4 h-4 text-[#c11e3d]" />, text: t('chipWorld') },
@@ -377,18 +334,20 @@ export const VisitorPortal: React.FC = () => {
           </div>
 
           {/* live counters */}
-          <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          {stats.length > 0 && (
+          <div className={`mt-14 grid grid-cols-2 gap-3 sm:gap-4 ${stats.length >= 4 ? 'md:grid-cols-4' : stats.length === 3 ? 'md:grid-cols-3' : ''}`}>
             {stats.map((s, i) => (
-              <Reveal key={s.label} delay={introDelay + 0.5 + i * 0.08} y={20}>
+              <Reveal key={s.label} delay={0.5 + i * 0.08} y={20}>
                 <div className="rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur px-5 py-4 hover:border-sky-500/60 hover:bg-white/[0.07] transition-colors">
                   <div className="text-3xl sm:text-4xl font-black font-mono text-white">
-                    <CountUp to={s.value} suffix={s.suffix} delay={introDelay + 0.5} />
+                    <CountUp to={s.value} suffix={s.suffix} delay={0.5} />
                   </div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-white/45 mt-1">{s.label}</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-white/70 mt-1">{s.label}</div>
                 </div>
               </Reveal>
             ))}
           </div>
+          )}
         </div>
         {/* angled bottom edge */}
         <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="relative block w-full h-10 sm:h-14 text-[#f8fafc]" aria-hidden="true">
@@ -397,44 +356,50 @@ export const VisitorPortal: React.FC = () => {
       </section>
 
       {/* 2. PHOTO CONVEYOR BELT */}
+      {show('belt') && (
+        <>
       <section className="-mt-16 space-y-5">
         <Reveal className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
             <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('beltEyebrow')}</span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('beltTitle')}</h2>
           </div>
-          {isAdmin && (
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="px-4 py-2.5 btn-duo-secondary text-xs font-black flex items-center gap-1.5 cursor-pointer self-start"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{t('addPhoto')}</span>
-            </button>
-          )}
         </Reveal>
         <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
           <div className="marquee-track flex w-max gap-4 py-2">
             {[...beltPhotos, ...beltPhotos].map((item, idx) => (
-              <button
+              <div
                 key={idx}
-                type="button"
-                onClick={() => item.post && setLightboxPost(item.post)}
-                className="group relative w-64 sm:w-72 h-44 sm:h-48 shrink-0 rounded-2xl overflow-hidden border-2 border-white shadow-lg cursor-pointer"
+                className="group relative w-64 sm:w-72 h-44 sm:h-48 shrink-0 rounded-2xl overflow-hidden border-2 border-white shadow-lg"
               >
-                <img src={item.img} alt={item.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <img
+                  src={item.img}
+                  srcSet={photoSrcSet(item.img)}
+                  sizes="288px"
+                  alt={idx < beltPhotos.length ? item.title : ''}
+                  aria-hidden={idx >= beltPhotos.length || undefined}
+                  loading="lazy"
+                  decoding="async"
+                  width={288}
+                  height={192}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#191919]/90 via-[#191919]/10 to-transparent" />
                 <div className="absolute bottom-3 start-3 end-3 text-start text-white">
                   <span className="text-[10px] font-black text-amber-300 block truncate">{item.tag}</span>
                   <span className="text-sm font-black leading-tight block truncate">{item.title}</span>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>
       </section>
+        </>
+      )}
 
       {/* 3. HOW IT WORKS: build, wire, code, compete */}
+      {show('how') && (
+        <>
       <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         <Reveal className="text-center max-w-2xl mx-auto space-y-3">
           <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('howEyebrow')}</span>
@@ -466,8 +431,12 @@ export const VisitorPortal: React.FC = () => {
           ))}
         </div>
       </section>
+        </>
+      )}
 
       {/* 4. ROBOT LAB: animated arm soldering a board */}
+      {show('lab') && (
+        <>
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="relative overflow-hidden rounded-[2rem] bg-[#141414] text-white p-8 sm:p-12">
@@ -478,7 +447,7 @@ export const VisitorPortal: React.FC = () => {
                 <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
                   {t('labTitleBefore')} <span className="text-sky-500">{t('labTitleHighlight')}</span>
                 </h2>
-                <p className="text-sm text-white/65 font-medium leading-relaxed">
+                <p className="text-sm text-white/75 font-medium leading-relaxed">
                   {t('labText')}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -499,12 +468,12 @@ export const VisitorPortal: React.FC = () => {
                   <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
                     <Bot className="w-5 h-5 text-sky-400 mb-2" />
                     <h4 className="text-sm font-black">{t('handsOnTitle')}</h4>
-                    <p className="text-xs text-white/55 font-medium">{t('handsOnText')}</p>
+                    <p className="text-xs text-white/70 font-medium">{t('handsOnText')}</p>
                   </div>
                   <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
                     <HeartHandshake className="w-5 h-5 text-sky-400 mb-2" />
                     <h4 className="text-sm font-black">{t('parentsLoopTitle')}</h4>
-                    <p className="text-xs text-white/55 font-medium">{t('parentsLoopText')}</p>
+                    <p className="text-xs text-white/70 font-medium">{t('parentsLoopText')}</p>
                   </div>
                 </div>
               </div>
@@ -516,8 +485,12 @@ export const VisitorPortal: React.FC = () => {
           </div>
         </Reveal>
       </section>
+        </>
+      )}
 
       {/* 5. NEXT CHALLENGE COUNTDOWN */}
+      {show('countdown') && (
+        <>
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="duo-card p-6 sm:p-8 bg-white grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
@@ -550,7 +523,7 @@ export const VisitorPortal: React.FC = () => {
                         {String(unit.v).padStart(2, '0')}
                       </motion.span>
                     </AnimatePresence>
-                    <span className="text-[10px] font-bold text-white/45 uppercase font-sans">{unit.l}</span>
+                    <span className="text-[10px] font-bold text-white/70 uppercase font-sans">{unit.l}</span>
                   </div>
                 </React.Fragment>
               ))}
@@ -558,8 +531,12 @@ export const VisitorPortal: React.FC = () => {
           </div>
         </Reveal>
       </section>
+        </>
+      )}
 
       {/* 6. HALL OF FAME TIMELINE */}
+      {show('fame') && (
+        <>
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <Reveal className="lg:col-span-5 space-y-5 lg:sticky lg:top-28">
@@ -571,7 +548,17 @@ export const VisitorPortal: React.FC = () => {
               {t('fameText')}
             </p>
             <div className="relative rounded-3xl overflow-hidden shadow-xl">
-              <img src={CLUB_PHOTOS.eurobotSpainChampions} alt={t('fameImgAlt')} className="w-full h-56 object-cover" />
+              <img
+                src={CLUB_PHOTOS.eurobotSpainChampions}
+                srcSet={photoSrcSet(CLUB_PHOTOS.eurobotSpainChampions)}
+                sizes="(min-width: 1024px) 480px, 100vw"
+                alt={t('fameImgAlt')}
+                loading="lazy"
+                decoding="async"
+                width={600}
+                height={224}
+                className="w-full h-56 object-cover"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-[#191919]/85 to-transparent" />
               <div className="absolute bottom-4 start-4 text-white">
                 <div className="text-xs font-black text-amber-300 uppercase">Eurobot Spain Junior</div>
@@ -591,16 +578,31 @@ export const VisitorPortal: React.FC = () => {
               style={{ bottom: '0.5rem' }}
             />
             <div className="space-y-5">
-              {CLUB_ACHIEVEMENTS_TIMELINE.map((item, idx) => (
-                <Reveal key={idx} delay={idx * 0.1} y={24}>
+              {achievements.map((item, idx) => (
+                <Reveal key={idx} delay={Math.min(idx, 4) * 0.08} y={24}>
                   <div className="relative">
                     <span className="absolute -start-[26px] top-5 w-4 h-4 rounded-full bg-white border-4 border-sky-600 shadow" />
-                    <motion.div whileHover={{ x: dir === 'rtl' ? -6 : 6 }} className="duo-card p-5 bg-white">
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className="px-2.5 py-1 rounded-lg bg-[#191919] text-white text-xs font-mono font-black">{item.year}</span>
-                        <h4 className="text-sm font-black text-slate-900">{item.title}</h4>
+                    <motion.div whileHover={{ x: dir === 'rtl' ? -6 : 6 }} className="duo-card p-4 bg-white flex items-center gap-4">
+                      {item.photo && (
+                        <img
+                          src={item.photo}
+                          srcSet={photoSrcSet(item.photo)}
+                          sizes="96px"
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          width={96}
+                          height={72}
+                          className="w-24 h-18 shrink-0 rounded-xl object-cover"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          {item.year && <span className="px-2.5 py-1 rounded-lg bg-[#191919] text-white text-xs font-mono font-black">{item.year}</span>}
+                          <h3 className="text-sm font-black text-slate-900">{item.title[lang]}</h3>
+                        </div>
+                        <p className="text-sm text-slate-600 font-medium">{item.text[lang]}</p>
                       </div>
-                      <p className="text-sm text-slate-600 font-medium">{item.description}</p>
                     </motion.div>
                   </div>
                 </Reveal>
@@ -609,8 +611,12 @@ export const VisitorPortal: React.FC = () => {
           </div>
         </div>
       </section>
+        </>
+      )}
 
       {/* 7. CLASSES WITH DAY FILTER (the section keeps its "programs" anchor for the menu links) */}
+      {show('programs') && (
+        <>
       <section id="programs" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <Reveal className="text-center max-w-2xl mx-auto space-y-3">
           <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('programsEyebrow', { count: groups.length })}</span>
@@ -635,7 +641,7 @@ export const VisitorPortal: React.FC = () => {
         </Reveal>
 
         {shownClasses.length === 0 ? (
-          <p className="py-12 text-center text-sm font-medium text-slate-400 rounded-3xl border-2 border-dashed border-slate-200">{t('noClasses')}</p>
+          <p className="py-12 text-center text-sm font-medium text-slate-500 rounded-3xl border-2 border-dashed border-slate-200">{t('noClasses')}</p>
         ) : (
           <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence mode="popLayout">
@@ -658,6 +664,13 @@ export const VisitorPortal: React.FC = () => {
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="absolute inset-x-0 bottom-0 p-3 flex flex-wrap gap-1.5 bg-gradient-to-t from-black/70 to-transparent text-white text-[11px] font-black">
+                      {ageLabel(g.ageMin, g.ageMax) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400 text-slate-900">
+                          <Users className="w-3 h-3" />
+                          {ageLabel(g.ageMin, g.ageMax)}
+                        </span>
+                      )}
+                      {g.level && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">{levelLabel[g.level]}</span>}
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
                         {weekdayName(g.dayOfWeek, locale)}
                       </span>
@@ -681,7 +694,7 @@ export const VisitorPortal: React.FC = () => {
                     <div className="pt-4 border-t-2 border-slate-100 space-y-4">
                       <div className="flex items-baseline justify-between">
                         <div className="text-2xl font-black text-slate-900 font-mono">
-                          {g.pricePerMonth} <span className="text-xs font-bold text-slate-400">{t('perMonth')}</span>
+                          {g.pricePerMonth} <span className="text-xs font-bold text-slate-600">{t('perMonth')}</span>
                         </div>
                         <span className="text-xs font-bold text-sky-700">{t('kitIncluded')}</span>
                       </div>
@@ -692,6 +705,17 @@ export const VisitorPortal: React.FC = () => {
                         <span>{t('registerChild')}</span>
                         <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
                       </button>
+                      {canBookTrial && show('contact') && (
+                        <button
+                          onClick={() => {
+                            setTrial((f) => ({ ...f, cls: g.name }));
+                            goTrial();
+                          }}
+                          className="w-full py-2.5 btn-duo-secondary text-xs font-black cursor-pointer"
+                        >
+                          {t('tryFree')}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </motion.article>
@@ -700,434 +724,66 @@ export const VisitorPortal: React.FC = () => {
           </motion.div>
         )}
       </section>
+        </>
+      )}
 
-      {/* 8. OFFICIAL FACEBOOK FEED & PHOTO GALLERY */}
-      <section id="facebook-feed" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-black uppercase mb-1">
-              <span>{t('fbBadge')}</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {t('fbTitle')}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 font-medium">
-              {t('fbText')}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Only admins can publish photos */}
-            {isAdmin && (
-              <button
-                onClick={() => setIsUploadModalOpen(true)}
-                className="px-4 py-3 btn-duo-green text-xs font-black flex items-center gap-2 cursor-pointer shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                <span>{t('addPhoto')}</span>
-              </button>
-            )}
-
-            <a
-              href="https://www.facebook.com/DiscoveryClubJunior/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-5 py-3 btn-duo-blue text-xs font-black flex items-center gap-2 cursor-pointer shrink-0"
-            >
-              <span>{t('fbPage')}</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-        </div>
-
-        {/* Category Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: 'all', label: t('filterAll', { count: facebookPosts.length }) },
-            { id: 'champions', label: t('filterChampions') },
-            { id: 'workshops', label: t('filterWorkshops') },
-            { id: 'girls', label: t('filterGirls') },
-            { id: 'hoodies', label: t('filterHoodies') },
-            { id: 'ia', label: t('filterIa') }
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setPostFilter(cat.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                postFilter === cat.id ? 'btn-duo-blue' : 'btn-duo-secondary'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Facebook Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {(showAllPosts ? filteredFacebookPosts : filteredFacebookPosts.slice(0, 6)).map((post) => {
-            const userKey = currentUser?.uid || 'guest-visitor';
-            const isLiked = post.likedBy?.includes(userKey);
-
-            return (
-              <motion.div
-                key={post.id}
-                whileHover={{ y: -6 }}
-                className="duo-card duo-card-glow-blue overflow-hidden bg-white flex flex-col justify-between"
-              >
-                <div>
-                  <div
-                    onClick={() => setLightboxPost(post)}
-                    className="overflow-hidden h-56 relative group cursor-pointer"
-                    title={t('clickToEnlarge')}
-                  >
-                    <img
-                      src={post.imageUrl}
-                      alt={post.caption}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-slate-950/15 group-hover:bg-slate-950/0 transition-colors" />
-                    <div className="absolute top-3 end-3 px-2.5 py-1 rounded-full bg-slate-900/85 text-white backdrop-blur-xs font-black text-[10px]">
-                      {post.tag}
-                    </div>
-                    <div className="absolute bottom-3 end-3 px-2 py-0.5 rounded-lg bg-black/60 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                      {t('enlarge')}
-                    </div>
-                  </div>
-                  <div className="p-5 space-y-2.5">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
-                      <span>{post.date}</span>
-                      <span className="text-sky-600 font-mono text-[10px]">{t('liveSynced')}</span>
-                    </div>
-                    <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3">
-                      {post.caption}
-                    </p>
-
-                    {/* Recent comments preview */}
-                    {post.commentsList && post.commentsList.length > 0 && (
-                      <div className="pt-2 border-t border-slate-100 space-y-1">
-                        <span className="text-[10px] font-black uppercase text-slate-400">{t('lastComment')}</span>
-                        <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl">
-                          <span className="font-bold text-slate-800">{post.commentsList[post.commentsList.length - 1].author}: </span>
-                          <span>{post.commentsList[post.commentsList.length - 1].text}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="px-5 pb-5 pt-3 flex items-center justify-between border-t-2 border-slate-100 text-xs font-bold text-slate-500">
-                  <div className="flex items-center gap-3">
-                    {/* Interactive Like Button connected to real Firestore */}
-                    <button
-                      onClick={() => likeFacebookPost(post.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                        isLiked
-                          ? 'bg-rose-100 text-rose-600 font-black scale-105'
-                          : 'hover:bg-slate-100 text-slate-600'
-                      }`}
-                      title={isLiked ? t('unlike') : t('like')}
-                    >
-                      <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
-                      <span>{post.likes}</span>
-                    </button>
-
-                    <button
-                      onClick={() => setLightboxPost(post)}
-                      className="flex items-center gap-1 text-slate-500 hover:text-sky-600 cursor-pointer"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      <span>{post.comments}</span>
-                    </button>
-                  </div>
-
-                  <a
-                    href={post.postUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sky-600 hover:underline font-black text-[11px] flex items-center gap-1"
-                  >
-                    <span>{t('viewOnFacebook')}</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-        {filteredFacebookPosts.length > 6 && (
-          <div className="flex justify-center">
-            <button
-              onClick={() => setShowAllPosts((v) => !v)}
-              className="px-6 py-3 btn-duo-secondary text-sm font-black flex items-center gap-2 cursor-pointer"
-            >
-              {showAllPosts ? t('showLessPosts') : t('showMorePosts', { count: filteredFacebookPosts.length - 6 })}
-            </button>
-          </div>
-        )}
-
-        {/* Lightbox Photo Preview & Interactive Commenting Modal */}
-        <AnimatePresence>
-          {lightboxPost && (
-            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="duo-card max-w-3xl w-full bg-white overflow-hidden shadow-2xl space-y-4 p-6 max-h-[90vh] flex flex-col"
-              >
-                <div className="flex items-center justify-between pb-3 border-b-2 border-slate-100 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-sky-600 uppercase">{lightboxPost.tag}</span>
-                    <span className="text-slate-300">·</span>
-                    <span className="text-xs font-bold text-slate-400">{lightboxPost.date}</span>
-                  </div>
-                  <button
-                    onClick={() => setLightboxPost(null)}
-                    aria-label={t('close')}
-                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-black text-sm cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="overflow-y-auto space-y-4 pe-1">
-                  {/* High-res Photo */}
-                  <div className="overflow-hidden rounded-2xl max-h-[50vh] bg-slate-100 flex items-center justify-center">
-                    <img
-                      src={lightboxPost.imageUrl}
-                      alt={lightboxPost.caption}
-                      className="w-full h-full object-contain max-h-[50vh] rounded-2xl"
-                    />
-                  </div>
-
-                  <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
-                    {lightboxPost.caption}
-                  </p>
-
-                  {/* Actions & Likes */}
-                  <div className="flex items-center justify-between py-2 border-y-2 border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => likeFacebookPost(lightboxPost.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black cursor-pointer transition-all ${
-                          lightboxPost.likedBy?.includes(currentUser?.uid || 'guest-visitor')
-                            ? 'bg-rose-100 text-rose-600'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        <Heart className="w-4 h-4 fill-current text-rose-500" />
-                        <span>{t('likesCount', { count: lightboxPost.likes })}</span>
-                      </button>
-
-                      <span className="text-xs font-bold text-slate-400">
-                        {t('commentsCount', { count: lightboxPost.comments })}
-                      </span>
-                    </div>
-
-                    <a
-                      href={lightboxPost.postUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-black text-sky-600 flex items-center gap-1 hover:underline"
-                    >
-                      <span>{t('originalPost')}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-
-                  {/* Real-time Comments List */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-black text-slate-700 uppercase">{t('communityComments')}</h4>
-                    {lightboxPost.commentsList && lightboxPost.commentsList.length > 0 ? (
-                      <div className="space-y-2 max-h-40 overflow-y-auto pe-1">
-                        {lightboxPost.commentsList.map((c) => (
-                          <div key={c.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-0.5">
-                            <div className="flex items-center justify-between font-bold">
-                              <span className="text-slate-800">{c.author}</span>
-                              <span className="text-[10px] text-slate-400">{c.date}</span>
-                            </div>
-                            <p className="text-slate-600">{c.text}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">{t('beFirstComment')}</p>
-                    )}
-                  </div>
-
-                  {/* Comment Input Form */}
-                  <form
-                    onSubmit={(e) => handleCommentSubmit(e, lightboxPost.id)}
-                    className="pt-2 space-y-2"
-                  >
-                    {!currentUser && (
-                      <input
-                        type="text"
-                        placeholder={t('namePlaceholder')}
-                        value={commentAuthor}
-                        onChange={(e) => setCommentAuthor(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:border-sky-400"
-                      />
-                    )}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder={t('commentPlaceholder')}
-                        value={commentInput}
-                        onChange={(e) => setCommentInput(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-medium focus:outline-none focus:border-sky-400"
-                      />
-                      <button
-                        type="submit"
-                        className="px-4 py-2 btn-duo-blue text-xs font-black flex items-center gap-1.5 cursor-pointer shrink-0"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>{t('publish')}</span>
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* Upload User Photo Modal */}
-        <AnimatePresence>
-          {isUploadModalOpen && (
-            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="duo-card max-w-lg w-full bg-white overflow-hidden shadow-2xl p-6 space-y-4"
-              >
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Camera className="w-5 h-5 text-emerald-600" />
-                    <h3 className="text-base font-black text-slate-800">
-                      {t('uploadTitle')}
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setIsUploadModalOpen(false)}
-                    aria-label={t('close')}
-                    className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <form onSubmit={handleUploadSubmit} className="space-y-4 text-xs font-bold text-slate-700">
-                  {/* File Upload Box */}
-                  <div>
-                    <label className="block mb-1.5">{t('chooseImage')}</label>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-50 flex flex-col items-center justify-center gap-2"
-                    >
-                      <Upload className="w-8 h-8 text-slate-400" />
-                      <div className="font-black text-slate-700">
-                        {t('browseFiles')}
-                      </div>
-                      <span className="text-[10px] text-slate-400">
-                        {t('fileLimits')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Or Paste URL */}
-                  <div>
-                    <label className="block mb-1">{t('pasteUrl')}</label>
-                    <input
-                      type="text"
-                      placeholder={t('urlPlaceholder')}
-                      value={uploadImagePreview}
-                      onChange={(e) => setUploadImagePreview(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:bg-white"
-                    />
-                  </div>
-
-                  {/* Preview */}
-                  {uploadImagePreview && (
-                    <div className="h-40 rounded-2xl overflow-hidden border-2 border-slate-200 relative">
-                      <img
-                        src={uploadImagePreview}
-                        alt={t('previewAlt')}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setUploadImagePreview('')}
-                        className="absolute top-2 end-2 px-2 py-1 bg-black/70 text-white rounded-lg text-[10px] font-bold"
-                      >
-                        {t('change')}
-                      </button>
+      {/* 8. COACHES */}
+      {show('coaches') && coaches.length > 0 && (
+        <section id="coaches" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <Reveal className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('coachesEyebrow')}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('coachesTitle')}</h2>
+            <p className="text-sm text-slate-600 font-medium">{t('coachesText')}</p>
+          </Reveal>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+            {coaches.map((c, i) => (
+              <Reveal key={c.name + i} delay={Math.min(i, 6) * 0.06} y={20}>
+                <div className="duo-card bg-white p-5 text-center space-y-3 h-full">
+                  {c.photo ? (
+                    <img src={c.photo} alt="" loading="lazy" decoding="async" width={96} height={96} className="w-24 h-24 mx-auto rounded-full object-cover border-4 border-slate-100" />
+                  ) : (
+                    <div className="w-24 h-24 mx-auto rounded-full bg-[#191919] text-white grid place-items-center text-2xl font-black" aria-hidden="true">
+                      {c.name.trim().charAt(0).toUpperCase()}
                     </div>
                   )}
-
-                  {/* Tag */}
                   <div>
-                    <label className="block mb-1">{t('category')}</label>
-                    <select
-                      value={uploadTag}
-                      onChange={(e) => setUploadTag(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white cursor-pointer"
-                    >
-                      <option value="🏆 Eurobot Champions">{t('tagChampions')}</option>
-                      <option value="🇹🇳 Honneur National">{t('tagNational')}</option>
-                      <option value="🌍 Tournoi International">{t('tagInternational')}</option>
-                      <option value="🛠️ Ateliers Manouba">{t('tagWorkshops')}</option>
-                      <option value="👧 Girls in Tech">{t('tagGirls')}</option>
-                      <option value="👕 Les Capuches">{t('tagHoodies')}</option>
-                      <option value="🧠 IA & Vision">{t('tagIa')}</option>
-                    </select>
+                    <h3 className="text-sm font-black text-slate-900">{c.name}</h3>
+                    {c.role && <p className="text-xs font-semibold text-slate-600">{c.role}</p>}
                   </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+      )}
 
-                  {/* Caption */}
-                  <div>
-                    <label className="block mb-1">{t('captionLabel')}</label>
-                    <textarea
-                      rows={3}
-                      required
-                      placeholder={t('captionPlaceholder')}
-                      value={uploadCaption}
-                      onChange={(e) => setUploadCaption(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:bg-white resize-none"
-                    />
-                  </div>
+      {/* 9. TESTIMONIALS */}
+      {show('testimonials') && testimonials.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <Reveal className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('testimonialsEyebrow')}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('testimonialsTitle')}</h2>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {testimonials.map((q, i) => (
+              <Reveal key={i} delay={Math.min(i, 5) * 0.08} y={20}>
+                <figure className="duo-card bg-white p-6 space-y-4 h-full">
+                  <Quote className="w-7 h-7 text-sky-600 rtl:-scale-x-100" aria-hidden="true" />
+                  <blockquote className="text-sm text-slate-700 font-medium leading-relaxed">{q.quote[lang]}</blockquote>
+                  <figcaption className="text-xs">
+                    <span className="font-black text-slate-900">{q.author}</span>
+                    {q.role[lang] && <span className="text-slate-600"> · {q.role[lang]}</span>}
+                  </figcaption>
+                </figure>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+      )}
 
-                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => setIsUploadModalOpen(false)}
-                      className="px-4 py-2 btn-duo-secondary text-xs font-bold cursor-pointer"
-                    >
-                      {t('cancel')}
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 btn-duo-green text-xs font-black cursor-pointer"
-                    >
-                      {t('publishPhoto')}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-      </section>
-
-      {/* 9. CLUB SHOP (only when the admin has products on sale) */}
+      {/* 10. CLUB SHOP (only when the admin has products on sale) */}
+      {show('shop') && (
+        <>
       {productsOnSale.length > 0 && (
       <Reveal>
       <section id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1169,7 +825,7 @@ export const VisitorPortal: React.FC = () => {
                   </h3>
                   {product.description && <p className="text-xs text-slate-600 font-medium">{product.description}</p>}
                   {product.sizes.length > 0 && (
-                    <p className="text-[11px] font-bold text-slate-400">{product.sizes.join(' · ')}</p>
+                    <p className="text-[11px] font-bold text-slate-500">{product.sizes.join(' · ')}</p>
                   )}
                 </div>
               </div>
@@ -1179,69 +835,140 @@ export const VisitorPortal: React.FC = () => {
       </section>
       </Reveal>
       )}
+        </>
+      )}
 
-      {/* 10. UPCOMING EVENTS */}
-      <Reveal>
-      <section id="events" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-xs font-black uppercase mb-1">
-              <span>{t('eventsBadge')}</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {t('eventsTitle')}
-            </h2>
+      {/* 11. FAQ */}
+      {show('faq') && faq.length > 0 && (
+        <section id="faq" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <Reveal className="text-center space-y-3">
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('faqEyebrow')}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('faqTitle')}</h2>
+          </Reveal>
+          <div className="space-y-3">
+            {faq.map((f, i) => (
+              <details key={i} className="group duo-card hover:transform-none! bg-white px-5 py-4">
+                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none font-black text-slate-900 text-sm [&::-webkit-details-marker]:hidden">
+                  {f.q[lang]}
+                  <ChevronDown className="w-4 h-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <p className="pt-3 text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">{f.a[lang]}</p>
+              </details>
+            ))}
           </div>
-        </div>
+        </section>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {events.map((evt) => (
-            <motion.div
-              key={evt.id}
-              whileHover={{ y: -4 }}
-              className="duo-card p-6 bg-white space-y-4 flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-black uppercase">
-                    {evt.category}
-                  </span>
-                  <span className="text-[11px] font-bold text-slate-400">{evt.date}</span>
+      {/* 12. CONTACT: free trial request, WhatsApp / phone / email, map */}
+      {show('contact') && hasContact && (
+        <section id="contact" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            {canBookTrial ? (
+              <Reveal>
+                <form onSubmit={sendTrial} className="duo-card hover:transform-none! bg-white p-6 sm:p-8 space-y-5 h-full">
+                  <div className="space-y-2">
+                    <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('contactEyebrow')}</span>
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('contactTitle')}</h2>
+                    <p className="text-sm text-slate-600 font-medium">{t('contactText')}</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                      <span>{t('trialParent')}</span>
+                      <input required autoComplete="name" value={trial.parent} onChange={(e) => setTrial({ ...trial, parent: e.target.value })} className={inputClass} />
+                    </label>
+                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                      <span>{t('trialPhone')}</span>
+                      <input required type="tel" dir="ltr" autoComplete="tel" value={trial.phone} onChange={(e) => setTrial({ ...trial, phone: e.target.value })} className={inputClass} />
+                    </label>
+                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                      <span>{t('trialChild')}</span>
+                      <input required value={trial.child} onChange={(e) => setTrial({ ...trial, child: e.target.value })} className={inputClass} />
+                    </label>
+                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                      <span>{t('trialAge')}</span>
+                      <input required type="number" min={3} max={22} inputMode="numeric" value={trial.age} onChange={(e) => setTrial({ ...trial, age: e.target.value })} className={inputClass} />
+                    </label>
+                  </div>
+                  {groups.length > 0 && (
+                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                      <span>{t('trialClass')}</span>
+                      <select value={trial.cls} onChange={(e) => setTrial({ ...trial, cls: e.target.value })} className={inputClass}>
+                        <option value="">{t('trialAnyClass')}</option>
+                        {shownClassesAll.map((g) => (
+                          <option key={g.id} value={g.name}>
+                            {g.name} · {weekdayName(g.dayOfWeek, locale)} {g.timeSlot}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <button type="submit" className="w-full py-3.5 btn-duo-green text-sm font-black flex items-center justify-center gap-2 cursor-pointer">
+                    {contact.whatsapp ? <WhatsAppIcon className="w-5 h-5" /> : <Mail className="w-4 h-4" />}
+                    {contact.whatsapp ? t('trialSend') : t('trialSendEmail')}
+                  </button>
+                </form>
+              </Reveal>
+            ) : null}
+
+            <Reveal className={canBookTrial ? '' : 'lg:col-span-2'}>
+              <div className="duo-card hover:transform-none! bg-white overflow-hidden h-full flex flex-col">
+                <div className="p-6 sm:p-8 space-y-4">
+                  {!canBookTrial && (
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('contactEyebrow')}</h2>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {waHref && (
+                      <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#25d366] text-white text-xs font-black hover:brightness-95">
+                        <WhatsAppIcon className="w-4 h-4" />
+                        {t('whatsappUs')}
+                      </a>
+                    )}
+                    {contact.phone && (
+                      <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-duo-secondary text-xs font-black">
+                        <Phone className="w-4 h-4" />
+                        <span>{t('callUs')}</span>
+                        <span dir="ltr" className="font-mono">{contact.phone}</span>
+                      </a>
+                    )}
+                    {contact.email && (
+                      <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-duo-secondary text-xs font-black">
+                        <Mail className="w-4 h-4" />
+                        {t('emailUs')}
+                      </a>
+                    )}
+                  </div>
+                  <a href={mapsLink()} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 text-sm font-semibold text-slate-700 hover:text-sky-700">
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
+                    <span>
+                      {[address.street[lang], address.city[lang]].filter(Boolean).join(', ')}
+                      <span className="block text-xs text-sky-700 font-bold">{t('openInMaps')}</span>
+                    </span>
+                  </a>
+                  {SITE_CONTENT.openingHours[lang] && (
+                    <p className="flex items-start gap-2 text-sm font-semibold text-slate-700">
+                      <Clock className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
+                      {SITE_CONTENT.openingHours[lang]}
+                    </p>
+                  )}
                 </div>
-
-                <h3 className="text-base font-black text-slate-800 leading-snug">
-                  {evt.title}
-                </h3>
-
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  {evt.description}
-                </p>
+                {hasMap() && (
+                  <iframe
+                    title={t('mapTitle')}
+                    src={`https://maps.google.com/maps?q=${address.lat},${address.lng}&z=16&hl=${lang}&output=embed`}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="w-full flex-1 min-h-[260px] border-0"
+                  />
+                )}
               </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
 
-              <div className="pt-4 border-t border-slate-100 space-y-3">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                    <span>{evt.location.split(',')[0]}</span>
-                  </span>
-                  <span className="text-emerald-600 font-mono">{t('spotsLeft', { count: evt.spotsLeft })}</span>
-                </div>
-
-                <button
-                  onClick={() => toggleEventRegistration(evt.id)}
-                  className={`w-full py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
-                    evt.isRegistered ? 'btn-duo-secondary text-slate-600' : 'btn-duo-purple'
-                  }`}
-                >
-                  {evt.isRegistered ? t('registeredCancel') : t('rsvp')}
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-      </Reveal>
-      {/* 11. FINAL CALL TO ACTION */}
+      {/* 13. FINAL CALL TO ACTION */}
+      {show('cta') && (
+        <>
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-sky-600 via-sky-800 to-sky-950 text-white px-8 py-14 sm:px-14 text-center">
@@ -1266,6 +993,9 @@ export const VisitorPortal: React.FC = () => {
           </div>
         </Reveal>
       </section>
+        </>
+      )}
+
     </div>
   );
 };

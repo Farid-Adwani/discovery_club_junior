@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SignInLoader } from '../components/common/SignInLoader';
 import { useT } from '../i18n';
 import { authMessages } from '../i18n/messages/auth';
+import { siteMessages } from '../i18n/messages/site';
 import { PHONE_PATTERN } from '../utils/contact';
 import { ageOf } from '../utils/age';
 import { toISODate } from '../utils/schedule';
@@ -31,6 +32,7 @@ export const ParentRegisterPage: React.FC = () => {
   } = useApp();
 
   const t = useT(authMessages);
+  const ts = useT(siteMessages);
 
   type ChildForm = { name: string; birthDate: string; notes: string };
   const emptyChild = (): ChildForm => ({ name: '', birthDate: '', notes: '' });
@@ -49,6 +51,8 @@ export const ParentRegisterPage: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [children, setChildren] = useState<ChildForm[]>([emptyChild()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [photoConsent, setPhotoConsent] = useState(false);
 
   const updateChild = (idx: number, patch: Partial<ChildForm>) => {
     setChildren((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -59,7 +63,7 @@ export const ParentRegisterPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const filledChildren = children.filter((c) => c.name.trim());
-    if (!parentName || !parentEmail || !phone || filledChildren.length === 0) return;
+    if (!parentName || !parentEmail || !phone || filledChildren.length === 0 || !acceptedTerms) return;
 
     setIsSubmitting(true);
     await registerParentAccount({
@@ -71,7 +75,9 @@ export const ParentRegisterPage: React.FC = () => {
         name: c.name.trim(),
         birthDate: c.birthDate,
         notes: c.notes.trim() || undefined
-      }))
+      })),
+      acceptedTerms,
+      photoConsent
     });
     setIsSubmitting(false);
   };
@@ -185,7 +191,7 @@ export const ParentRegisterPage: React.FC = () => {
                     value={parentName}
                     onChange={(e) => setParentName(e.target.value)}
                     placeholder={t('parentNamePlaceholder')}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
                   />
                 </div>
 
@@ -200,7 +206,7 @@ export const ParentRegisterPage: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+216 98 123 456"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
                   />
                 </div>
               </div>
@@ -214,7 +220,7 @@ export const ParentRegisterPage: React.FC = () => {
                     value={parentEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
                     placeholder="parent@example.com"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
                   />
                 </div>
 
@@ -227,7 +233,7 @@ export const ParentRegisterPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={t('regPasswordPlaceholder')}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:bg-white text-xs font-semibold"
                   />
                 </div>
               </div>
@@ -269,7 +275,7 @@ export const ParentRegisterPage: React.FC = () => {
                         value={child.name}
                         onChange={(e) => updateChild(idx, { name: e.target.value })}
                         placeholder={t('childNamePlaceholder')}
-                        className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 text-xs font-semibold"
+                        className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:border-sky-500 text-xs font-semibold"
                       />
                     </div>
 
@@ -301,7 +307,7 @@ export const ParentRegisterPage: React.FC = () => {
                       value={child.notes}
                       onChange={(e) => updateChild(idx, { notes: e.target.value })}
                       placeholder={t('notesPlaceholder')}
-                      className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-xs font-semibold resize-none"
+                      className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:border-emerald-500 text-xs font-semibold resize-none"
                     />
                   </div>
                 </div>
@@ -315,6 +321,41 @@ export const ParentRegisterPage: React.FC = () => {
                 <Plus className="w-4 h-4" />
                 <span>{t('addChild')}</span>
               </button>
+            </div>
+
+            {/* Consent: terms & privacy (required), publishing photos (optional) */}
+            <div className="space-y-3 pt-4 border-t-2 border-slate-100 text-xs">
+              <label className="flex items-start gap-2.5 font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  onInvalid={(e) => e.currentTarget.setCustomValidity(ts('consentRequired'))}
+                  onInput={(e) => e.currentTarget.setCustomValidity('')}
+                  className="mt-0.5 w-4 h-4 shrink-0 accent-emerald-600"
+                />
+                <span>
+                  {ts('consentTermsBefore')}{' '}
+                  <a href="#/terms" target="_blank" rel="noopener" className="font-black text-sky-700 underline">
+                    {ts('terms')}
+                  </a>{' '}
+                  {ts('consentAnd')}{' '}
+                  <a href="#/privacy" target="_blank" rel="noopener" className="font-black text-sky-700 underline">
+                    {ts('privacyPolicy')}
+                  </a>
+                  . *
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={photoConsent}
+                  onChange={(e) => setPhotoConsent(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 shrink-0 accent-emerald-600"
+                />
+                <span>{ts('photoConsent')}</span>
+              </label>
             </div>
 
             {/* Submit Button */}

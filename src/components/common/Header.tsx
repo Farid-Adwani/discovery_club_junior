@@ -11,16 +11,18 @@ import {
   LogIn,
   LogOut,
   Menu,
+  MessageCircle,
   ShieldCheck,
-  Sparkles,
-  Trophy,
   UserPlus,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { NotificationBell } from './NotificationBell';
 import { useT } from '../../i18n';
 import { commonMessages } from '../../i18n/messages/common';
+import { siteMessages } from '../../i18n/messages/site';
+import { SITE_CONTENT, hasMap } from '../../data/siteContent';
 
 type Space = 'admin' | 'trainer' | 'parent';
 const SPACE_ICON: Record<Space, React.ElementType> = { admin: ShieldCheck, trainer: GraduationCap, parent: HeartHandshake };
@@ -31,8 +33,12 @@ const SPACE_COLOR: Record<Space, string> = { admin: '#c11e3d', trainer: '#191919
  * their spaces (Admin / Coach / Parents) and open their profile menu.
  */
 export const Header: React.FC = () => {
-  const { currentPage, navigateTo, currentUser, logout } = useApp();
+  const { currentPage, navigateTo, currentUser, logout, landing } = useApp();
   const t = useT(commonMessages);
+  const ts = useT(siteMessages);
+  const { contact } = SITE_CONTENT;
+  // Same rule as the contact section of the home page
+  const showContact = !landing.hidden?.includes('contact') && !!(contact.whatsapp || contact.email || contact.phone || hasMap());
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -87,8 +93,7 @@ export const Header: React.FC = () => {
   const publicLinks = [
     { key: 'home', icon: Home, label: t('navHome'), onClick: () => navigateTo('home'), active: currentPage === 'home' },
     { key: 'programs', icon: BookOpen, label: t('navCourses'), onClick: () => goToSection('programs') },
-    { key: 'events', icon: Trophy, label: t('navOlympiads'), onClick: () => goToSection('events') },
-    { key: 'feed', icon: Sparkles, label: t('navCommunity'), onClick: () => goToSection('facebook-feed') }
+    ...(showContact ? [{ key: 'contact', icon: MessageCircle, label: ts('contactUs'), onClick: () => goToSection('contact') }] : [])
   ];
 
   const Avatar: React.FC<{ size: string }> = ({ size }) =>
@@ -177,6 +182,9 @@ export const Header: React.FC = () => {
         <div className="flex-1" />
 
         {/* Desktop right side */}
+        {/* One bell for every screen size (two would check for news twice) */}
+        <NotificationBell />
+
         <div className="hidden lg:flex items-center gap-2">
           <LanguageSwitcher />
           {currentUser ? (

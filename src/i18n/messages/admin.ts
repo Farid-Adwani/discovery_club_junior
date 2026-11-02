@@ -5,7 +5,6 @@ export const adminMessages = defineMessages({
     kpiOccupancyNone: 'No class has a limit on children',
     confirmDeleteClass: 'Delete the class "{name}"?',
     confirmDeleteClassText: 'Its students are taken out of it and their tuition is updated. The class is kept in the database (soft delete).',
-    confirmDeletePost: 'Delete this post from the feed?',
     // Header
     badge: 'Administrative Command Space',
     title: 'Discovery Junior Operations & Management',
@@ -21,7 +20,6 @@ export const adminMessages = defineMessages({
     tabAttendance: 'Attendance Call Lists',
     tabPayments: 'Payments & Tuition',
     tabInventory: 'Club Shop',
-    tabFacebook: 'Facebook Feed ({count})',
 
     // Statuses
     statusAll: 'All',
@@ -119,51 +117,13 @@ export const adminMessages = defineMessages({
     // Curriculum tab
 
     // Facebook tab
-    fbCollection: '📱 Firestore Collection: facebook_posts',
-    fbTitle: 'Official Facebook Posts & Photo Asset Manager',
-    fbSubtitle: 'Publish new community updates, inspect photos, monitor likes & comments in real-time.',
-    publishPost: '+ Publish Post',
-    photoAssetsTitle: 'Available Authentic Photo Assets (From Facebook Page)',
-    photoAssetsHint: 'Click any photo to use for new post',
-    usePhotoTitle: 'Use photo: {name}',
-    usePhoto: 'Use Photo',
-    openOnFacebook: 'Open on Facebook',
-    deletePost: 'Delete Post',
 
     // Photo asset names
-    photoEurobotChampions: 'Eurobot Champions',
-    photoTrophyCert: 'Trophy Certificate',
-    photoAwards: 'Award Ceremony',
-    photoMinistry: 'Ministry Honour',
-    photoRobocupVienna: 'RoboCup Vienna',
-    photoRobocupEgypt: 'RoboCup Egypt',
-    photoOda: 'ODA Robots 2nd Prize',
-    photoEurobotQualif: 'Eurobot Tunisia Qualifiers',
-    photoIstanbul: 'Istanbul Airport',
-    photoTunisDeparture: 'Departure from Tunis',
-    photoThaiFriends: 'Friends from Thailand',
-    photoFlags: 'Flags of the World',
 
     // Post tags (display labels only; stored values stay unchanged)
-    tagEurobot: '🏆 Eurobot Champions',
-    tagNationalHonour: '🇹🇳 National Honour',
-    tagInternational: '🌍 International Tournament',
-    tagWorkshops: '🛠️ Manouba Workshops',
-    tagGirls: '👧 Girls in Tech',
-    tagHoodies: '👕 The Hoodies',
-    tagAi: '🧠 AI & Vision',
 
     // New post modal
-    newPostTitle: 'Publish New Facebook Post',
-    postTag: 'Post Category / Tag:',
-    captionLabel: 'Caption / French Text *',
-    captionPlaceholder: 'Write the post message...',
-    photoLabel: 'Photo:',
-    chooseFile: 'Choose file',
-    photoUrlPlaceholder: 'or paste the photo URL/path...',
-    preview: 'Preview',
     cancel: 'Cancel',
-    publishToFeed: 'Publish to Feed',
 
     // Price modal
     pricingOverride: 'Pricing Override: {name}',
@@ -183,7 +143,6 @@ export const adminMessages = defineMessages({
 
     // Toasts
     toastNeedTrainer: 'Choose at least one trainer for this class',
-    toastPostPublished: 'Published Facebook post to Firestore database!',
 
     // Schedule generator modal
     sgTitle: 'Automated Schedule & Conflict Matrix',
@@ -203,7 +162,6 @@ export const adminMessages = defineMessages({
     kpiOccupancyNone: 'Aucune classe n’a de limite d’enfants',
     confirmDeleteClass: 'Supprimer la classe « {name} » ?',
     confirmDeleteClassText: 'Ses élèves en sont retirés et leurs frais sont mis à jour. La classe est conservée dans la base de données (suppression douce).',
-    confirmDeletePost: 'Supprimer cette publication du fil ?',
     badge: 'Espace de pilotage administratif',
     title: 'Opérations & gestion Discovery Junior',
     subtitle: 'Gérez les listes d’élèves, validez la liste d’attente, affectez les groupes et gérez la boutique du club.',
@@ -217,7 +175,6 @@ export const adminMessages = defineMessages({
     tabAttendance: 'Feuilles d’appel',
     tabPayments: 'Paiements & frais',
     tabInventory: 'Boutique du club',
-    tabFacebook: 'Fil Facebook ({count})',
 
     statusAll: 'Tous',
     statusWaitlist: 'En attente',
@@ -305,48 +262,10 @@ export const adminMessages = defineMessages({
     adjust: 'Ajuster',
 
 
-    fbCollection: '📱 Collection Firestore : facebook_posts',
-    fbTitle: 'Publications Facebook officielles & gestion des photos',
-    fbSubtitle: 'Publiez des actualités, consultez les photos et suivez les j’aime et commentaires en temps réel.',
-    publishPost: '+ Publier',
-    photoAssetsTitle: 'Photos authentiques disponibles (page Facebook)',
-    photoAssetsHint: 'Cliquez sur une photo pour l’utiliser dans une publication',
-    usePhotoTitle: 'Utiliser la photo : {name}',
-    usePhoto: 'Utiliser',
-    openOnFacebook: 'Ouvrir sur Facebook',
-    deletePost: 'Supprimer la publication',
 
-    photoEurobotChampions: 'Champions Eurobot',
-    photoTrophyCert: 'Trophée Certificat',
-    photoAwards: 'Remise des Prix',
-    photoMinistry: 'Honneur Ministère',
-    photoRobocupVienna: 'RoboCup Vienne',
-    photoRobocupEgypt: 'RoboCup Égypte',
-    photoOda: 'ODA Robots 2ème Prix',
-    photoEurobotQualif: 'Qualif. Eurobot Tunisie',
-    photoIstanbul: 'Aéroport Istanbul',
-    photoTunisDeparture: 'Départ Tunis',
-    photoThaiFriends: 'Amis Thaïlande',
-    photoFlags: 'Drapeaux du Monde',
 
-    tagEurobot: '🏆 Champions Eurobot',
-    tagNationalHonour: '🇹🇳 Honneur National',
-    tagInternational: '🌍 Tournoi International',
-    tagWorkshops: '🛠️ Ateliers Manouba',
-    tagGirls: '👧 Girls in Tech',
-    tagHoodies: '👕 Les Capuches',
-    tagAi: '🧠 IA & Vision',
 
-    newPostTitle: 'Nouvelle publication Facebook',
-    postTag: 'Catégorie / étiquette :',
-    captionLabel: 'Légende / texte en français *',
-    captionPlaceholder: 'Écrivez le message de publication...',
-    photoLabel: 'Photo :',
-    chooseFile: 'Choisir un fichier',
-    photoUrlPlaceholder: 'ou collez l’URL/chemin de la photo...',
-    preview: 'Aperçu',
     cancel: 'Annuler',
-    publishToFeed: 'Publier sur le fil',
 
     pricingOverride: 'Tarif personnalisé : {name}',
     monthlyTuition: 'Frais mensuels (DT) :',
@@ -363,7 +282,6 @@ export const adminMessages = defineMessages({
     createGroup: 'Créer le groupe',
 
     toastNeedTrainer: 'Choisissez au moins un formateur pour cette classe',
-    toastPostPublished: 'Publication Facebook enregistrée dans Firestore !',
 
     sgTitle: 'Matrice automatique des horaires & conflits',
     sgSubtitle: 'Vérification en direct des affectations des formateurs, de l’occupation des salles et de la cohérence de l’emploi du temps.',
@@ -382,7 +300,6 @@ export const adminMessages = defineMessages({
     kpiOccupancyNone: 'لا يوجد قسم بحدّ أقصى للأطفال',
     confirmDeleteClass: 'حذف القسم «{name}»؟',
     confirmDeleteClassText: 'سيُخرج تلاميذه منه وتُحدَّث رسومهم. يبقى القسم محفوظًا في قاعدة البيانات (حذف ناعم).',
-    confirmDeletePost: 'حذف هذا المنشور من الصفحة؟',
     badge: 'فضاء الإدارة',
     title: 'تسيير وإدارة ديسكفري جونيور',
     subtitle: 'إدارة قوائم التلاميذ، والموافقة على قائمة الانتظار، وتوزيع المجموعات، وإدارة متجر النادي.',
@@ -396,7 +313,6 @@ export const adminMessages = defineMessages({
     tabAttendance: 'قوائم الحضور',
     tabPayments: 'المدفوعات والرسوم',
     tabInventory: 'متجر النادي',
-    tabFacebook: 'منشورات فيسبوك ({count})',
 
     statusAll: 'الكل',
     statusWaitlist: 'في الانتظار',
@@ -484,48 +400,10 @@ export const adminMessages = defineMessages({
     adjust: 'تعديل',
 
 
-    fbCollection: '📱 مجموعة Firestore: facebook_posts',
-    fbTitle: 'منشورات فيسبوك الرسمية وإدارة الصور',
-    fbSubtitle: 'انشر أخبارًا جديدة، واطّلع على الصور، وتابع الإعجابات والتعليقات مباشرة.',
-    publishPost: '+ نشر منشور',
-    photoAssetsTitle: 'الصور الأصلية المتاحة (من صفحة فيسبوك)',
-    photoAssetsHint: 'انقر على أي صورة لاستخدامها في منشور جديد',
-    usePhotoTitle: 'استخدام الصورة: {name}',
-    usePhoto: 'استخدام',
-    openOnFacebook: 'فتح على فيسبوك',
-    deletePost: 'حذف المنشور',
 
-    photoEurobotChampions: 'أبطال يوروبوت',
-    photoTrophyCert: 'شهادة الكأس',
-    photoAwards: 'حفل توزيع الجوائز',
-    photoMinistry: 'تكريم الوزارة',
-    photoRobocupVienna: 'روبوكاب فيينا',
-    photoRobocupEgypt: 'روبوكاب مصر',
-    photoOda: 'ODA Robots الجائزة الثانية',
-    photoEurobotQualif: 'تصفيات يوروبوت تونس',
-    photoIstanbul: 'مطار إسطنبول',
-    photoTunisDeparture: 'الانطلاق من تونس',
-    photoThaiFriends: 'أصدقاء من تايلاند',
-    photoFlags: 'أعلام العالم',
 
-    tagEurobot: '🏆 أبطال يوروبوت',
-    tagNationalHonour: '🇹🇳 تكريم وطني',
-    tagInternational: '🌍 مسابقة دولية',
-    tagWorkshops: '🛠️ ورشات منوبة',
-    tagGirls: '👧 الفتيات في التكنولوجيا',
-    tagHoodies: '👕 السترات',
-    tagAi: '🧠 الذكاء الاصطناعي والرؤية',
 
-    newPostTitle: 'نشر منشور فيسبوك جديد',
-    postTag: 'الفئة / الوسم:',
-    captionLabel: 'النص / باللغة الفرنسية *',
-    captionPlaceholder: 'اكتب نص المنشور...',
-    photoLabel: 'الصورة:',
-    chooseFile: 'اختيار ملف',
-    photoUrlPlaceholder: 'أو الصق رابط/مسار الصورة...',
-    preview: 'معاينة',
     cancel: 'إلغاء',
-    publishToFeed: 'نشر',
 
     pricingOverride: 'تعديل الرسوم: {name}',
     monthlyTuition: 'الرسوم الشهرية (د.ت):',
@@ -542,7 +420,6 @@ export const adminMessages = defineMessages({
     createGroup: 'إنشاء المجموعة',
 
     toastNeedTrainer: 'اختر مدربًا واحدًا على الأقل لهذا القسم',
-    toastPostPublished: 'تم نشر منشور فيسبوك في قاعدة بيانات Firestore!',
 
     sgTitle: 'مصفوفة الجدول والتعارضات الآلية',
     sgSubtitle: 'تحقق مباشر من توزيع المدربين وإشغال القاعات وتناسق الجدول الزمني.',

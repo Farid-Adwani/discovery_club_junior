@@ -4,22 +4,24 @@ import { CLUB_PHOTOS } from '../../data/initialData';
 import { Gear, Oscilloscope } from '../visitor/RoboticsArt';
 import { useT } from '../../i18n';
 import { commonMessages } from '../../i18n/messages/common';
+import { siteMessages } from '../../i18n/messages/site';
 
 // Start-up "boot sequence" in scenes: mechanics → electronics → coding → robotics,
 // then the logo assembles and the screen splits open like two doors.
-// Plays on every page load / refresh (moving between pages inside the site does not reload it).
+// About 2.5 s, once per browser session; skipped with a click, the Skip button or Escape,
+// and never shown to visitors who ask their device for reduced motion.
 
 const CRIMSON = '#c11e3d';
 
 /** Scene timeline, in seconds from page load. */
 const T = {
-  mechanics: 0.5,
-  electronics: 1.6,
-  coding: 2.7,
-  robotics: 3.8,
-  logo: 4.9,
-  open: 6.0,
-  done: 6.7
+  mechanics: 0.15,
+  electronics: 0.55,
+  coding: 0.95,
+  robotics: 1.35,
+  logo: 1.75,
+  open: 2.5,
+  done: 3.1
 };
 
 const MODULES = [
@@ -55,11 +57,34 @@ const PLAY = typeof window !== 'undefined' && shouldPlayIntro() && !seenThisSess
 
 let alreadyPlayed = false;
 
-/** Seconds the page should wait before running its own entrance animations. */
-export const INTRO_DELAY = PLAY ? T.open + 0.15 : 0;
+// The doors have opened (or will never play): the page can run its own entrance animations
+let opened = !PLAY;
+const openListeners = new Set<() => void>();
+const markOpened = () => {
+  if (opened) return;
+  opened = true;
+  openListeners.forEach((fn) => fn());
+};
 
-/** Delay for a page mounting now: none once the intro has already played (e.g. coming back to the home page) */
-export const getIntroDelay = () => (alreadyPlayed ? 0 : INTRO_DELAY);
+/**
+ * True once the intro is out of the way. Pages wait for it before their entrance animations,
+ * so skipping the intro shows the page straight away instead of after the full timeline.
+ */
+export function useIntroOpened(): boolean {
+  const [isOpen, setIsOpen] = useState(opened);
+  useEffect(() => {
+    if (opened) {
+      setIsOpen(true);
+      return;
+    }
+    const fn = () => setIsOpen(true);
+    openListeners.add(fn);
+    return () => {
+      openListeners.delete(fn);
+    };
+  }, []);
+  return isOpen;
+}
 
 const TRACES = [
   'M0 120 H260 L330 190 H600',
@@ -468,6 +493,7 @@ const SCENES: Record<ModuleKey, React.FC> = {
 
 export const IntroReveal: React.FC = () => {
   const t = useT(commonMessages);
+  const ts = useT(siteMessages);
   const [visible, setVisible] = useState(PLAY && !alreadyPlayed);
   const [phase, setPhase] = useState<Phase>('boot');
   const [percent, setPercent] = useState(0);
@@ -489,22 +515,32 @@ export const IntroReveal: React.FC = () => {
       setTimeout(() => setPhase('open'), T.open * 1000),
       setTimeout(() => setVisible(false), T.done * 1000)
     ];
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') skip();
+    };
+    window.addEventListener('keydown', onKey);
     const start = performance.now();
     let frame = requestAnimationFrame(function tick(now) {
-      const p = Math.min(100, Math.round(((now - start) / (T.open * 1000)) * 100));
+      const p = Math.max(0, Math.min(100, Math.round(((now - start) / (T.open * 1000)) * 100)));
       setPercent(p);
       if (p < 100) frame = requestAnimationFrame(tick);
     });
     return () => {
       timers.forEach(clearTimeout);
       cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', onKey);
+      markOpened(); // left the home page mid-intro: never keep the page waiting
     };
   }, []);
 
-  const skip = () => {
+  useEffect(() => {
+    if (phase === 'open') markOpened();
+  }, [phase]);
+
+  function skip() {
     setPhase('open');
     setTimeout(() => setVisible(false), 600);
-  };
+  }
 
   const opening = phase === 'open';
   const sceneIndex = MODULES.findIndex((m) => m.key === phase);
@@ -514,11 +550,12 @@ export const IntroReveal: React.FC = () => {
   return (
     <AnimatePresence>
       {visible && (
-        <motion.div key="intro" className="fixed inset-0 z-[100] cursor-pointer select-none" onClick={skip} exit={{ opacity: 0 }} aria-hidden="true">
+        <motion.div key="intro" className="fixed inset-0 z-[100] cursor-pointer select-none" onClick={skip} exit={{ opacity: 0 }}>
           {/* the two doors */}
           {(['top', 'bottom'] as const).map((side) => (
             <motion.div
               key={side}
+              aria-hidden="true"
               className={`absolute left-0 right-0 h-1/2 bg-[#141414] ${side === 'top' ? 'top-0' : 'bottom-0'}`}
               animate={opening ? { y: side === 'top' ? '-100%' : '100%' } : { y: 0 }}
               transition={{ duration: 0.6, ease: [0.76, 0, 0.24, 1] }}
@@ -527,13 +564,14 @@ export const IntroReveal: React.FC = () => {
                 className={`absolute left-0 right-0 h-[2px] bg-sky-600 shadow-[0_0_18px_4px_rgba(193,30,61,0.7)] ${side === 'top' ? 'bottom-0' : 'top-0'}`}
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: phase === 'logo' || opening ? 1 : 0 }}
-                transition={{ delay: phase === 'logo' ? 0.8 : 0, duration: 0.35, ease: 'easeOut' }}
+                transition={{ delay: phase === 'logo' ? 0.45 : 0, duration: 0.3, ease: 'easeOut' }}
               />
             </motion.div>
           ))}
 
           <motion.div
             className="absolute inset-0 overflow-hidden"
+            aria-hidden="true"
             animate={opening ? { opacity: 0, scale: 1.08 } : { opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
           >
@@ -575,16 +613,6 @@ export const IntroReveal: React.FC = () => {
             {/* HUD corners */}
             <div className="absolute top-5 start-6 font-mono text-[10px] sm:text-xs text-white/40 tracking-widest">DCJ-OS v26 · ROBOTICS LAB</div>
             <div className="absolute top-5 end-6 font-mono text-[10px] sm:text-xs text-sky-500 tracking-widest">{percent}%</div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                skip();
-              }}
-              className="absolute bottom-5 end-6 font-mono text-[10px] sm:text-xs text-white/50 hover:text-white tracking-widest border border-white/15 hover:border-white/40 rounded-full px-3 py-1.5 cursor-pointer"
-            >
-              {t('skip')} <span className="inline-block rtl:rotate-180">›</span>
-            </button>
 
             {/* stage */}
             <div className="absolute inset-0 flex items-center justify-center">
@@ -635,7 +663,7 @@ export const IntroReveal: React.FC = () => {
                           style={preserve3d}
                           initial={{ rotateY: -540, scale: 0 }}
                           animate={{ rotateY: 0, scale: 1 }}
-                          transition={{ duration: 1, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                          transition={{ duration: 0.65, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
                         >
                           {/* coin edge */}
                           {Array.from({ length: 8 }).map((_, k) => (
@@ -659,7 +687,7 @@ export const IntroReveal: React.FC = () => {
                             className="absolute left-1/2 top-1/2 w-3 h-3 -ml-1.5 -mt-1.5 rounded-full bg-sky-500 shadow-[0_0_12px_#ff5a78]"
                             initial={{ x: Math.cos(a) * 260, y: Math.sin(a) * 260, opacity: 1 }}
                             animate={{ x: 0, y: 0, opacity: 0 }}
-                            transition={{ duration: 0.55, delay: i * 0.05, ease: 'easeIn' }}
+                            transition={{ duration: 0.4, delay: i * 0.04, ease: 'easeIn' }}
                           />
                         );
                       })}
@@ -670,7 +698,7 @@ export const IntroReveal: React.FC = () => {
                           key={i}
                           initial={{ opacity: 0, y: 14 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.45 + i * 0.025, duration: 0.25 }}
+                          transition={{ delay: 0.2 + i * 0.015, duration: 0.2 }}
                           className={ch === ' ' ? 'w-3' : ''}
                         >
                           {ch}
@@ -706,6 +734,17 @@ export const IntroReveal: React.FC = () => {
               </div>
             </div>
           </motion.div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              skip();
+            }}
+            aria-label={ts('skipIntro')}
+            className={`absolute bottom-5 end-6 font-mono text-[10px] sm:text-xs text-white/70 hover:text-white tracking-widest border border-white/25 hover:border-white/50 rounded-full px-3 py-1.5 cursor-pointer transition-opacity ${opening ? 'opacity-0' : ''}`}
+          >
+            {t('skip')} <span className="inline-block rtl:rotate-180" aria-hidden="true">›</span>
+          </button>
         </motion.div>
       )}
     </AnimatePresence>

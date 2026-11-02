@@ -28,9 +28,6 @@ import type {
   Student,
   Trainer,
   Group,
-  ClubEvent,
-  FacebookPost,
-  FacebookComment,
   SessionRecord,
   StudentAttendanceRecord,
   Product,
@@ -45,9 +42,22 @@ import type {
   PaymentMethod,
   AccountSummary,
   CashCategory,
-  CashEntry
+  CashEntry,
+  StockCategory,
+  StockItem,
+  StockLocation,
+  StockMovement,
+  RequestComment
 } from '../src/types/index.js';
-import { WEEK_DAYS } from '../src/types/index.js';
+import { WEEK_DAYS, GROUP_LEVELS } from '../src/types/index.js';
+import { UNAVAILABLE_STATES, unitBreakdown, unitsField } from '../src/utils/stock.js';
+import { LANDING_LANGS, LANDING_SECTIONS, LANDING_STAT_KEYS, LANDING_TEXT_KEYS, type LandingContent } from '../src/data/landing.js';
+
+import { imageField, replacedImage } from './storage.js';
+import { readMoney, writeMoney, sendMoney, upgradeMoney, toMillimes, toDinars, type MoneyCollection } from './money.js';
+import { allowAttempt, recordAttempt, clearAttempts, clientIp } from './rateLimit.js';
+import { notify, adminUserIds, trainerUserIds, parentsOf, shortDate, sendPush, subscriptionId, vapidPublicKey, type StoredNotification } from './notify.js';
+import { notificationMessages } from '../src/i18n/messages/notifications.js';
 
 export const router = Router();
 router.use(attachUser);
@@ -67,7 +77,7 @@ const today = () => new Date().toISOString().split('T')[0];
  * always expose `trainerIds` and a price.
  */
 function normalizeGroup(raw: Record<string, unknown>): Group {
-  const g = raw as unknown as Group & { trainerId?: string; programId?: string };
+  const g = readMoney('groups', raw) as unknown as Group & { trainerId?: string; programId?: string };
   const trainerIds = Array.isArray(g.trainerIds) ? g.trainerIds : g.trainerId ? [g.trainerId] : [];
   const { trainerId: _legacy, programId: _program, ...rest } = g;
   return { ...rest, trainerIds, pricePerMonth: Number(g.pricePerMonth) || 0 };
@@ -78,7 +88,7 @@ function normalizeGroup(raw: Record<string, unknown>): Group {
  * The former 'active' status is the same as 'accepted' now (a child is either pending or accepted).
  */
 function normalizeStudent(raw: Record<string, unknown>): Student {
-  const st = raw as unknown as Omit<Student, 'status'> & { groupId?: string; programId?: string; status: string };
+  const st = readMoney('students', raw) as unknown as Omit<Student, 'status'> & { groupId?: string; programId?: string; status: string };
   const groupIds = Array.isArray(st.groupIds) ? st.groupIds : st.groupId ? [st.groupId] : [];
   const { groupId: _legacy, programId: _program, ...rest } = st;
   return { ...rest, groupIds, status: st.status === 'waitlist' ? 'waitlist' : 'accepted' };
@@ -137,10 +147,14 @@ async function studentsInClasses(classIds: string[]): Promise<Student[]> {
   return [...found.values()];
 }
 
-/** The standard price follows the classes: the sum of each class's monthly price. */
-async function enrollmentFields(groupIds: string[]) {
+/**
+ * The standard price follows the classes: the sum of each class's monthly price (millimes).
+ * `stored` is the student document being updated (an older one gets its money converted too).
+ */
+async function enrollmentFields(groupIds: string[], stored?: Record<string, unknown>) {
   const groups = (await Promise.all(groupIds.map(getGroup))).filter((g): g is Group => !!g);
   return {
+    ...upgradeMoney('students', stored),
     standardMonthlyPrice: groups.reduce((sum, g) => sum + g.pricePerMonth, 0),
     // Older documents also stored the program of the first class
     programId: FieldValue.delete()
@@ -157,6 +171,11 @@ async function listAll<T>(name: string): Promise<T[]> {
   return snap.docs.filter(isLive).map((d) => d.data() as T);
 }
 
+/** Like listAll, with money in millimes */
+async function listMoney<T>(name: MoneyCollection): Promise<T[]> {
+  return (await listAll<T>(name)).map((d) => readMoney(name, d));
+}
+
 /** Firestore `in` queries accept at most 30 values, so split larger lists. */
 async function whereIn<T>(name: string, field: string, values: string[]): Promise<T[]> {
   const out: T[] = [];
@@ -165,6 +184,15 @@ async function whereIn<T>(name: string, field: string, values: string[]): Promis
     snap.docs.filter(isLive).forEach((d) => out.push(d.data() as T));
   }
   return out;
+}
+
+/** Runs many writes in batches of at most 450 (Firestore allows 500 per batch). */
+async function commitInChunks(writes: ((batch: FirebaseFirestore.WriteBatch) => void)[]) {
+  for (let i = 0; i < writes.length; i += 450) {
+    const batch = db.batch();
+    writes.slice(i, i + 450).forEach((w) => w(batch));
+    await batch.commit();
+  }
 }
 
 function str(value: unknown, field: string, { max = 500, optional = false } = {}): string {
@@ -253,12 +281,12 @@ async function loadParentData(req: AuthedRequest) {
       }
       return out;
     })(),
-    whereIn<ProductOrder>('hoodie_distributions', 'studentId', [...myIds]),
+    whereIn<ProductOrder>('hoodie_distributions', 'studentId', [...myIds]).then((list) => list.map((o) => readMoney('hoodie_distributions', o))),
     scheduleItemsFor([...myIds])
   ]);
   const unique = new Map([...classSessions, ...makeUpSessions].map((s) => [s.id, s]));
-  // Parents only see their own children's lines, never other children or guests
-  const sessions = [...unique.values()].map(({ guests: _guests, extraStudentIds: _extra, ...s }) => ({
+  // Parents only see their own children's lines, never other children, guests or the coach's internal notes
+  const sessions = [...unique.values()].map(({ guests: _guests, extraStudentIds: _extra, trainerNotes: _notes, ...s }) => ({
     ...s,
     records: Object.fromEntries(Object.entries(s.records || {}).filter(([id]) => myIds.has(id)))
   }));
@@ -271,7 +299,7 @@ router.get('/health', (_req, res) => res.json({ ok: true }));
 
 router.get('/me', requireUser, (req: AuthedRequest, res) => res.json(req.user));
 
-/** Any signed-in user edits their own name, photo (small JPEG data URL, null removes it) and date of birth (null removes it). */
+/** Any signed-in user edits their own name, photo (small JPEG data URL, uploaded to Storage; null removes it) and date of birth (null removes it). */
 router.put(
   '/me/profile',
   requireUser,
@@ -280,36 +308,134 @@ router.put(
     const b = req.body || {};
     const update: Record<string, unknown> = {};
     if (b.displayName !== undefined) update.displayName = str(b.displayName, 'Name', { max: 120 });
-    if (b.photo !== undefined) {
-      if (b.photo === null) update.photoURL = FieldValue.delete();
-      else if (typeof b.photo !== 'string' || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.photo) || b.photo.length > 200_000) {
-        throw new HttpError(400, 'Please choose a JPEG, PNG or WebP image.');
-      } else update.photoURL = b.photo;
-    }
     if (b.birthDate !== undefined) update.birthDate = b.birthDate === null || b.birthDate === '' ? FieldValue.delete() : dateOfBirth(b.birthDate, 14, 100);
+    const before = b.photo !== undefined ? (await col('users').doc(user.uid).get()).get('photoURL') : undefined;
+    if (b.photo !== undefined) {
+      if (b.photo !== null && (typeof b.photo !== 'string' || !b.photo.startsWith('data:'))) throw new HttpError(400, 'Please choose a JPEG, PNG or WebP image.');
+      update.photoURL = b.photo === null ? FieldValue.delete() : await imageField(b.photo, 'photos/users', { maxBytes: 150_000, field: 'Photo' });
+    }
     await col('users').doc(user.uid).set(update, { merge: true });
+    if (b.photo !== undefined) await replacedImage(before, update.photoURL);
     forgetProfile(user.uid);
     res.json({ ok: true });
   })
 );
 
-/** Everything the current user is allowed to see, in one call. */
+// ---------- notifications & push ----------
+
+/** The signed-in person's notifications (newest first) and how many are unread. Keeps the 200 newest. */
+router.get(
+  '/notifications',
+  requireUser,
+  ah(async (req, res) => {
+    const snap = await col('notifications').where('userId', '==', req.user!.uid).get();
+    const all = snap.docs.map((d) => d.data() as StoredNotification).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // Trimmed only once well over the limit, so most loads don't write anything
+    if (all.length > 250) await commitInChunks(all.slice(200).map((n) => (batch) => batch.delete(col('notifications').doc(n.id))));
+    const limit = Math.min(200, Number(req.query.limit) || 60);
+    res.json({ items: all.slice(0, limit), unread: all.filter((n) => !n.readAt).length, total: Math.min(all.length, 200) });
+  })
+);
+
+/** Mark some (ids) or all of the person's notifications as read */
+router.post(
+  '/notifications/read',
+  requireUser,
+  ah(async (req, res) => {
+    const ids: unknown = req.body?.ids;
+    const at = new Date().toISOString();
+    const snap = await col('notifications').where('userId', '==', req.user!.uid).get();
+    const wanted = Array.isArray(ids) ? new Set(ids.map(String)) : null;
+    const unread = snap.docs.filter((d) => !d.get('readAt') && (!wanted || wanted.has(d.id)));
+    await commitInChunks(unread.map((d) => (batch) => batch.update(d.ref, { readAt: at })));
+    res.json({ count: unread.length });
+  })
+);
+
+router.get('/push/key', (_req, res) => res.json({ publicKey: vapidPublicKey() }));
+
+/** Remember this browser for push (one document per device), in the person's language */
+router.post(
+  '/push/subscribe',
+  requireUser,
+  ah(async (req, res) => {
+    const sub = req.body?.subscription;
+    if (!sub || typeof sub.endpoint !== 'string' || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) {
+      throw new HttpError(400, 'Subscription is invalid.');
+    }
+    const lang = oneOf(req.body?.lang ?? 'fr', ['en', 'fr', 'ar'] as const, 'Language');
+    const id = subscriptionId(sub.endpoint);
+    await col('push_subscriptions').doc(id).set({
+      id,
+      userId: req.user!.uid,
+      subscription: { endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) } },
+      lang,
+      createdAt: new Date().toISOString()
+    });
+    res.json({ ok: true });
+  })
+);
+
+router.post(
+  '/push/unsubscribe',
+  requireUser,
+  ah(async (req, res) => {
+    const endpoint = str(req.body?.endpoint, 'Endpoint', { max: 2000 });
+    const ref = col('push_subscriptions').doc(subscriptionId(endpoint));
+    if ((await ref.get()).get('userId') === req.user!.uid) await ref.delete();
+    res.json({ ok: true });
+  })
+);
+
+/** A test message to the person's own devices */
+router.post(
+  '/push/test',
+  requireUser,
+  ah(async (req, res) => {
+    if (!vapidPublicKey()) throw new HttpError(503, 'Push notifications are not configured on the server (VAPID keys).');
+    const subs = (await col('push_subscriptions').where('userId', '==', req.user!.uid).get()).docs.map((d) => d.data());
+    if (!subs.length) throw new HttpError(404, 'No device is registered for push yet.');
+    await sendPush(subs as Parameters<typeof sendPush>[0], (lang) => {
+      const m = notificationMessages[lang] || notificationMessages.en;
+      return { title: m.testTitle, body: m.testBody, url: '/', tag: 'test' };
+    });
+    res.json({ devices: subs.length });
+  })
+);
+
+/** Attendance sheets the admin loads by default: from the first day of the month, this many months back */
+const SESSION_MONTHS = 6;
+
+function defaultSessionsFrom(now = new Date()): string {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (SESSION_MONTHS - 1), 1));
+  return d.toISOString().slice(0, 10);
+}
+
+/** What a coach needs about a child: no money, no parent contact details */
+function forTrainer({ standardMonthlyPrice: _s, customMonthlyPrice: _c, paymentStatus: _p, parentPhone: _ph, parentEmail: _e, ...st }: Student) {
+  return { ...st, parentPhone: '', parentEmail: '', standardMonthlyPrice: 0, paymentStatus: 'pending' as const };
+}
+
+/**
+ * Everything the current user is allowed to see, in one call.
+ * The admin gets attendance sheets from `?sessionsFrom=YYYY-MM-DD` (default: the last few months), the rest is complete.
+ */
 router.get(
   '/data',
   ah(async (req, res) => {
     const user = req.user;
+    const sessionsFrom = typeof req.query.sessionsFrom === 'string' && DATE_RE.test(req.query.sessionsFrom) ? req.query.sessionsFrom : defaultSessionsFrom();
     const admin = isAdmin(user);
     // A parent's own data does not depend on the public lists, so load both at the same time
     const parentData = !admin && user?.role === 'parent' ? loadParentData(req) : null;
     // Awaited below; this only stops Node treating an early failure as unhandled (which would crash the server)
     parentData?.catch(() => {});
 
-    const [trainers, groups, events, facebookPosts, allProducts] = await Promise.all([
+    const [trainers, groups, allProducts, landingSnap] = await Promise.all([
       listAll<Trainer>('trainers'),
       listAll<Record<string, unknown>>('groups').then((list) => list.map(normalizeGroup)),
-      listAll<ClubEvent & { registeredUids?: string[] }>('events'),
-      listAll<FacebookPost>('facebook_posts'),
-      listAll<Product>('products')
+      listMoney<Product>('products'),
+      col('site_content').doc('landing').get()
     ]);
 
     let students: Student[] = [];
@@ -319,6 +445,7 @@ router.get(
     let scheduleItems: ScheduleItem[] = [];
     let payments: PaymentRecord[] = [];
     let deletedStudents: Student[] = [];
+    let stock: { stockItems: Partial<StockItem>[]; stockCategories: StockCategory[]; stockLocations: StockLocation[]; stockMovements: StockMovement[] } | null = null;
     // Team birthdays are only for the club team
     const isTeam = admin || (user?.role === 'trainer' && !!user.trainerId);
     const [staffMembers, admins] = isTeam ? await Promise.all([listAll<StaffMember>('staff_members'), adminProfiles()]) : [[], []];
@@ -326,13 +453,26 @@ router.get(
     if (admin) {
       [students, sessions, orders, materialRequests, scheduleItems, payments] = await Promise.all([
         listAll<Record<string, unknown>>('students').then((list) => list.map(normalizeStudent)),
-        // The `sessions` collection also holds sign-in sessions (server/auth.ts): keep only attendance sheets
-        listAll<SessionRecord>('sessions').then((list) => list.filter((s) => !!s.groupId && !!s.date)),
-        listAll<ProductOrder>('hoodie_distributions'),
+        // Older sign-in sessions (server/auth.ts) have no date, so the query only returns attendance sheets
+        col('sessions').where('date', '>=', sessionsFrom).get().then((snap) => snap.docs.filter(isLive).map((d) => d.data() as SessionRecord).filter((s) => !!s.groupId)),
+        listMoney<ProductOrder>('hoodie_distributions'),
         listAll<MaterialRequest>('material_requests'),
         listAll<ScheduleItem>('schedule_items'),
-        listAll<PaymentRecord>('payments')
+        // Complete: the arrears of each child are computed from every month
+        listMoney<PaymentRecord>('payments')
       ]);
+      const [items, cats, locs, moves] = await Promise.all([
+        listAll<StockItem>('stock_items'),
+        col('stock_categories').get(),
+        col('stock_locations').get(),
+        col('stock_movements').orderBy('at', 'desc').limit(300).get()
+      ]);
+      stock = {
+        stockItems: items,
+        stockCategories: cats.docs.map((d) => d.data() as StockCategory),
+        stockLocations: locs.docs.map((d) => d.data() as StockLocation),
+        stockMovements: moves.docs.map((d) => d.data() as StockMovement)
+      };
       // The trash: deleted children can be restored
       deletedStudents = (await col('students').where('deletedAt', '>', '').get()).docs.map((d) => normalizeStudent(d.data()));
     } else if (user?.role === 'trainer' && user.trainerId) {
@@ -341,13 +481,23 @@ router.get(
       let classItems: ScheduleItem[];
       let mine: FirebaseFirestore.QuerySnapshot;
       [students, sessions, mats, classItems, mine] = await Promise.all([
-        studentsInClasses(myGroupIds),
+        studentsInClasses(myGroupIds).then((list) => list.map(forTrainer)),
         whereIn<SessionRecord>('sessions', 'groupId', myGroupIds),
         col('material_requests').where('trainerId', '==', user.trainerId).get(),
         // For the coach's week schedule: cancelled classes, and what the office added for this coach
         whereIn<ScheduleItem>('schedule_items', 'groupId', myGroupIds),
         col('schedule_items').where('trainerIds', 'array-contains', user.trainerId).get()
       ]);
+      // Stock items the coach may request (no location or internal notes)
+      const [items, cats] = await Promise.all([listAll<StockItem>('stock_items'), listAll<StockCategory>('stock_categories')]);
+      stock = {
+        stockItems: items
+          .filter((it) => !it.hiddenFromTrainers)
+          .map((it) => ({ id: it.id, name: it.name, categoryId: it.categoryId, imageUrl: it.imageUrl, quantity: unitBreakdown(it).available, unit: it.unit })),
+        stockCategories: cats,
+        stockLocations: [],
+        stockMovements: []
+      };
       scheduleItems = [
         ...classItems.filter((it) => it.kind === 'cancellation'),
         ...mine.docs.filter(isLive).map((d) => d.data() as ScheduleItem)
@@ -367,37 +517,61 @@ router.get(
     students = students.map(withClassPrice);
     deletedStudents = deletedStudents.map(withClassPrice);
 
+    // Coach emails: the team sees all of them, a parent only their children's coaches, visitors none
+    const parentCoachIds = new Set(
+      user?.role === 'parent' ? groups.filter((g) => students.some((st) => st.groupIds.includes(g.id))).flatMap((g) => g.trainerIds) : []
+    );
     res.json({
       // Phone numbers only for the admin, birth dates only for the team
-      trainers: admin ? trainers : trainers.map(({ birthDate: _b, ...t }) => ({ ...t, phone: '', ...(isTeam ? { birthDate: _b } : {}) })),
+      trainers: admin
+        ? trainers
+        : trainers.map(({ birthDate: _b, ...t }) => ({
+            ...t,
+            phone: '',
+            email: isTeam || parentCoachIds.has(t.id) ? t.email : '',
+            ...(isTeam ? { birthDate: _b } : {})
+          })),
       staffMembers,
       adminProfiles: admins,
-      groups,
-      events: events.map(({ registeredUids = [], ...e }) => ({
-        ...e,
-        isRegistered: !!user && registeredUids.includes(user.uid)
-      })),
-      facebookPosts: facebookPosts.sort((a, b) => (a.id > b.id ? 1 : -1)),
+      groups: groups.map((g) => sendMoney('groups', g)),
+      landing: (landingSnap.data() as LandingContent | undefined) || {},
       // Only the admin sees products that are not on sale
-      products: (admin ? allProducts : allProducts.filter((p) => p.isActive)).sort((a, b) =>
-        a.createdAt < b.createdAt ? 1 : -1
-      ),
-      students,
+      products: (admin ? allProducts : allProducts.filter((p) => p.isActive))
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .map((p) => sendMoney('products', p)),
+      students: students.map((st) => sendMoney('students', st)),
       sessions,
-      orders,
+      ...(admin ? { sessionsFrom } : {}),
+      orders: orders.map((o) => sendMoney('hoodie_distributions', o)),
       materialRequests,
       scheduleItems,
-      ...(admin ? { payments, deletedStudents } : {})
+      ...(admin
+        ? { payments: payments.map((p) => sendMoney('payments', p)), deletedStudents: deletedStudents.map((st) => sendMoney('students', st)) }
+        : {}),
+      ...(stock || {})
     });
   })
 );
 
 // ---------- signed-in users ----------
 
-/** Validates a parent sign-up form and adds its writes (children + profile) to `batch`. No course is chosen here. */
-function addParentRegistration(batch: FirebaseFirestore.WriteBatch, uid: string, accountEmail: string, b: Record<string, any>) {
+/**
+ * Validates a parent sign-up form and adds its writes (children + profile) to `batch`. No course is chosen here.
+ * A new account must accept the terms and privacy policy. Publishing photos of the child is a separate, optional
+ * choice; a parent adding a child later keeps their earlier choice unless the form gives a new one.
+ */
+function addParentRegistration(
+  batch: FirebaseFirestore.WriteBatch,
+  uid: string,
+  accountEmail: string,
+  b: Record<string, any>,
+  existing?: { photoConsent?: boolean }
+) {
   const parentName = str(b.parentName, 'Parent name', { max: 120 });
   const parentPhone = phone(b.parentPhone);
+  if (!existing && b.acceptedTerms !== true) throw new HttpError(400, 'Please accept the terms and the privacy policy.');
+  const photoConsent = typeof b.photoConsent === 'boolean' ? b.photoConsent : existing?.photoConsent === true;
+  const consentAt = new Date().toISOString();
   if (!Array.isArray(b.children) || b.children.length === 0 || b.children.length > 10) {
     throw new HttpError(400, 'Please add between 1 and 10 children.');
   }
@@ -422,6 +596,7 @@ function addParentRegistration(batch: FirebaseFirestore.WriteBatch, uid: string,
       registeredAt: today(),
       standardMonthlyPrice: 0,
       paymentStatus: 'pending',
+      photoConsent,
       notes: str(child?.notes, 'Notes', { max: 1000, optional: true }) || 'Registered through Parent Portal Account Registration'
     };
     batch.set(col('students').doc(id), student);
@@ -434,6 +609,8 @@ function addParentRegistration(batch: FirebaseFirestore.WriteBatch, uid: string,
       displayName: parentName,
       parentPhone,
       studentIds: FieldValue.arrayUnion(...ids),
+      ...(!existing ? { termsAcceptedAt: consentAt } : {}),
+      ...(!existing || typeof b.photoConsent === 'boolean' ? { photoConsent, photoConsentAt: consentAt } : {}),
       createdAt: FieldValue.serverTimestamp()
     },
     { merge: true }
@@ -448,9 +625,11 @@ router.post(
   ah(async (req, res) => {
     const user = req.user!;
     const batch = db.batch();
-    const ids = addParentRegistration(batch, user.uid, user.email, req.body || {});
+    const stored = (await col('users').doc(user.uid).get()).data() || {};
+    const ids = addParentRegistration(batch, user.uid, user.email, req.body || {}, { photoConsent: stored.photoConsent });
     await batch.commit();
     forgetProfile(user.uid);
+    await notifyRegistration(req.body || {});
     res.status(201).json({ studentIds: ids });
   })
 );
@@ -463,24 +642,16 @@ function password(value: unknown): string {
   return value;
 }
 
-// Slows down password guessing: after 8 wrong passwords for an email (or 30 from one address), wait 15 minutes
+// Slows down password guessing: after 8 wrong passwords for an email (or 30 from one address), wait 15 minutes.
+// The counters are in Firestore (server/rateLimit.ts) because serverless instances share no memory.
 const FAIL_WINDOW_MS = 15 * 60_000;
-const failures = new Map<string, { count: number; until: number }>();
-function tooManyFailures(...keys: string[]) {
-  const now = Date.now();
-  return keys.some((k) => {
-    const f = failures.get(k);
-    return !!f && f.until > now && f.count >= (k.startsWith('ip:') ? 30 : 8);
-  });
-}
-function recordFailure(...keys: string[]) {
-  const now = Date.now();
-  for (const k of keys) {
-    const f = failures.get(k);
-    failures.set(k, f && f.until > now ? { count: f.count + 1, until: f.until } : { count: 1, until: now + FAIL_WINDOW_MS });
-  }
-  if (failures.size > 5000) for (const [k, f] of failures) if (f.until <= now) failures.delete(k);
-}
+const loginLimits = (accountEmail: string, ip: string) => [
+  { key: `login:email:${accountEmail}`, max: 8 },
+  { key: `login:ip:${ip}`, max: 30 }
+];
+// Sign-ups: 5 per hour from one address (each one notifies every admin)
+const REGISTER_WINDOW_MS = 60 * 60_000;
+const REGISTER_MAX = 5;
 
 /** New parent account + their children, in one step. Returns a session token. */
 router.post(
@@ -489,6 +660,10 @@ router.post(
     const b = req.body || {};
     const accountEmail = email(b.email);
     const pw = password(b.password);
+    const ipKey = `register:ip:${clientIp(req)}`;
+    if (!(await allowAttempt([{ key: ipKey, max: REGISTER_MAX }]))) {
+      throw new HttpError(429, 'Too many sign-ups from this connection. Please try again in an hour.');
+    }
     if (await isStaffEmail(accountEmail)) {
       throw new HttpError(403, 'This email belongs to club staff. Please ask the club administrator for your password.');
     }
@@ -506,10 +681,18 @@ router.post(
       if ((err as { code?: number }).code === 6) throw new HttpError(409, 'An account already exists with this email. Please sign in.');
       throw err;
     }
+    await recordAttempt([ipKey], REGISTER_WINDOW_MS);
+    await notifyRegistration(b);
     const token = await createSession(uid);
     res.status(201).json({ token, user: await resolveProfile(account) });
   })
 );
+
+/** Admins: a parent registered children (they wait on the Students page) */
+async function notifyRegistration(b: Record<string, any>) {
+  const children = (Array.isArray(b.children) ? b.children : []).map((c: { name?: string }) => String(c?.name || '').trim()).filter(Boolean);
+  await notify(await adminUserIds(), 'registration_new', { parent: String(b.parentName || '').trim(), children: children.join(', ') }, '#/admin/students');
+}
 
 router.post(
   '/auth/login',
@@ -517,15 +700,15 @@ router.post(
     const b = req.body || {};
     const accountEmail = str(b.email, 'Email', { max: 200 }).toLowerCase();
     const pw = str(b.password, 'Password', { max: 128 });
-    const keys = [`email:${accountEmail}`, `ip:${req.ip}`];
-    if (tooManyFailures(...keys)) throw new HttpError(429, 'Too many wrong passwords. Please wait 15 minutes and try again.');
+    const limits = loginLimits(accountEmail, clientIp(req));
+    if (!(await allowAttempt(limits))) throw new HttpError(429, 'Too many wrong passwords. Please wait 15 minutes and try again.');
 
     const account = await findAccountByEmail(accountEmail);
     if (!account || !(await checkPassword(pw, account.passwordHash))) {
-      recordFailure(...keys);
+      await recordAttempt(limits.map((l) => l.key), FAIL_WINDOW_MS);
       throw new HttpError(401, 'Wrong email or password.');
     }
-    failures.delete(keys[0]);
+    await clearAttempts(limits[0].key);
     const token = await createSession(account.id);
     res.json({ token, user: await resolveProfile(account) });
   })
@@ -555,7 +738,8 @@ router.post(
     }
 
     // Every order starts as "requested"; stock is only taken when the admin marks it ready
-    const product = liveData<Product>(await col('products').doc(productId).get());
+    const stored = liveData<Product>(await col('products').doc(productId).get());
+    const product = stored ? readMoney('products', stored) : undefined;
     if (!product || !product.isActive) throw new HttpError(404, 'This product is not on sale.');
     const size = product.sizes.length ? oneOf(b.size, product.sizes, 'Size') : ONE_SIZE;
     const order: ProductOrder = {
@@ -571,8 +755,9 @@ router.post(
       createdAt: new Date().toISOString(),
       price: product.price
     };
-    await col('hoodie_distributions').doc(order.id).set(order);
-    res.status(201).json(order);
+    await col('hoodie_distributions').doc(order.id).set(writeMoney(order));
+    await notify(await adminUserIds(), 'order_new', { parent: student.parentName, product: `${product.name}${size !== ONE_SIZE ? ` (${size})` : ''}`, child: student.studentName }, '#/admin/inventory', { except: req.user!.uid });
+    res.status(201).json(sendMoney('hoodie_distributions', order));
   })
 );
 
@@ -586,17 +771,15 @@ router.put(
       const mine = await parentStudents(req);
       if (!mine.some((s) => s.id === studentId)) throw new HttpError(403, 'You can only change your own child’s photo.');
     }
+    const ref = col('students').doc(studentId);
+    const snap = await ref.get();
+    if (!isLive(snap)) throw new HttpError(404, 'Child not found.');
     const photo = req.body?.photo;
-    if (photo === null) {
-      await col('students').doc(studentId).update({ photoURL: FieldValue.delete() });
-      return res.json({ ok: true });
-    }
-    if (typeof photo !== 'string' || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) {
-      throw new HttpError(400, 'Please choose a JPEG, PNG or WebP image.');
-    }
-    if (photo.length > 200_000) throw new HttpError(400, 'This photo is too large.');
-    await col('students').doc(studentId).update({ photoURL: photo });
-    res.json({ ok: true });
+    if (photo !== null && (typeof photo !== 'string' || !photo.startsWith('data:'))) throw new HttpError(400, 'Please choose a JPEG, PNG or WebP image.');
+    const photoURL = photo === null ? undefined : await imageField(photo, 'photos/students', { maxBytes: 150_000, field: 'Photo' });
+    await ref.update({ photoURL: photoURL ?? FieldValue.delete() });
+    await replacedImage(snap.get('photoURL'), photoURL);
+    res.json({ ok: true, photoURL });
   })
 );
 
@@ -650,64 +833,6 @@ router.put(
   })
 );
 
-router.post(
-  '/posts/:id/like',
-  requireUser,
-  ah(async (req, res) => {
-    const uid = req.user!.uid;
-    const ref = col('facebook_posts').doc(req.params.id);
-    await db.runTransaction(async (tx) => {
-      const post = liveData<FacebookPost>(await tx.get(ref));
-      if (!post) throw new HttpError(404, 'Post not found.');
-      const likedBy = post.likedBy || [];
-      const hasLiked = likedBy.includes(uid);
-      tx.update(ref, {
-        likes: hasLiked ? Math.max(0, post.likes - 1) : post.likes + 1,
-        likedBy: hasLiked ? FieldValue.arrayRemove(uid) : FieldValue.arrayUnion(uid)
-      });
-    });
-    res.json({ ok: true });
-  })
-);
-
-router.post(
-  '/posts/:id/comments',
-  requireUser,
-  ah(async (req, res) => {
-    const comment: FacebookComment = {
-      id: newId('cm'),
-      author: req.user!.displayName,
-      text: str(req.body?.text, 'Comment', { max: 1000 }),
-      date: new Date().toISOString().slice(0, 16).replace('T', ' ')
-    };
-    const ref = col('facebook_posts').doc(req.params.id);
-    if (!isLive(await ref.get())) throw new HttpError(404, 'Post not found.');
-    await ref.update({ comments: FieldValue.increment(1), commentsList: FieldValue.arrayUnion(comment) });
-    res.status(201).json(comment);
-  })
-);
-
-router.post(
-  '/events/:id/rsvp',
-  requireUser,
-  ah(async (req, res) => {
-    const uid = req.user!.uid;
-    const ref = col('events').doc(req.params.id);
-    const isRegistered = await db.runTransaction(async (tx) => {
-      const evt = (await tx.get(ref)).data() as (ClubEvent & { registeredUids?: string[] }) | undefined;
-      if (!evt) throw new HttpError(404, 'Event not found.');
-      const registered = (evt.registeredUids || []).includes(uid);
-      if (!registered && evt.spotsLeft <= 0) throw new HttpError(409, 'This event is full.');
-      tx.update(ref, {
-        registeredUids: registered ? FieldValue.arrayRemove(uid) : FieldValue.arrayUnion(uid),
-        spotsLeft: registered ? evt.spotsLeft + 1 : evt.spotsLeft - 1
-      });
-      return !registered;
-    });
-    res.json({ isRegistered });
-  })
-);
-
 // ---------- trainers (and admins) ----------
 
 router.post(
@@ -724,83 +849,115 @@ router.post(
 
     const date = str(b.date, 'Date', { max: 10 });
     if (!DATE_RE.test(date)) throw new HttpError(400, 'Date is invalid.');
-    const allowedIds = new Set((await studentsInClasses([groupId])).map((st) => st.id));
-    const existing = await col('sessions').where('groupId', '==', groupId).where('date', '==', date).limit(1).get();
-    const previous = existing.empty ? undefined : (existing.docs[0].data() as SessionRecord);
-    // Children of other classes added by hand for this session (make-up).
-    // A save that doesn't send extras / guests (e.g. the trainer portal) keeps the ones already saved.
-    const extraInput: unknown[] = b.extraStudentIds === undefined ? previous?.extraStudentIds ?? [] : b.extraStudentIds;
-    if (!Array.isArray(extraInput) || extraInput.length > 50) throw new HttpError(400, 'Too many extra children.');
-    const extraStudentIds: string[] = [];
-    for (const id of new Set(extraInput.map((v: unknown) => str(v, 'Child', { max: 100 }))) as Set<string>) {
-      if (allowedIds.has(id)) continue;
-      if (!isLive(await col('students').doc(id).get())) continue;
-      extraStudentIds.push(id);
-      allowedIds.add(id);
-    }
-    // People without a student record (trial, visitor)
-    const guestInput: unknown[] = b.guests === undefined ? previous?.guests ?? [] : b.guests;
-    if (!Array.isArray(guestInput) || guestInput.length > 30) throw new HttpError(400, 'Too many guests.');
-    const guests: SessionGuest[] = (guestInput as Record<string, unknown>[]).map((g: Record<string, unknown>, i: number) => ({
-      id: str(g?.id, 'Guest', { max: 60, optional: true }) || `guest-${i + 1}`,
-      name: str(g?.name, 'Guest name', { max: 120 }),
-      ...(str(g?.phone, 'Phone', { max: 30, optional: true }) ? { phone: str(g?.phone, 'Phone', { max: 30 }) } : {}),
-      status: oneOf(g?.status ?? 'unmarked', ['present', 'absent', 'late', 'unmarked'] as const, 'Attendance status'),
-      ...(str(g?.remarks, 'Remark', { max: 500, optional: true }) ? { remarks: str(g?.remarks, 'Remark', { max: 500 }) } : {})
-    }));
+    const classIds = new Set((await studentsInClasses([groupId])).map((st) => st.id));
 
-    // The mark is credited to the trainer who is signed in
+    // The trainer who is signed in gets the marks (read before the transaction: it doesn't change)
     const trainer = req.user!.trainerId
       ? ((await col('trainers').doc(req.user!.trainerId).get()).data() as Trainer | undefined)
       : undefined;
     const ratedBy = trainer?.name || req.user!.displayName;
     const ratedAt = new Date().toISOString().replace('T', ' ').slice(0, 16);
 
-    const records: Record<string, StudentAttendanceRecord> = {};
-    for (const [studentId, r] of Object.entries((b.records || {}) as Record<string, StudentAttendanceRecord>)) {
-      if (!allowedIds.has(studentId)) continue;
-      const status = oneOf(r?.status, ['present', 'absent', 'late', 'unmarked'] as const, 'Attendance status');
-      // Mark out of 20; absent children and empty fields are simply not rated
-      const hasMark = status !== 'absent' && r?.rating !== undefined && r?.rating !== null && String(r.rating) !== '';
-      const rating = hasMark ? num(r.rating, 'Mark', { min: 0, max: 20 }) : undefined;
-      // A mark that didn't change keeps who gave it and when (e.g. the office saving the trainer's sheet)
-      const before = previous?.records?.[studentId];
-      const sameMark = rating !== undefined && before?.rating === rating;
-      records[studentId] = {
-        studentId,
-        status,
-        rating,
-        ratedBy: rating !== undefined ? (sameMark ? before?.ratedBy ?? ratedBy : ratedBy) : undefined,
-        ratedAt: rating !== undefined ? (sameMark ? before?.ratedAt ?? ratedAt : ratedAt) : undefined,
-        pedagogicalRemark: str(r?.pedagogicalRemark, 'Remark', { max: 1000, optional: true }) || undefined,
-        remarks: str(r?.remarks, 'Remark', { max: 1000, optional: true }) || undefined
+    // One sheet per class and date. New sheets get a fixed id and the read + write run in a transaction,
+    // so two people saving the same class at once update one sheet instead of creating two.
+    const { session, previous } = await db.runTransaction(async (tx) => {
+      const fixedRef = col('sessions').doc(`sess-${groupId}-${date}`);
+      const fixed = await tx.get(fixedRef);
+      // Older sheets have a random id
+      const legacy = fixed.exists ? null : await tx.get(col('sessions').where('groupId', '==', groupId).where('date', '==', date).limit(1));
+      const existingDoc = fixed.exists ? fixed : legacy?.docs[0];
+      const previous = existingDoc ? (existingDoc.data() as SessionRecord) : undefined;
+      const allowedIds = new Set(classIds);
+      // Children of other classes added by hand for this session (make-up). Only the office adds new ones;
+      // a save that doesn't send extras / guests (e.g. the trainer portal) keeps the ones already saved.
+      const previousExtras = previous?.extraStudentIds ?? [];
+      const extraInput: unknown[] = b.extraStudentIds === undefined || !isAdmin(req.user) ? previousExtras : b.extraStudentIds;
+      if (!Array.isArray(extraInput) || extraInput.length > 50) throw new HttpError(400, 'Too many extra children.');
+      const extraStudentIds: string[] = [];
+      const candidates = [...new Set(extraInput.map((v: unknown) => str(v, 'Child', { max: 100 })))].filter((id) => !allowedIds.has(id));
+      const extraSnaps = candidates.length ? await tx.getAll(...candidates.map((id) => col('students').doc(id))) : [];
+      extraSnaps.forEach((snap) => {
+        if (!isLive(snap)) return;
+        extraStudentIds.push(snap.id);
+        allowedIds.add(snap.id);
+      });
+      // People without a student record (trial, visitor)
+      const guestInput: unknown[] = b.guests === undefined ? previous?.guests ?? [] : b.guests;
+      if (!Array.isArray(guestInput) || guestInput.length > 30) throw new HttpError(400, 'Too many guests.');
+      const guests: SessionGuest[] = (guestInput as Record<string, unknown>[]).map((g: Record<string, unknown>, i: number) => ({
+        id: str(g?.id, 'Guest', { max: 60, optional: true }) || `guest-${i + 1}`,
+        name: str(g?.name, 'Guest name', { max: 120 }),
+        ...(str(g?.phone, 'Phone', { max: 30, optional: true }) ? { phone: str(g?.phone, 'Phone', { max: 30 }) } : {}),
+        status: oneOf(g?.status ?? 'unmarked', ['present', 'absent', 'late', 'unmarked'] as const, 'Attendance status'),
+        ...(str(g?.remarks, 'Remark', { max: 500, optional: true }) ? { remarks: str(g?.remarks, 'Remark', { max: 500 }) } : {})
+      }));
+  
+      const records: Record<string, StudentAttendanceRecord> = {};
+      for (const [studentId, r] of Object.entries((b.records || {}) as Record<string, StudentAttendanceRecord>)) {
+        if (!allowedIds.has(studentId)) continue;
+        const status = oneOf(r?.status, ['present', 'absent', 'late', 'unmarked'] as const, 'Attendance status');
+        // Mark out of 20; absent children and empty fields are simply not rated
+        const hasMark = status !== 'absent' && r?.rating !== undefined && r?.rating !== null && String(r.rating) !== '';
+        const rating = hasMark ? num(r.rating, 'Mark', { min: 0, max: 20 }) : undefined;
+        // A mark that didn't change keeps who gave it and when (e.g. the office saving the trainer's sheet)
+        const before = previous?.records?.[studentId];
+        const sameMark = rating !== undefined && before?.rating === rating;
+        records[studentId] = {
+          studentId,
+          status,
+          rating,
+          ratedBy: rating !== undefined ? (sameMark ? before?.ratedBy ?? ratedBy : ratedBy) : undefined,
+          ratedAt: rating !== undefined ? (sameMark ? before?.ratedAt ?? ratedAt : ratedAt) : undefined,
+          pedagogicalRemark: str(r?.pedagogicalRemark, 'Remark', { max: 1000, optional: true }) || undefined,
+          remarks: str(r?.remarks, 'Remark', { max: 1000, optional: true }) || undefined
+        };
+      }
+  
+      // Marks of make-up children are kept when the save didn't send them (trainer portal)
+      if (b.extraStudentIds === undefined || !isAdmin(req.user)) {
+        for (const id of extraStudentIds) if (!records[id] && previous?.records?.[id]) records[id] = previous.records[id];
+      }
+      const validate = b.validateSyllabus === true;
+      const session: SessionRecord = {
+        id: existingDoc ? existingDoc.id : fixedRef.id,
+        groupId,
+        date,
+        weekNumber: num(b.weekNumber, 'Week', { min: 0, max: 200 }),
+        topicTaught: str(b.topicTaught, 'Topic', { max: 300, optional: true }),
+        isSyllabusValidated: validate,
+        validatedAt: validate ? new Date().toISOString().replace('T', ' ').slice(0, 16) : undefined,
+        trainerNotes: str(b.trainerNotes, 'Notes', { max: 2000, optional: true }) || undefined,
+        records,
+        ...(extraStudentIds.length ? { extraStudentIds } : {}),
+        ...(guests.length ? { guests } : {}),
+        updatedAt: new Date().toISOString(),
+        updatedBy: ratedBy
       };
-    }
-
-    // Marks of make-up children are kept when the save didn't send them (trainer portal)
-    if (b.extraStudentIds === undefined) {
-      for (const id of extraStudentIds) if (!records[id] && previous?.records?.[id]) records[id] = previous.records[id];
-    }
-    const validate = b.validateSyllabus === true;
-    const session: SessionRecord = {
-      id: existing.empty ? newId('sess') : existing.docs[0].id,
-      groupId,
-      date,
-      weekNumber: num(b.weekNumber, 'Week', { min: 0, max: 200 }),
-      topicTaught: str(b.topicTaught, 'Topic', { max: 300, optional: true }),
-      isSyllabusValidated: validate,
-      validatedAt: validate ? new Date().toISOString().replace('T', ' ').slice(0, 16) : undefined,
-      trainerNotes: str(b.trainerNotes, 'Notes', { max: 2000, optional: true }) || undefined,
-      records,
-      ...(extraStudentIds.length ? { extraStudentIds } : {}),
-      ...(guests.length ? { guests } : {}),
-      updatedAt: new Date().toISOString(),
-      updatedBy: ratedBy
-    };
-    await col('sessions').doc(session.id).set(session);
+      tx.set(col('sessions').doc(session.id), session);
+      return { session, previous };
+    });
+    await notifyAttendance(session, previous, group.name);
     res.json(session);
   })
 );
+
+/** Parents: their child was marked absent, or got a new mark (only what changed since the last save) */
+async function notifyAttendance(session: SessionRecord, previous: SessionRecord | undefined, className: string) {
+  const changes = Object.values(session.records).filter((r) => {
+    const before = previous?.records?.[r.studentId];
+    return (r.status === 'absent' && before?.status !== 'absent') || (r.rating !== undefined && r.rating !== before?.rating);
+  });
+  if (!changes.length) return;
+  const parents = new Map((await parentsOf(changes.map((r) => r.studentId))).map((p) => [p.studentId, p]));
+  const date = shortDate(session.date);
+  for (const r of changes) {
+    const p = parents.get(r.studentId);
+    if (!p?.parentUid) continue;
+    const before = previous?.records?.[r.studentId];
+    if (r.status === 'absent' && before?.status !== 'absent') await notify([p.parentUid], 'attendance_absent', { child: p.name, class: className, date }, '#/parent');
+    if (r.rating !== undefined && r.rating !== before?.rating) await notify([p.parentUid], 'attendance_mark', { child: p.name, mark: r.rating, class: className, date }, '#/parent');
+  }
+}
 
 router.post(
   '/material-requests',
@@ -812,21 +969,60 @@ router.post(
     const group = await getGroup(str(b.groupId, 'Class', { max: 100 }));
     if (!trainer || !group) throw new HttpError(404, 'Trainer or class not found.');
 
+    let stockItem: StockItem | undefined;
+    if (b.stockItemId) {
+      stockItem = liveData<StockItem>(await col('stock_items').doc(str(b.stockItemId, 'Item', { max: 100 })).get());
+      if (!stockItem || (stockItem.hiddenFromTrainers && !isAdmin(req.user))) throw new HttpError(404, 'This item is not in the stock.');
+    }
     const request: MaterialRequest = {
       id: newId('mat'),
       trainerId,
       trainerName: trainer.name,
       groupId: group.id,
       groupName: group.name,
-      itemsNeeded: str(b.itemsNeeded, 'Items', { max: 1000 }),
+      ...(stockItem ? { stockItemId: stockItem.id } : {}),
+      itemsNeeded: stockItem ? str(b.itemsNeeded, 'Items', { max: 1000, optional: true }) || stockItem.name : str(b.itemsNeeded, 'Items', { max: 1000 }),
       quantity: str(b.quantity, 'Quantity', { max: 100 }),
       urgency: oneOf(b.urgency, ['low', 'medium', 'urgent'] as const, 'Urgency'),
       status: 'pending',
       requestedAt: today(),
       sessionDate: str(b.sessionDate, 'Session date', { max: 20, optional: true })
     };
+    // Optional first message, e.g. what it is for
+    const first = str(b.comment, 'Comment', { max: 1000, optional: true });
+    if (first) request.comments = [requestComment(req, first)];
     await col('material_requests').doc(request.id).set(request);
+    await notify(await adminUserIds(), 'request_new', { trainer: request.trainerName, item: request.itemsNeeded, qty: request.quantity, class: request.groupName }, '#/admin/stock', { except: req.user!.uid });
     res.status(201).json(request);
+  })
+);
+
+function requestComment(req: AuthedRequest, text: string): RequestComment {
+  return {
+    id: newId('cmt'),
+    authorName: req.user!.displayName,
+    role: isAdmin(req.user) ? 'admin' : 'trainer',
+    text,
+    at: new Date().toISOString()
+  };
+}
+
+/** The coach who asked, or an admin, adds a message to a request. */
+router.post(
+  '/material-requests/:id/comments',
+  requireRole('trainer', 'admin'),
+  ah(async (req, res) => {
+    const ref = col('material_requests').doc(req.params.id);
+    const request = (await ref.get()).data() as MaterialRequest | undefined;
+    if (!request) throw new HttpError(404, 'Request not found.');
+    if (!isAdmin(req.user) && request.trainerId !== req.user!.trainerId) throw new HttpError(403, 'This request is not yours.');
+    const comment = requestComment(req, str(req.body?.text, 'Comment', { max: 1000 }));
+    if ((request.comments?.length || 0) >= 100) throw new HttpError(400, 'Too many comments on this request.');
+    await ref.update({ comments: FieldValue.arrayUnion(comment) });
+    const params = { author: comment.authorName, item: request.itemsNeeded, text: comment.text.length > 90 ? `${comment.text.slice(0, 90)}…` : comment.text };
+    if (comment.role === 'admin') await notify(await trainerUserIds([request.trainerId]), 'request_comment', params, '#/trainer', { except: req.user!.uid });
+    else await notify(await adminUserIds(), 'request_comment', params, '#/admin/stock', { except: req.user!.uid });
+    res.status(201).json(comment);
   })
 );
 
@@ -846,13 +1042,18 @@ adminRouter.patch(
     const ref = col('students').doc(req.params.id);
     const snap = await ref.get();
     if (!isLive(snap)) throw new HttpError(404, 'Child not found.');
+    const wasWaiting = snap.get('status') === 'waitlist';
     if (b.customMonthlyPrice !== undefined) {
       // The fee follows the classes; a custom price is kept only when it really differs from them
-      const custom = b.customMonthlyPrice === null ? null : num(b.customMonthlyPrice, 'Price', { min: 0, max: 10000 });
-      const standard = (await enrollmentFields(normalizeStudent(snap.data()!).groupIds)).standardMonthlyPrice;
-      update.customMonthlyPrice = custom === null || custom === standard ? FieldValue.delete() : custom;
+      const custom = b.customMonthlyPrice === null ? null : toMillimes(num(b.customMonthlyPrice, 'Price', { min: 0, max: 10000 }));
+      const fields = await enrollmentFields(normalizeStudent(snap.data()!).groupIds, snap.data());
+      Object.assign(update, fields);
+      update.customMonthlyPrice = custom === null || custom === fields.standardMonthlyPrice ? FieldValue.delete() : custom;
     }
     await ref.update(update);
+    if (wasWaiting && update.status === 'accepted') {
+      await notify([snap.get('parentUid')], 'child_accepted', { child: snap.get('studentName') }, '#/parent');
+    }
     res.json({ ok: true });
   })
 );
@@ -891,8 +1092,8 @@ adminRouter.put(
     const studentSnap = await studentRef.get();
     if (!isLive(studentSnap)) throw new HttpError(404, 'Child not found.');
     const scholarship = b.scholarship === true;
-    const amountDue = scholarship ? 0 : num(b.amountDue, 'Amount due', { min: 0, max: 100000 });
-    const amountPaid = scholarship ? 0 : num(b.amountPaid ?? 0, 'Amount paid', { min: 0, max: 100000 });
+    const amountDue = scholarship ? 0 : toMillimes(num(b.amountDue, 'Amount due', { min: 0, max: 100000 }));
+    const amountPaid = scholarship ? 0 : toMillimes(num(b.amountPaid ?? 0, 'Amount paid', { min: 0, max: 100000 }));
     const paidAt = str(b.paidAt, 'Payment date', { max: 10, optional: true });
     if (paidAt && !DATE_RE.test(paidAt)) throw new HttpError(400, 'Payment date is invalid.');
     const note = str(b.note, 'Note', { max: 500, optional: true });
@@ -909,11 +1110,19 @@ adminRouter.put(
       updatedAt: new Date().toISOString(),
       updatedBy: req.user?.uid || ''
     };
-    const batch = db.batch();
-    batch.set(paymentRef(month, record.studentId), record);
-    if (month === thisMonth()) batch.update(studentRef, { paymentStatus: mirrorStatus(record) });
-    await batch.commit();
-    res.json(record);
+    // Read and written in one transaction, so two saves at once can't both count the same money as received
+    const before = await db.runTransaction(async (tx) => {
+      const stored = liveData<PaymentRecord>(await tx.get(paymentRef(month, record.studentId)));
+      tx.set(paymentRef(month, record.studentId), writeMoney(record));
+      if (month === thisMonth()) tx.update(studentRef, { paymentStatus: mirrorStatus(record) });
+      return stored ? readMoney('payments', stored) : undefined;
+    });
+    // The parent hears about money received (not about a note or a corrected due amount)
+    const received = amountPaid - (before?.amountPaid || 0);
+    if (received > 0) {
+      await notify([studentSnap.get('parentUid')], 'payment_received', { amount: toDinars(received), child: studentSnap.get('studentName'), month: `${month.slice(5)}/${month.slice(0, 4)}` }, '#/parent');
+    }
+    res.json(sendMoney('payments', record));
   })
 );
 
@@ -940,11 +1149,13 @@ adminRouter.post(
     }
     const batch = db.batch();
     let count = 0;
+    const paid: { parentUid?: string; child: string; amount: number }[] = [];
     ids.forEach((id, i) => {
       const student = liveData<Record<string, unknown>>(studentSnaps[i]);
       if (!student) return;
       const st = normalizeStudent(student);
-      const existing = liveData<PaymentRecord>(paymentSnaps[i]);
+      const stored = liveData<PaymentRecord>(paymentSnaps[i]);
+      const existing = stored ? readMoney('payments', stored) : undefined;
       if (existing?.status === 'scholarship' || (!existing && st.paymentStatus === 'scholarship')) return;
       const amountDue = existing ? existing.amountDue : st.customMonthlyPrice ?? classTotals.get(id) ?? 0;
       const record: PaymentRecord = {
@@ -960,11 +1171,15 @@ adminRouter.post(
         updatedAt: new Date().toISOString(),
         updatedBy: req.user?.uid || ''
       };
-      batch.set(paymentRef(month, id), record);
+      batch.set(paymentRef(month, id), writeMoney(record));
       if (month === thisMonth()) batch.update(col('students').doc(id), { paymentStatus: 'paid' });
       count++;
+      const received = amountDue - (existing?.amountPaid || 0);
+      if (received > 0) paid.push({ parentUid: st.parentUid, child: st.studentName, amount: received });
     });
     await batch.commit();
+    const label = `${month.slice(5)}/${month.slice(0, 4)}`;
+    for (const p of paid) await notify([p.parentUid], 'payment_received', { amount: toDinars(p.amount), child: p.child, month: label }, '#/parent');
     res.json({ count });
   })
 );
@@ -1000,9 +1215,12 @@ adminRouter.post(
     const groupIds = student.groupIds.includes(group.id) ? student.groupIds : [...student.groupIds, group.id];
     await ref.update({
       groupIds,
-      ...(await enrollmentFields(groupIds)),
+      ...(await enrollmentFields(groupIds, snap.data())),
       ...(student.status === 'waitlist' ? { status: 'accepted' } : {})
     });
+    if (!student.groupIds.includes(group.id)) {
+      await notify([student.parentUid], 'child_class', { child: student.studentName, class: group.name }, '#/parent');
+    }
     res.json({ groupIds });
   })
 );
@@ -1015,7 +1233,7 @@ adminRouter.delete(
     const snap = await ref.get();
     if (!isLive(snap)) throw new HttpError(404, 'Child not found.');
     const groupIds = normalizeStudent(snap.data()!).groupIds.filter((id) => id !== req.params.groupId);
-    await ref.update({ groupIds, ...(await enrollmentFields(groupIds)) });
+    await ref.update({ groupIds, ...(await enrollmentFields(groupIds, snap.data())) });
     res.json({ groupIds });
   })
 );
@@ -1074,7 +1292,7 @@ adminRouter.get(
       snap = await col('cash_categories').get();
     }
     const categories = snap.docs.map((d) => d.data() as CashCategory);
-    res.json({ categories, entries: await listAll<CashEntry>('cash_entries') });
+    res.json({ categories, entries: (await listMoney<CashEntry>('cash_entries')).map((e) => sendMoney('cash_entries', e)) });
   })
 );
 
@@ -1129,7 +1347,7 @@ async function parseCashEntry(b: Record<string, unknown>) {
   const note = str(b.note, 'Note', { max: 1000, optional: true });
   return {
     type,
-    amount: num(b.amount, 'Amount', { min: 0.001, max: 10_000_000 }),
+    amount: toMillimes(num(b.amount, 'Amount', { min: 0.001, max: 10_000_000 })),
     date,
     categoryId: category.id,
     label: str(b.label, 'Label', { max: 200 }),
@@ -1147,8 +1365,8 @@ adminRouter.post(
       createdAt: new Date().toISOString(),
       createdBy: req.user!.displayName
     };
-    await col('cash_entries').doc(entry.id).set(entry);
-    res.status(201).json(entry);
+    await col('cash_entries').doc(entry.id).set(writeMoney(entry));
+    res.status(201).json(sendMoney('cash_entries', entry));
   })
 );
 
@@ -1160,7 +1378,7 @@ adminRouter.put(
     if (!existing) throw new HttpError(404, 'Entry not found.');
     const fields = await parseCashEntry(req.body || {});
     // set() replaces the document, so optional fields that were cleared disappear
-    await ref.set({ id: existing.id, createdAt: existing.createdAt, createdBy: existing.createdBy, ...fields, updatedAt: new Date().toISOString() });
+    await ref.set(writeMoney({ id: existing.id, createdAt: existing.createdAt, createdBy: existing.createdBy, ...fields, updatedAt: new Date().toISOString() }));
     res.json({ ok: true });
   })
 );
@@ -1300,7 +1518,10 @@ adminRouter.put(
   ah(async (req, res) => {
     const pw = password(req.body?.password);
     const ref = col('accounts').doc(req.params.id);
-    if (!(await ref.get()).exists) throw new HttpError(404, 'Account not found.');
+    const account = (await ref.get()).data() as Account | undefined;
+    if (!account) throw new HttpError(404, 'Account not found.');
+    // Another admin must not be able to lock the club owner out
+    if (isOwnerEmail(account.email) && req.params.id !== req.user!.uid) throw new HttpError(403, 'Only the club owner can change the owner’s password.');
     await ref.update({ passwordHash: await hashPassword(pw) });
     if (req.params.id !== req.user!.uid) await deleteSessionsOf(req.params.id);
     res.json({ ok: true });
@@ -1378,7 +1599,7 @@ adminRouter.post(
       deletedBy: FieldValue.delete(),
       restoredAt: new Date().toISOString(),
       groupIds: kept,
-      ...(await enrollmentFields(kept))
+      ...(await enrollmentFields(kept, snap.data()))
     });
     res.json({ groupIds: kept, droppedClasses: dropped });
   })
@@ -1406,12 +1627,19 @@ async function enrolledCount(groupId: string): Promise<number> {
   return snap.docs.filter(isLive).length;
 }
 
-function parseGroup(b: Record<string, unknown>, id: string): Group {
+const optionalNum = (value: unknown, field: string, range: { min: number; max: number }) =>
+  value === undefined || value === null || value === '' ? undefined : num(value, field, range);
+
+/** A class from the form (money in millimes). A new image (data URL) is uploaded to Storage. */
+async function parseGroup(b: Record<string, unknown>, id: string): Promise<Group> {
+  const ageMin = optionalNum(b.ageMin, 'Minimum age', { min: 3, max: 22 });
+  const ageMax = optionalNum(b.ageMax, 'Maximum age', { min: 3, max: 22 });
+  if (ageMin !== undefined && ageMax !== undefined && ageMax < ageMin) throw new HttpError(400, 'The maximum age must not be below the minimum age.');
   return {
     id,
     name: str(b.name, 'Class name', { max: 120 }),
     description: str(b.description, 'Description', { max: 3000, optional: true }),
-    pricePerMonth: num(b.pricePerMonth, 'Price', { min: 0, max: 10000 }),
+    pricePerMonth: toMillimes(num(b.pricePerMonth, 'Price', { min: 0, max: 10000 })),
     trainerIds: parseTrainerIds(b.trainerIds),
     dayOfWeek: oneOf(b.dayOfWeek, DAYS, 'Day'),
     timeSlot: timeSlot(b.timeSlot),
@@ -1422,36 +1650,40 @@ function parseGroup(b: Record<string, unknown>, id: string): Group {
         ? undefined
         : num(b.maxCapacity, 'Capacity', { min: 1, max: 500 }),
     // Optional: empty means the default class picture
-    imageUrl: str(b.imageUrl, 'Image', { max: 900_000, optional: true }) || undefined
+    imageUrl: await imageField(b.imageUrl, 'groups'),
+    ageMin,
+    ageMax,
+    level: b.level === undefined || b.level === null || b.level === '' ? undefined : oneOf(b.level, GROUP_LEVELS, 'Level')
   };
 }
 
 adminRouter.post(
   '/groups',
   ah(async (req, res) => {
-    const group = parseGroup(req.body || {}, newId('grp'));
-    await col('groups').doc(group.id).set(group);
-    res.status(201).json(group);
+    const group = await parseGroup(req.body || {}, newId('grp'));
+    await col('groups').doc(group.id).set(writeMoney(group));
+    res.status(201).json(sendMoney('groups', group));
   })
 );
 
 adminRouter.put(
   '/groups/:id',
   ah(async (req, res) => {
-    const group = parseGroup(req.body || {}, req.params.id);
-    const before = await getGroup(group.id);
+    const before = await getGroup(req.params.id);
     if (!before) throw new HttpError(404, 'Class not found.');
+    const group = await parseGroup(req.body || {}, req.params.id);
     const enrolled = await enrolledCount(group.id);
     if (group.maxCapacity && group.maxCapacity < enrolled) {
       throw new HttpError(400, `${enrolled} students are already in this class: the capacity can't be lower.`);
     }
-    await col('groups').doc(group.id).set(group);
+    await col('groups').doc(group.id).set(writeMoney(group));
+    await replacedImage(before.imageUrl, group.imageUrl);
     // A new price changes the standard price of every child in the class
     if (before.pricePerMonth !== group.pricePerMonth) {
       const members = (await col('students').where('groupIds', 'array-contains', group.id).get()).docs.filter(isLive);
-      for (const d of members) await d.ref.update(await enrollmentFields(normalizeStudent(d.data()!).groupIds));
+      await Promise.all(members.map(async (d) => d.ref.update(await enrollmentFields(normalizeStudent(d.data()!).groupIds, d.data()))));
     }
-    res.json(group);
+    res.json(sendMoney('groups', group));
   })
 );
 
@@ -1464,7 +1696,7 @@ adminRouter.delete(
     // Update each child's price now that this class is gone
     for (const d of members) {
       const remaining = normalizeStudent(d.data()!).groupIds.filter((id) => id !== req.params.id);
-      await d.ref.update({ groupIds: remaining, ...(await enrollmentFields(remaining)) });
+      await d.ref.update({ groupIds: remaining, ...(await enrollmentFields(remaining, d.data())) });
     }
     res.json({ ok: true });
   })
@@ -1534,7 +1766,7 @@ adminRouter.put(
       // Lower-cased so it matches the sign-in email (this is how trainers get their role)
       email: str(b.email, 'Email', { max: 200 }).toLowerCase(),
       phone: str(b.phone, 'Phone', { max: 40, optional: true }),
-      avatar: str(b.avatar, 'Avatar', { max: 2000, optional: true }),
+      avatar: (await imageField(b.avatar, 'photos/trainers', { maxBytes: 150_000, field: 'Photo' })) || '',
       bio: str(b.bio, 'Bio', { max: 3000, optional: true })
     };
     // Keep the date of birth (set separately) unless a new one is given
@@ -1542,6 +1774,7 @@ adminRouter.put(
     const dob = b.birthDate ? dateOfBirth(b.birthDate, 16, 100) : previous?.birthDate;
     if (dob) trainer.birthDate = dob;
     await col('trainers').doc(trainer.id).set(trainer);
+    await replacedImage(previous?.avatar, trainer.avatar);
     forgetAllProfiles();
     res.json(trainer);
   })
@@ -1550,8 +1783,208 @@ adminRouter.put(
 adminRouter.patch(
   '/material-requests/:id',
   ah(async (req, res) => {
-    const status = oneOf(req.body?.status, ['pending', 'approved', 'delivered'] as const, 'Status');
-    await col('material_requests').doc(req.params.id).update({ status });
+    const b = req.body || {};
+    const ref = col('material_requests').doc(req.params.id);
+    let changed: { request: MaterialRequest; status: MaterialRequest['status']; reason: string } | null = null;
+    let lowItem: { name: string; left: number } | null = null;
+    await db.runTransaction(async (tx) => {
+      const request = (await tx.get(ref)).data() as MaterialRequest | undefined;
+      if (!request) throw new HttpError(404, 'Request not found.');
+      const status = b.status === undefined ? request.status : oneOf(b.status, ['pending', 'approved', 'delivered', 'refused'] as const, 'Status');
+      // The admin can link (or unlink with null) a request to a stock item, e.g. one that was typed by hand
+      let stockItemId = request.stockItemId;
+      if (b.stockItemId !== undefined) {
+        if (request.stockDeducted) throw new HttpError(409, 'Put the request back to “approved” before changing its item.');
+        stockItemId = b.stockItemId === null ? undefined : str(b.stockItemId, 'Item', { max: 100 });
+      }
+      const at = new Date().toISOString();
+      const update: Record<string, unknown> = {
+        status,
+        stockItemId: stockItemId ?? FieldValue.delete(),
+        ...(status !== request.status ? { statusChangedAt: at } : {})
+      };
+      const by = req.user!.displayName;
+      // Refused: the reason (optional) goes to the conversation, so the coach reads why
+      const reason = status === 'refused' && status !== request.status ? str(b.reason, 'Reason', { max: 1000, optional: true }) : '';
+      if (reason) update.comments = FieldValue.arrayUnion(requestComment(req, reason));
+      // Delivered: the units leave the stock (once). Back to pending/approved: they come back.
+      if (status === 'delivered' && !request.stockDeducted && stockItemId) {
+        const qty = parseInt(String(request.quantity), 10);
+        if (qty > 0) {
+          const itemRef = col('stock_items').doc(stockItemId);
+          const item = liveData<StockItem>(await tx.get(itemRef));
+          if (!item) throw new HttpError(404, 'Stock item not found.');
+          const breakdown = unitBreakdown(item);
+          if (breakdown.available < qty) throw new HttpError(409, `Only ${breakdown.available} ${item.unit || ''} available of “${item.name}”.`.replace('  ', ' '));
+          tx.update(itemRef, { quantity: item.quantity - qty, units: unitsField(breakdown), status: FieldValue.delete(), updatedAt: at });
+          const mv: StockMovement = { id: newId('mv'), itemId: item.id, delta: -qty, reason: 'request', requestId: request.id, note: `${request.trainerName} · ${request.groupName}`, at, by };
+          tx.set(col('stock_movements').doc(mv.id), mv);
+          update.stockDeducted = qty;
+          const left = item.quantity - qty;
+          if (item.minQuantity !== undefined && left <= item.minQuantity && item.quantity > item.minQuantity) lowItem = { name: item.name, left };
+        }
+      } else if (status !== 'delivered' && request.stockDeducted && request.stockItemId) {
+        const itemRef = col('stock_items').doc(request.stockItemId);
+        const item = liveData<StockItem>(await tx.get(itemRef));
+        if (item) {
+          tx.update(itemRef, { quantity: item.quantity + request.stockDeducted, units: unitsField(unitBreakdown(item)), status: FieldValue.delete(), updatedAt: at });
+          const mv: StockMovement = { id: newId('mv'), itemId: item.id, delta: request.stockDeducted, reason: 'request_undo', requestId: request.id, at, by };
+          tx.set(col('stock_movements').doc(mv.id), mv);
+        }
+        update.stockDeducted = FieldValue.delete();
+      }
+      tx.update(ref, update);
+      changed = status !== request.status ? { request, status, reason } : null;
+    });
+    // The coach hears when the request is approved, delivered or refused
+    const c = changed as { request: MaterialRequest; status: MaterialRequest['status']; reason: string } | null;
+    if (c && c.status !== 'pending') {
+      const type = c.status === 'approved' ? 'request_approved' : c.status === 'delivered' ? 'request_delivered' : 'request_refused';
+      await notify(await trainerUserIds([c.request.trainerId]), type, { item: c.request.itemsNeeded, qty: c.request.quantity, reason: c.reason }, '#/trainer', { except: req.user!.uid });
+    }
+    const low = lowItem as { name: string; left: number } | null;
+    if (low) await notify(await adminUserIds(), 'stock_low', { item: low.name, qty: low.left }, '#/admin/stock');
+    res.json({ ok: true });
+  })
+);
+
+// ---------- stock (equipment) ----------
+
+
+function parseNamed(b: Record<string, unknown>, withColor: boolean) {
+  const out: Record<string, string> = { name: str(b.name, 'Name', { max: 80 }) };
+  if (withColor) {
+    const color = str(b.color, 'Color', { max: 7 });
+    if (!/^#[0-9a-f]{6}$/i.test(color)) throw new HttpError(400, 'Color is invalid.');
+    out.color = color;
+  }
+  return out;
+}
+
+for (const [path, collection, withColor, prefix] of [
+  ['categories', 'stock_categories', true, 'scat'],
+  ['locations', 'stock_locations', false, 'sloc']
+] as const) {
+  adminRouter.post(
+    `/stock/${path}`,
+    ah(async (req, res) => {
+      const doc = { id: newId(prefix), ...parseNamed(req.body || {}, withColor) };
+      await col(collection).doc(doc.id).set(doc);
+      res.status(201).json(doc);
+    })
+  );
+  adminRouter.put(
+    `/stock/${path}/:id`,
+    ah(async (req, res) => {
+      const ref = col(collection).doc(req.params.id);
+      if (!isLive(await ref.get())) throw new HttpError(404, 'Not found.');
+      await ref.update(parseNamed(req.body || {}, withColor));
+      res.json({ ok: true });
+    })
+  );
+  // Archived, not erased: items keep showing the name
+  adminRouter.delete(
+    `/stock/${path}/:id`,
+    ah(async (req, res) => {
+      await softDelete(col(collection).doc(req.params.id), req);
+      res.json({ ok: true });
+    })
+  );
+}
+
+async function parseStockItem(b: Record<string, unknown>) {
+  const opt = (v: unknown, field: string, max = 200) => str(v, field, { max, optional: true }) || undefined;
+  const categoryId = opt(b.categoryId, 'Category', 100);
+  const locationId = opt(b.locationId, 'Location', 100);
+  if (categoryId && !isLive(await col('stock_categories').doc(categoryId).get())) throw new HttpError(404, 'Category not found.');
+  if (locationId && !isLive(await col('stock_locations').doc(locationId).get())) throw new HttpError(404, 'Place not found.');
+  const imageUrl = await imageField(b.imageUrl, 'stock', { maxBytes: 300_000, field: 'Photo' });
+  const quantity = num(b.quantity ?? 0, 'Quantity', { min: 0, max: 1_000_000 });
+  // Pieces in use, in repair, broken or lost; the others are available
+  const rawUnits = (b.units && typeof b.units === 'object' ? b.units : {}) as Record<string, unknown>;
+  const counts = Object.fromEntries(UNAVAILABLE_STATES.map((s) => [s, rawUnits[s] === undefined ? 0 : num(rawUnits[s], 'Pieces', { min: 0, max: 1_000_000 })]));
+  const breakdown = unitBreakdown({ quantity, units: counts });
+  if (UNAVAILABLE_STATES.reduce((sum, s) => sum + breakdown[s], 0) > quantity) throw new HttpError(400, 'More pieces in use, in repair, broken or lost than the total quantity.');
+  return {
+    name: str(b.name, 'Name', { max: 120 }),
+    reference: opt(b.reference, 'Reference', 80),
+    categoryId,
+    locationId,
+    quantity,
+    units: unitsField(breakdown),
+    unit: opt(b.unit, 'Unit', 20),
+    minQuantity: b.minQuantity === undefined || b.minQuantity === null || b.minQuantity === '' ? undefined : num(b.minQuantity, 'Minimum', { min: 0, max: 1_000_000 }),
+    imageUrl,
+    notes: opt(b.notes, 'Notes', 2000),
+    hiddenFromTrainers: b.hiddenFromTrainers === true ? true : undefined
+  };
+}
+
+adminRouter.post(
+  '/stock/items',
+  ah(async (req, res) => {
+    const at = new Date().toISOString();
+    const item: StockItem = { id: newId('stk'), ...(await parseStockItem(req.body || {})), createdAt: at };
+    const mv: StockMovement = { id: newId('mv'), itemId: item.id, delta: item.quantity, reason: 'created', at, by: req.user!.displayName };
+    const batch = db.batch();
+    // JSON round trip: Firestore rejects undefined fields
+    batch.set(col('stock_items').doc(item.id), JSON.parse(JSON.stringify(item)));
+    if (item.quantity) batch.set(col('stock_movements').doc(mv.id), mv);
+    await batch.commit();
+    res.status(201).json(item);
+  })
+);
+
+adminRouter.put(
+  '/stock/items/:id',
+  ah(async (req, res) => {
+    const ref = col('stock_items').doc(req.params.id);
+    const existing = liveData<StockItem>(await ref.get());
+    if (!existing) throw new HttpError(404, 'Item not found.');
+    const fields = await parseStockItem(req.body || {});
+    const at = new Date().toISOString();
+    const item = JSON.parse(JSON.stringify({ id: existing.id, createdAt: existing.createdAt, ...fields, updatedAt: at }));
+    const batch = db.batch();
+    batch.set(ref, item);
+    if (fields.quantity !== existing.quantity) {
+      const mv: StockMovement = { id: newId('mv'), itemId: existing.id, delta: fields.quantity - existing.quantity, reason: 'adjust', at, by: req.user!.displayName };
+      batch.set(col('stock_movements').doc(mv.id), mv);
+    }
+    await batch.commit();
+    await replacedImage(existing.imageUrl, fields.imageUrl);
+    res.json(item);
+  })
+);
+
+/** Quick +/- from the inventory */
+adminRouter.patch(
+  '/stock/items/:id/quantity',
+  ah(async (req, res) => {
+    const delta = num(req.body?.delta, 'Change', { min: -1_000_000, max: 1_000_000 });
+    const ref = col('stock_items').doc(req.params.id);
+    const at = new Date().toISOString();
+    let low: { name: string; left: number } | null = null;
+    await db.runTransaction(async (tx) => {
+      const item = liveData<StockItem>(await tx.get(ref));
+      if (!item) throw new HttpError(404, 'Item not found.');
+      // Only available pieces come and go here; the ones in use, in repair… stay counted
+      const breakdown = unitBreakdown(item);
+      const quantity = Math.max(item.quantity - breakdown.available, item.quantity + delta);
+      tx.update(ref, { quantity, units: unitsField(breakdown), status: FieldValue.delete(), updatedAt: at });
+      const mv: StockMovement = { id: newId('mv'), itemId: item.id, delta: quantity - item.quantity, reason: 'adjust', note: str(req.body?.note, 'Note', { max: 200, optional: true }) || undefined, at, by: req.user!.displayName };
+      tx.set(col('stock_movements').doc(mv.id), JSON.parse(JSON.stringify(mv)));
+      if (item.minQuantity !== undefined && quantity <= item.minQuantity && item.quantity > item.minQuantity) low = { name: item.name, left: quantity };
+    });
+    const dropped = low as { name: string; left: number } | null;
+    if (dropped) await notify(await adminUserIds(), 'stock_low', { item: dropped.name, qty: dropped.left }, '#/admin/stock', { except: req.user!.uid });
+    res.json({ ok: true });
+  })
+);
+
+adminRouter.delete(
+  '/stock/items/:id',
+  ah(async (req, res) => {
+    await softDelete(col('stock_items').doc(req.params.id), req);
     res.json({ ok: true });
   })
 );
@@ -1611,9 +2044,29 @@ adminRouter.post(
     }
     // Firestore rejects undefined fields
     await col('schedule_items').doc(item.id).set(JSON.parse(JSON.stringify(item)));
+    await notifySchedule(item, req.user!.uid);
     res.status(201).json(item);
   })
 );
+
+/** Parents (and coaches) hear about what was added to their week, or a cancelled class */
+async function notifySchedule(item: ScheduleItem, actor: string) {
+  const parents = (await parentsOf(item.studentIds)).map((p) => p.parentUid);
+  const date = shortDate(item.date);
+  if (item.kind === 'cancellation') {
+    const group = item.groupId ? await getGroup(item.groupId) : undefined;
+    if (!group) return;
+    // The coach only when the whole class is off (not when one child is excused)
+    const kids = (await studentsInClasses([group.id])).map((s) => s.id);
+    const whole = kids.length === 0 || kids.every((id) => item.studentIds.includes(id));
+    await notify(parents, 'class_cancelled', { class: group.name, date }, '#/parent', { except: actor });
+    if (whole) await notify(await trainerUserIds(group.trainerIds), 'class_cancelled', { class: group.name, date }, '#/trainer', { except: actor });
+    return;
+  }
+  const params = { title: item.title, date, time: item.startTime };
+  await notify(parents, 'schedule_added', params, '#/parent', { except: actor });
+  if (item.trainerIds?.length) await notify(await trainerUserIds(item.trainerIds), 'schedule_added', params, '#/trainer', { except: actor });
+}
 
 /** Takes one student off an item; the item is deleted when nobody is left on it. */
 adminRouter.delete(
@@ -1663,10 +2116,12 @@ adminRouter.patch(
     const orderRef = col('hoodie_distributions').doc(req.params.id);
     // Ready and picked-up orders hold one unit of stock; waiting and cancelled ones don't
     const holdsStock = (s: ProductOrder['status']) => s === 'ready' || s === 'picked_up';
+    let becameReady: ProductOrder | null = null;
     await db.runTransaction(async (tx) => {
       const order = (await tx.get(orderRef)).data() as ProductOrder | undefined;
       if (!order) throw new HttpError(404, 'Order not found.');
       if (order.status === status) return;
+      becameReady = status === 'ready' ? order : null;
       // Older orders without a product don't touch the stock
       const change = order.productId ? Number(holdsStock(status)) - Number(holdsStock(order.status)) : 0;
       if (change !== 0) {
@@ -1685,6 +2140,12 @@ adminRouter.patch(
         pickedUpAt: status === 'picked_up' ? today() : FieldValue.delete()
       });
     });
+    // The parent can come and pick it up
+    const ready = becameReady as ProductOrder | null;
+    if (ready) {
+      const [p] = await parentsOf([ready.studentId]);
+      await notify([p?.parentUid], 'order_ready', { product: `${ready.productName || ''}${ready.size && ready.size !== ONE_SIZE ? ` (${ready.size})` : ''}`, child: ready.studentName }, '#/parent');
+    }
     res.json({ ok: true });
   })
 );
@@ -1695,7 +2156,8 @@ adminRouter.put(
   ah(async (req, res) => {
     const b = req.body || {};
     const ref = col('products').doc(req.params.id);
-    const existing = (await ref.get()).data() as Product | undefined;
+    const stored = (await ref.get()).data() as Product | undefined;
+    const existing = stored ? readMoney('products', stored) : undefined;
     if (!Array.isArray(b.sizes ?? []) || (b.sizes ?? []).length > 20) throw new HttpError(400, 'Sizes are invalid.');
     const sizes = [...new Set((b.sizes ?? []).map((sz: unknown) => str(sz, 'Size', { max: 20 })))] as string[];
     const oldStock = existing?.stock || {};
@@ -1705,16 +2167,16 @@ adminRouter.put(
       name: str(b.name, 'Name', { max: 120 }),
       category: oneOf(b.category, PRODUCT_CATEGORIES, 'Category'),
       description: str(b.description, 'Description', { max: 2000, optional: true }),
-      price: num(b.price, 'Price', { min: 0, max: 10000 }),
-      // Firestore documents are limited to 1 MB, so very large pasted images are rejected
-      imageUrl: str(b.imageUrl, 'Image', { max: 900_000, optional: true }),
+      price: toMillimes(num(b.price, 'Price', { min: 0, max: 10000 })),
+      imageUrl: (await imageField(b.imageUrl, 'products')) || '',
       sizes,
       stock: Object.fromEntries(keys.map((k) => [k, oldStock[k] ?? 0])),
       isActive: b.isActive === true,
       createdAt: existing?.createdAt || new Date().toISOString()
     };
-    await ref.set(product);
-    res.json(product);
+    await ref.set(writeMoney(product));
+    await replacedImage(existing?.imageUrl, product.imageUrl);
+    res.json(sendMoney('products', product));
   })
 );
 
@@ -1753,33 +2215,42 @@ adminRouter.delete(
   })
 );
 
-adminRouter.post(
-  '/posts',
+/** Landing page: texts per language, hidden sections, counters and the next challenge date */
+adminRouter.put(
+  '/site-content/landing',
   ah(async (req, res) => {
     const b = req.body || {};
-    const post: FacebookPost = {
-      id: `fb-${Date.now()}`,
-      caption: str(b.caption, 'Caption', { max: 5000 }),
-      date: str(b.date, 'Date', { max: 60, optional: true }) || today(),
-      // Firestore documents are limited to 1 MB, so very large pasted images are rejected
-      imageUrl: str(b.imageUrl, 'Image', { max: 900_000 }),
-      likes: 0,
-      comments: 0,
-      tag: str(b.tag, 'Tag', { max: 80, optional: true }),
-      postUrl: str(b.postUrl, 'Post link', { max: 500, optional: true }),
-      likedBy: [],
-      commentsList: []
+    const hidden = Array.isArray(b.hidden) ? LANDING_SECTIONS.filter((s) => b.hidden.includes(s)) : [];
+    const stats: NonNullable<LandingContent['stats']> = {};
+    for (const k of LANDING_STAT_KEYS) {
+      const v = b.stats?.[k];
+      if (v !== undefined && v !== null && v !== '') stats[k] = num(v, 'Counter', { min: 0, max: 1_000_000 });
+    }
+    const countdownDate = str(b.countdownDate, 'Date', { max: 10, optional: true });
+    if (countdownDate && !/^\d{4}-\d{2}-\d{2}$/.test(countdownDate)) throw new HttpError(400, 'Date is invalid.');
+    // Only the known texts; empty ones fall back to the default wording
+    const text: NonNullable<LandingContent['text']> = {};
+    for (const lang of LANDING_LANGS) {
+      const given = b.text?.[lang];
+      if (!given || typeof given !== 'object') continue;
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(given as Record<string, unknown>)) {
+        if (!LANDING_TEXT_KEYS.has(k)) continue;
+        const value = str(v, 'Text', { max: 1000, optional: true }).trim();
+        if (value) out[k] = value;
+      }
+      if (Object.keys(out).length) text[lang] = out;
+    }
+    const content: LandingContent = {
+      hidden,
+      stats,
+      ...(countdownDate ? { countdownDate } : {}),
+      text,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user!.displayName
     };
-    await col('facebook_posts').doc(post.id).set(post);
-    res.status(201).json(post);
-  })
-);
-
-adminRouter.delete(
-  '/posts/:id',
-  ah(async (req, res) => {
-    await softDelete(col('facebook_posts').doc(req.params.id), req);
-    res.json({ ok: true });
+    await col('site_content').doc('landing').set(content);
+    res.json(content);
   })
 );
 

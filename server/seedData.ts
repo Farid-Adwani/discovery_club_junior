@@ -2,8 +2,6 @@ import { db } from './firebaseAdmin';
 import {
   INITIAL_TRAINERS,
   INITIAL_GROUPS,
-  INITIAL_EVENTS,
-  FACEBOOK_POSTS,
   INITIAL_PRODUCTS,
   INITIAL_STUDENTS,
   INITIAL_SESSIONS,
@@ -26,7 +24,7 @@ async function writeCollection(name: string, docs: Doc[], overwrite: boolean) {
 }
 
 /**
- * Public club content: trainers, classes, events, posts, shop products.
+ * Public club content: trainers, classes, shop products.
  * With `demo`, also writes the sample students, sessions, shop orders and material requests.
  * Without `overwrite`, a collection that already has documents is left untouched.
  */
@@ -39,16 +37,6 @@ export async function seedDatabase({ overwrite = false, demo = false } = {}) {
     overwrite
   );
   written.groups = await writeCollection('groups', INITIAL_GROUPS.map((g) => ({ id: g.id, data: { ...g } })), overwrite);
-  written.events = await writeCollection(
-    'events',
-    INITIAL_EVENTS.map(({ isRegistered: _ignored, ...e }) => ({ id: e.id, data: { ...e, registeredUids: [] } })),
-    overwrite
-  );
-  written.facebook_posts = await writeCollection(
-    'facebook_posts',
-    FACEBOOK_POSTS.map((p) => ({ id: p.id, data: { likedBy: [], commentsList: [], ...p } })),
-    overwrite
-  );
   written.products = await writeCollection('products', INITIAL_PRODUCTS.map((p) => ({ id: p.id, data: { ...p } })), overwrite);
 
   if (demo) {

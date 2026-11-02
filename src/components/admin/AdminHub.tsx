@@ -2,16 +2,16 @@ import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
+  Boxes,
   Cake,
   CalendarDays,
   Camera,
   ClipboardList,
   DollarSign,
+  Globe,
   Landmark,
-  LayoutGrid,
   Package,
   Pencil,
-  Share2,
   ShieldCheck,
   TrendingUp,
   Users
@@ -25,6 +25,7 @@ import { fromISODate } from '../../utils/schedule';
 import { birthdayPeople } from '../../utils/birthdays';
 import { currentMonth, monthRows } from '../../utils/payments';
 import { BirthdaysCard } from '../common/BirthdaysCard';
+import { ModalPortal } from '../common/ModalPortal';
 
 export type AdminSection =
   | 'overview'
@@ -34,8 +35,9 @@ export type AdminSection =
   | 'payments'
   | 'inventory'
   | 'team'
-  | 'facebook'
-  | 'cash';
+  | 'cash'
+  | 'stock'
+  | 'site';
 
 type Tone = { bg: string; icon: string; ring: string };
 const TONES: Record<string, Tone> = {
@@ -64,7 +66,6 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
     orders,
     staffMembers,
     adminProfiles,
-    facebookPosts,
     materialRequests,
     navigateTo,
     updateMyProfile,
@@ -128,8 +129,9 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
     { id: 'payments', icon: <DollarSign className="w-6 h-6" />, tone: TONES.green, stat: unpaid ? t('s_unpaid', { count: unpaid }) : t('s_allPaid'), alert: unpaid > 0 },
     { id: 'inventory', icon: <Package className="w-6 h-6" />, tone: TONES.wine, stat: toPrepare ? t('s_orders', { count: toPrepare }) : t('s_noOrders'), alert: toPrepare > 0 },
     { id: 'team', icon: <Cake className="w-6 h-6" />, tone: TONES.pink, stat: t('s_team', { count: trainers.length + staffMembers.length + adminProfiles.length }) },
-    { id: 'facebook', icon: <Share2 className="w-6 h-6" />, tone: TONES.sky, stat: t('s_posts', { count: facebookPosts.length }) },
-    { id: 'cash', icon: <Landmark className="w-6 h-6" />, tone: TONES.teal, stat: t('s_open') }
+    { id: 'cash', icon: <Landmark className="w-6 h-6" />, tone: TONES.teal, stat: t('s_open') },
+    { id: 'site', icon: <Globe className="w-6 h-6" />, tone: TONES.violet, stat: t('s_site') },
+    { id: 'stock', icon: <Boxes className="w-6 h-6" />, tone: TONES.ink, stat: openRequests ? t('s_requests', { count: openRequests }) : t('s_open'), alert: openRequests > 0 }
   ];
 
   return (
@@ -223,60 +225,62 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
 
       {/* Edit profile */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setIsEditing(false)}>
-          <form
-            onSubmit={handleSave}
-            onClick={(e) => e.stopPropagation()}
-            className="duo-card bg-white w-full max-w-sm p-5 space-y-4 text-xs font-bold text-slate-700"
-          >
-            <h4 className="text-base font-black text-slate-900">{t('profileTitle')}</h4>
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setIsEditing(false)}>
+            <form
+              onSubmit={handleSave}
+              onClick={(e) => e.stopPropagation()}
+              className="duo-card hover:transform-none! bg-white w-full max-w-sm p-5 space-y-4 text-xs font-bold text-slate-700"
+            >
+              <h4 className="text-base font-black text-slate-900">{t('profileTitle')}</h4>
 
-            <div className="flex items-center gap-4">
-              {shownPhoto ? (
-                <img src={shownPhoto} alt="" className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-200" />
-              ) : (
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#c11e3d] to-[#6a0d1f] text-white flex items-center justify-center text-3xl font-black">
-                  {(name || currentUser.displayName).slice(0, 1).toUpperCase()}
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="px-3 py-2 btn-duo-secondary text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Camera className="w-4 h-4" />
-                  {t('changePhoto')}
-                </button>
-                {shownPhoto && (
-                  <button type="button" onClick={() => setPhoto(null)} className="text-[11px] font-bold text-rose-600 cursor-pointer">
-                    {t('removePhoto')}
-                  </button>
+              <div className="flex items-center gap-4">
+                {shownPhoto ? (
+                  <img src={shownPhoto} alt="" className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-200" />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#c11e3d] to-[#6a0d1f] text-white flex items-center justify-center text-3xl font-black">
+                    {(name || currentUser.displayName).slice(0, 1).toUpperCase()}
+                  </div>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="px-3 py-2 btn-duo-secondary text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4" />
+                    {t('changePhoto')}
+                  </button>
+                  {shownPhoto && (
+                    <button type="button" onClick={() => setPhoto(null)} className="text-[11px] font-bold text-rose-600 cursor-pointer">
+                      {t('removePhoto')}
+                    </button>
+                  )}
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block mb-1">{t('name')}</label>
-              <input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <label className="block mb-1">{t('birthDate')}</label>
-              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputCls} />
-              <p className="mt-1 text-[11px] font-medium text-slate-400">{t('birthDateHint')}</p>
-            </div>
+              <div>
+                <label className="block mb-1">{t('name')}</label>
+                <input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="block mb-1">{t('birthDate')}</label>
+                <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputCls} />
+                <p className="mt-1 text-[11px] font-medium text-slate-400">{t('birthDateHint')}</p>
+              </div>
 
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setIsEditing(false)} className="px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
-                {t('cancel')}
-              </button>
-              <button type="submit" disabled={isSaving} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
-                {t('save')}
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setIsEditing(false)} className="px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
+                  {t('cancel')}
+                </button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
+                  {t('save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

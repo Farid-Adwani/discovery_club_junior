@@ -4,10 +4,6 @@ import { defineMessages } from '../index';
 export const visitorMessages = defineMessages({
   en: {
     // toasts
-    toastSelectPhoto: 'Please select or upload a photo first',
-    toastEnterCaption: 'Please enter a caption for the photo',
-    toastPhotoAdded: 'Photo successfully added to live feed and saved to database!',
-    defaultCommentAuthor: 'Club Supporter',
 
     // hero
     heroWords: 'robots|rovers|circuits|inventions',
@@ -20,8 +16,6 @@ export const visitorMessages = defineMessages({
     chipTrophy: '1st place · Eurobot Junior Spain',
     chipWorld: 'Spain · Austria · Egypt',
     chipAges: 'Ages 6–17',
-    showMorePosts: 'See {count} more posts',
-    showLessPosts: 'Show fewer posts',
     heroIntro:
       'Discovery Club Junior is Manouba’s hands-on robotics, electronics and coding club. Kids and teens design, wire and program real robots, and take them to international competitions.',
     registerChild: 'Register your child',
@@ -119,54 +113,14 @@ export const visitorMessages = defineMessages({
     kitIncluded: 'Kit included',
 
     // facebook feed
-    fbBadge: '📱 Official Facebook page · Live',
-    fbTitle: 'News & photos from Discovery Club Junior',
-    fbText: 'More than 4,200 parents and fans follow our robotics workshops in Manouba!',
-    fbPage: 'Facebook page',
     filterAll: 'All posts ({count})',
-    filterChampions: '🏆 Eurobot Champions',
-    filterWorkshops: '🛠️ Manouba workshops',
-    filterGirls: '👧 Girls in Tech',
-    filterHoodies: '👕 The Hoodies',
-    filterIa: '🧠 AI & Vision',
-    clickToEnlarge: 'Click to enlarge the photo',
-    enlarge: '🔍 Enlarge',
-    liveSynced: 'Live synced',
-    lastComment: 'Latest comment:',
-    unlike: 'Unlike',
-    like: 'Like this post',
-    viewOnFacebook: 'View on Facebook',
-    likesCount: '{count} likes',
-    commentsCount: '💬 {count} comments',
-    originalPost: 'Original post on Facebook',
-    communityComments: 'Community comments:',
-    beFirstComment: 'Be the first to comment on this post!',
     namePlaceholder: 'Your name (e.g. Parent, Visitor...)',
-    commentPlaceholder: 'Write a word of encouragement to the students...',
-    publish: 'Post',
     close: 'Close',
 
     // upload modal
-    uploadTitle: 'Add your photos to the feed',
-    chooseImage: 'Choose an image from your device:',
-    browseFiles: 'Click to browse your files',
-    fileLimits: 'PNG, JPG, WEBP up to 5 MB',
-    pasteUrl: 'Or paste an image URL:',
-    urlPlaceholder: 'https://... photo URL',
-    previewAlt: 'Preview',
     change: 'Change',
     category: 'Category:',
-    tagChampions: '🏆 Eurobot Champions',
-    tagNational: '🇹🇳 National honour',
-    tagInternational: '🌍 International tournament',
-    tagWorkshops: '🛠️ Manouba workshops',
-    tagGirls: '👧 Girls in Tech',
-    tagHoodies: '👕 The Hoodies',
-    tagIa: '🧠 AI & Vision',
-    captionLabel: 'Description / caption *',
-    captionPlaceholder: 'Describe this photo...',
     cancel: 'Cancel',
-    publishPhoto: 'Publish photo',
 
     // shop
     shopBadge: '👕 Official club merchandise',
@@ -175,24 +129,61 @@ export const visitorMessages = defineMessages({
     priceDt: '{price} DT',
 
     // events
-    eventsBadge: '📅 Tournaments & challenges',
-    eventsTitle: 'Upcoming club events & hackathons',
-    spotsLeft: '{count} spots left',
-    registeredCancel: 'Registered (click to cancel)',
-    rsvp: 'RSVP for event',
 
     // final CTA
     ctaTitle: 'Ready to build the future?',
     ctaText: 'Create your parent account in one minute, add all your children, and we’ll place each one in the right class.',
 
     // RoboticsArt
+    // class cards
+    ageRange: '{min}–{max} yrs',
+    agePlus: '{min}+ yrs',
+    levelBeginner: 'Beginner',
+    levelIntermediate: 'Intermediate',
+    levelAdvanced: 'Advanced',
+    tryFree: 'Book a free trial',
+
+    // coaches
+    coachesEyebrow: 'The team',
+    coachesTitle: 'Meet the coaches',
+    coachesText: 'Engineers and educators who build robots with your kids every week.',
+
+    // testimonials
+    testimonialsEyebrow: 'Parents say',
+    testimonialsTitle: 'What families tell us',
+
+    // faq
+    faqEyebrow: 'Questions',
+    faqTitle: 'Frequently asked questions',
+
+    // contact & trial
+    contactEyebrow: 'Come and try',
+    contactTitle: 'Book a free trial class',
+    contactText: 'Tell us about your child and we’ll reply on WhatsApp with the next free slot. No account needed.',
+    trialParent: 'Your name',
+    trialChild: 'Child’s first name',
+    trialAge: 'Age',
+    trialClass: 'Class you’re interested in',
+    trialAnyClass: 'Not sure yet, advise me',
+    trialPhone: 'Your phone',
+    trialSend: 'Send on WhatsApp',
+    trialSendEmail: 'Send by email',
+    trialMessage: 'Hello Discovery Club Junior! I would like to book a free trial class.\nParent: {parent}\nChild: {child} ({age} years old)\nClass: {cls}\nPhone: {phone}',
+    trialSubject: 'Free trial class request',
+    whatsappUs: 'Chat on WhatsApp',
+    callUs: 'Call us',
+    emailUs: 'Email us',
+    openInMaps: 'Open in Google Maps',
+    mapTitle: 'Map showing where the club is',
+    whatsappFloat: 'Contact us on WhatsApp',
+    whatsappHello: 'Hello Discovery Club Junior! I have a question about your classes.',
+
+    // page metadata
+    metaTitle: 'Discovery Club Junior | Robotics & coding classes for kids in Manouba',
+    metaDescription: 'Weekly robotics, electronics and coding classes for kids and teens in Manouba, Tunisia. Real hardware, small groups, international competitions. Book a free trial class.',
     logoAlt: 'Discovery Club Junior logo'
   },
   fr: {
-    toastSelectPhoto: 'Veuillez d’abord choisir ou importer une photo',
-    toastEnterCaption: 'Veuillez saisir une légende pour la photo',
-    toastPhotoAdded: 'Photo ajoutée au fil en direct et enregistrée avec succès !',
-    defaultCommentAuthor: 'Supporter du club',
 
     heroWords: 'robots|rovers|circuits|prototypes',
     heroLine1: 'Ici, les enfants construisent',
@@ -204,8 +195,6 @@ export const visitorMessages = defineMessages({
     chipTrophy: '1re place · Eurobot Junior Espagne',
     chipWorld: 'Espagne · Autriche · Égypte',
     chipAges: 'De 6 à 17 ans',
-    showMorePosts: 'Voir {count} publications de plus',
-    showLessPosts: 'Voir moins de publications',
     heroIntro:
       'Discovery Club Junior est le club de robotique, d’électronique et de programmation de Manouba, axé sur la pratique. Enfants et ados conçoivent, câblent et programment de vrais robots, et les emmènent en compétitions internationales.',
     registerChild: 'Inscrire votre enfant',
@@ -295,75 +284,72 @@ export const visitorMessages = defineMessages({
     noClasses: 'Les classes seront annoncées bientôt.',
     kitIncluded: 'Kit inclus',
 
-    fbBadge: '📱 Page officielle Facebook · En direct',
-    fbTitle: 'Actualités & photos de Discovery Club Junior',
-    fbText: 'Plus de 4 200 parents et passionnés suivent nos ateliers de robotique à Manouba !',
-    fbPage: 'Page Facebook',
     filterAll: 'Tous les posts ({count})',
-    filterChampions: '🏆 Champions Eurobot',
-    filterWorkshops: '🛠️ Ateliers Manouba',
-    filterGirls: '👧 Girls in Tech',
-    filterHoodies: '👕 Les Capuches',
-    filterIa: '🧠 IA & Vision',
-    clickToEnlarge: 'Cliquer pour agrandir la photo',
-    enlarge: '🔍 Agrandir',
-    liveSynced: 'Synchronisé en direct',
-    lastComment: 'Dernier commentaire :',
-    unlike: 'Je n’aime plus',
-    like: 'J’aime ce post',
-    viewOnFacebook: 'Voir sur Facebook',
-    likesCount: '{count} J’aime',
-    commentsCount: '💬 {count} commentaires',
-    originalPost: 'Post original sur Facebook',
-    communityComments: 'Commentaires de la communauté :',
-    beFirstComment: 'Soyez le premier à commenter ce post !',
     namePlaceholder: 'Votre nom (ex : Parent, Visiteur...)',
-    commentPlaceholder: 'Écrire un mot d’encouragement aux élèves...',
-    publish: 'Publier',
     close: 'Fermer',
 
-    uploadTitle: 'Ajoutez vos photos au fil',
-    chooseImage: 'Choisir une image depuis votre appareil :',
-    browseFiles: 'Cliquez pour parcourir vos fichiers',
-    fileLimits: 'PNG, JPG, WEBP jusqu’à 5 Mo',
-    pasteUrl: 'Ou collez une URL d’image :',
-    urlPlaceholder: 'https://... URL de la photo',
-    previewAlt: 'Aperçu',
     change: 'Changer',
     category: 'Catégorie :',
-    tagChampions: '🏆 Champions Eurobot',
-    tagNational: '🇹🇳 Honneur national',
-    tagInternational: '🌍 Tournoi international',
-    tagWorkshops: '🛠️ Ateliers Manouba',
-    tagGirls: '👧 Girls in Tech',
-    tagHoodies: '👕 Les Capuches',
-    tagIa: '🧠 IA & Vision',
-    captionLabel: 'Description / légende *',
-    captionPlaceholder: 'Décrivez cette photo...',
     cancel: 'Annuler',
-    publishPhoto: 'Publier la photo',
 
     shopBadge: '👕 Produits officiels du club',
     shopTitle: 'Boutique Discovery Junior Club',
     orderInPortal: 'Commander dans l’espace parents',
     priceDt: '{price} DT',
 
-    eventsBadge: '📅 Tournois & défis',
-    eventsTitle: 'Prochains événements & hackathons du club',
-    spotsLeft: '{count} places restantes',
-    registeredCancel: 'Inscrit (cliquez pour annuler)',
-    rsvp: 'S’inscrire à l’événement',
 
     ctaTitle: 'Prêts à construire le futur ?',
     ctaText: 'Créez votre compte parent en une minute, ajoutez tous vos enfants, et nous placerons chacun dans la bonne classe.',
 
+    // class cards
+    ageRange: '{min}–{max} ans',
+    agePlus: '{min} ans et +',
+    levelBeginner: 'Débutant',
+    levelIntermediate: 'Intermédiaire',
+    levelAdvanced: 'Avancé',
+    tryFree: 'Réserver un essai gratuit',
+
+    // coaches
+    coachesEyebrow: 'L’équipe',
+    coachesTitle: 'Rencontrez les coachs',
+    coachesText: 'Des ingénieurs et des pédagogues qui construisent des robots avec vos enfants chaque semaine.',
+
+    // testimonials
+    testimonialsEyebrow: 'Les parents en parlent',
+    testimonialsTitle: 'Ce que nous disent les familles',
+
+    // faq
+    faqEyebrow: 'Questions',
+    faqTitle: 'Questions fréquentes',
+
+    // contact & trial
+    contactEyebrow: 'Venez essayer',
+    contactTitle: 'Réservez une séance d’essai gratuite',
+    contactText: 'Parlez-nous de votre enfant, nous vous répondons sur WhatsApp avec le prochain créneau libre. Aucun compte nécessaire.',
+    trialParent: 'Votre nom',
+    trialChild: 'Prénom de l’enfant',
+    trialAge: 'Âge',
+    trialClass: 'Cours qui vous intéresse',
+    trialAnyClass: 'Je ne sais pas encore, conseillez-moi',
+    trialPhone: 'Votre téléphone',
+    trialSend: 'Envoyer sur WhatsApp',
+    trialSendEmail: 'Envoyer par e-mail',
+    trialMessage: 'Bonjour Discovery Club Junior ! Je souhaite réserver une séance d’essai gratuite.\nParent : {parent}\nEnfant : {child} ({age} ans)\nCours : {cls}\nTéléphone : {phone}',
+    trialSubject: 'Demande de séance d’essai gratuite',
+    whatsappUs: 'Écrire sur WhatsApp',
+    callUs: 'Appelez-nous',
+    emailUs: 'Écrivez-nous',
+    openInMaps: 'Ouvrir dans Google Maps',
+    mapTitle: 'Carte indiquant l’emplacement du club',
+    whatsappFloat: 'Nous contacter sur WhatsApp',
+    whatsappHello: 'Bonjour Discovery Club Junior ! J’ai une question sur vos cours.',
+
+    // page metadata
+    metaTitle: 'Discovery Club Junior | Cours de robotique et de code pour enfants à Manouba',
+    metaDescription: 'Cours hebdomadaires de robotique, d’électronique et de programmation pour enfants et ados à Manouba, Tunisie. Vrai matériel, petits groupes, compétitions internationales. Réservez une séance d’essai gratuite.',
     logoAlt: 'Logo de Discovery Club Junior'
   },
   ar: {
-    toastSelectPhoto: 'يرجى اختيار صورة أو رفعها أولاً',
-    toastEnterCaption: 'يرجى كتابة تعليق للصورة',
-    toastPhotoAdded: 'تمت إضافة الصورة إلى الصفحة المباشرة وحفظها بنجاح!',
-    defaultCommentAuthor: 'مشجّع النادي',
 
     heroWords: 'روبوتات|مركبات|دوائر|اختراعات',
     heroLine1: 'هنا يصنع الأطفال',
@@ -375,8 +361,6 @@ export const visitorMessages = defineMessages({
     chipTrophy: 'المركز الأول · يوروبوت جونيور إسبانيا',
     chipWorld: 'إسبانيا · النمسا · مصر',
     chipAges: 'من 6 إلى 17 سنة',
-    showMorePosts: 'عرض {count} منشورات أخرى',
-    showLessPosts: 'عرض منشورات أقل',
     heroIntro:
       'Discovery Club Junior هو نادي الروبوتيك والإلكترونيك والبرمجة التطبيقي في منوبة. يصمّم الأطفال واليافعون روبوتات حقيقية ويوصلون دوائرها ويبرمجونها، ثم يشاركون بها في مسابقات دولية.',
     registerChild: 'سجّل طفلك',
@@ -466,68 +450,69 @@ export const visitorMessages = defineMessages({
     noClasses: 'سيتم الإعلان عن الأقسام قريبًا.',
     kitIncluded: 'العُدّة مشمولة',
 
-    fbBadge: '📱 صفحة فيسبوك الرسمية · مباشر',
-    fbTitle: 'أخبار وصور Discovery Club Junior',
-    fbText: 'أكثر من 4200 وليّ ومهتمّ يتابعون ورشات الروبوتيك لدينا في منوبة!',
-    fbPage: 'صفحة فيسبوك',
     filterAll: 'كل المنشورات ({count})',
-    filterChampions: '🏆 أبطال يوروبوت',
-    filterWorkshops: '🛠️ ورشات منوبة',
-    filterGirls: '👧 فتيات في التكنولوجيا',
-    filterHoodies: '👕 السترات ذات القلنسوة',
-    filterIa: '🧠 الذكاء الاصطناعي والرؤية',
-    clickToEnlarge: 'انقر لتكبير الصورة',
-    enlarge: '🔍 تكبير',
-    liveSynced: 'مُزامَن مباشرة',
-    lastComment: 'آخر تعليق:',
-    unlike: 'إلغاء الإعجاب',
-    like: 'أعجبني هذا المنشور',
-    viewOnFacebook: 'عرض على فيسبوك',
-    likesCount: '{count} إعجاب',
-    commentsCount: '💬 {count} تعليقات',
-    originalPost: 'المنشور الأصلي على فيسبوك',
-    communityComments: 'تعليقات المجتمع:',
-    beFirstComment: 'كن أول من يعلّق على هذا المنشور!',
     namePlaceholder: 'اسمك (مثال: وليّ، زائر...)',
-    commentPlaceholder: 'اكتب كلمة تشجيع للتلاميذ...',
-    publish: 'نشر',
     close: 'إغلاق',
 
-    uploadTitle: 'أضف صورك إلى الصفحة',
-    chooseImage: 'اختر صورة من جهازك:',
-    browseFiles: 'انقر لتصفّح ملفاتك',
-    fileLimits: 'PNG، JPG، WEBP حتى 5 ميغابايت',
-    pasteUrl: 'أو الصق رابط صورة:',
-    urlPlaceholder: 'https://... رابط الصورة',
-    previewAlt: 'معاينة',
     change: 'تغيير',
     category: 'الفئة:',
-    tagChampions: '🏆 أبطال يوروبوت',
-    tagNational: '🇹🇳 تكريم وطني',
-    tagInternational: '🌍 بطولة دولية',
-    tagWorkshops: '🛠️ ورشات منوبة',
-    tagGirls: '👧 فتيات في التكنولوجيا',
-    tagHoodies: '👕 السترات ذات القلنسوة',
-    tagIa: '🧠 الذكاء الاصطناعي والرؤية',
-    captionLabel: 'الوصف / التعليق *',
-    captionPlaceholder: 'صِف هذه الصورة...',
     cancel: 'إلغاء',
-    publishPhoto: 'نشر الصورة',
 
     shopBadge: '👕 منتجات النادي الرسمية',
     shopTitle: 'متجر Discovery Junior Club',
     orderInPortal: 'اطلب من فضاء الأولياء',
     priceDt: '{price} د.ت',
 
-    eventsBadge: '📅 بطولات وتحدّيات',
-    eventsTitle: 'فعاليات النادي وهاكاثونات قادمة',
-    spotsLeft: '{count} أماكن متبقية',
-    registeredCancel: 'مسجَّل (انقر للإلغاء)',
-    rsvp: 'سجّل في الفعالية',
 
     ctaTitle: 'مستعدّون لبناء المستقبل؟',
     ctaText: 'أنشئ حساب وليّ الأمر في دقيقة واحدة، وأضف جميع أطفالك، وسنضع كلاً منهم في القسم المناسب.',
 
+    // class cards
+    ageRange: '{min}–{max} سنة',
+    agePlus: '{min} سنة فما فوق',
+    levelBeginner: 'مبتدئ',
+    levelIntermediate: 'متوسط',
+    levelAdvanced: 'متقدم',
+    tryFree: 'احجز حصة تجريبية مجانية',
+
+    // coaches
+    coachesEyebrow: 'الفريق',
+    coachesTitle: 'تعرّف على المدربين',
+    coachesText: 'مهندسون ومربّون يبنون الروبوتات مع أطفالكم كل أسبوع.',
+
+    // testimonials
+    testimonialsEyebrow: 'يقول الأولياء',
+    testimonialsTitle: 'ما تقوله لنا العائلات',
+
+    // faq
+    faqEyebrow: 'أسئلة',
+    faqTitle: 'الأسئلة الشائعة',
+
+    // contact & trial
+    contactEyebrow: 'تعال وجرّب',
+    contactTitle: 'احجز حصة تجريبية مجانية',
+    contactText: 'حدّثنا عن طفلك وسنردّ عليك عبر واتساب بأقرب موعد متاح. لا حاجة لإنشاء حساب.',
+    trialParent: 'اسمك',
+    trialChild: 'اسم الطفل',
+    trialAge: 'العمر',
+    trialClass: 'الحصة التي تهمّك',
+    trialAnyClass: 'لست متأكدًا بعد، انصحوني',
+    trialPhone: 'رقم هاتفك',
+    trialSend: 'إرسال عبر واتساب',
+    trialSendEmail: 'إرسال بالبريد الإلكتروني',
+    trialMessage: 'مرحبًا Discovery Club Junior! أرغب في حجز حصة تجريبية مجانية.\nالولي: {parent}\nالطفل: {child} ({age} سنة)\nالحصة: {cls}\nالهاتف: {phone}',
+    trialSubject: 'طلب حصة تجريبية مجانية',
+    whatsappUs: 'راسلنا على واتساب',
+    callUs: 'اتصل بنا',
+    emailUs: 'راسلنا بالبريد',
+    openInMaps: 'فتح في خرائط Google',
+    mapTitle: 'خريطة تبيّن مكان النادي',
+    whatsappFloat: 'تواصل معنا عبر واتساب',
+    whatsappHello: 'مرحبًا Discovery Club Junior! لديّ سؤال حول حصصكم.',
+
+    // page metadata
+    metaTitle: 'Discovery Club Junior | حصص روبوتيك وبرمجة للأطفال في منوبة',
+    metaDescription: 'حصص أسبوعية في الروبوتيك والإلكترونيك والبرمجة للأطفال والمراهقين في منوبة، تونس. معدات حقيقية، مجموعات صغيرة ومسابقات دولية. احجز حصة تجريبية مجانية.',
     logoAlt: 'شعار Discovery Club Junior'
   }
 });

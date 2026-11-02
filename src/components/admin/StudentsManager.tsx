@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
+  Camera,
+  CameraOff,
   Check,
   CheckCircle2,
   Clock,
@@ -666,6 +668,11 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
                       {st.birthDate && <span> · {t('born', { date: formatDate(st.birthDate) })}</span>}
                     </div>
                     {!pending && <div className="text-[11px] font-medium text-slate-400">{t('registered', { date: formatDate(st.registeredAt) })}</div>}
+                    {/* Asked at sign-up; children registered before that have no answer (treated as no) */}
+                    <div className={`mt-1 inline-flex items-center gap-1 text-[11px] font-bold ${st.photoConsent ? 'text-[#15803d]' : 'text-amber-700'}`}>
+                      {st.photoConsent ? <Camera className="w-3.5 h-3.5" /> : <CameraOff className="w-3.5 h-3.5" />}
+                      {st.photoConsent ? t('photoConsentYes') : t('photoConsentNo')}
+                    </div>
                   </div>
                 </div>
 

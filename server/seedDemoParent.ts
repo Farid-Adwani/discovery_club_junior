@@ -214,12 +214,6 @@ async function createDemo() {
 
   await batch.commit();
 
-  // 4. Registered for one upcoming event
-  const firstEvent = (await db.collection('events').limit(1).get()).docs[0];
-  if (firstEvent) {
-    await firstEvent.ref.update({ registeredUids: FieldValue.arrayUnion(user.uid), spotsLeft: FieldValue.increment(-1) });
-  }
-
   console.log('\nDemo parent created:');
   console.log(`  login     ${EMAIL} / ${PASSWORD}`);
   for (const k of kids) {

@@ -117,6 +117,18 @@
   .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
+
+  /* Visible focus for keyboard users on every control (form fields keep their own focus border) */
+  :focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
 }
 
 /* Duolingo-Inspired Chunky 3D Tactile Buttons */
@@ -570,4 +582,17 @@ input[type='email'] {
   body:has(> .print-sheet) > *:not(.print-sheet) { display: none !important; }
   .print-sheet { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-sheet tr { break-inside: avoid; }
+}
+
+/* notification bell: a short ring when something new is waiting */
+@keyframes bellRing {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[bellRing_1s_ease-in-out_2\] { animation: none !important; }
 }

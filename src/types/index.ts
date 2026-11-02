@@ -7,7 +7,9 @@ export type AppPage =
   | 'register-parent'
   | 'admin'
   | 'trainer'
-  | 'parent';
+  | 'parent'
+  | 'privacy'
+  | 'terms';
 
 export interface AppUser {
   uid: string;
@@ -24,26 +26,6 @@ export interface AppUser {
   childName?: string;
 }
 
-export interface FacebookComment {
-  id: string;
-  author: string;
-  text: string;
-  date: string;
-}
-
-export interface FacebookPost {
-  id: string;
-  caption: string;
-  date: string;
-  imageUrl: string;
-  likes: number;
-  comments: number;
-  tag: string;
-  postUrl: string;
-  likedBy?: string[];
-  commentsList?: FacebookComment[];
-}
-
 /** 'waitlist' = pending (shown as "Pending"); older 'active' records are read as 'accepted' */
 export type StudentStatus = 'waitlist' | 'accepted';
 
@@ -54,7 +36,7 @@ export interface Student {
   parentEmail: string;
   parentUid?: string; // account of the parent who registered the child
   studentName: string;
-  photoURL?: string; // small square JPEG stored as a data URL (resized in the browser)
+  photoURL?: string; // Storage URL of a small square JPEG (resized in the browser, uploaded by the server)
   birthDate?: string; // YYYY-MM-DD; the age shown on the site is computed from it
   studentAge: number; // age when registered (only used when birthDate is missing, for older records)
   status: StudentStatus;
@@ -65,6 +47,7 @@ export interface Student {
   /** 'scholarship' = free every month; 'paid'/'pending' mirror the current month's payment (see PaymentRecord) */
   paymentStatus: 'paid' | 'pending' | 'scholarship';
   notes?: string;
+  photoConsent?: boolean; // the parent allows the club to publish photos of this child (asked at sign-up)
 }
 
 export type PaymentMethod = 'cash' | 'transfer' | 'cheque' | 'card' | 'other';
@@ -170,8 +153,14 @@ export interface Group {
   timeSlot: string;
   room: string;
   maxCapacity?: number; // missing = no limit on the number of children
-  imageUrl?: string; // wide JPEG data URL; missing = the default class picture (CLASS_DEFAULT_IMAGE)
+  imageUrl?: string; // Storage URL (the browser uploads a resized data URL); missing = the default class picture (CLASS_DEFAULT_IMAGE)
+  ageMin?: number; // ages the class is for, shown on the public site
+  ageMax?: number;
+  level?: GroupLevel;
 }
+
+export const GROUP_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+export type GroupLevel = (typeof GROUP_LEVELS)[number];
 
 /** Picture shown for a class that has no image of its own */
 export const CLASS_DEFAULT_IMAGE = '/photos/class_default.svg';
@@ -279,19 +268,74 @@ export interface MaterialRequest {
   itemsNeeded: string;
   quantity: string;
   urgency: 'low' | 'medium' | 'urgent';
-  status: 'pending' | 'approved' | 'delivered';
+  status: 'pending' | 'approved' | 'delivered' | 'refused';
   requestedAt: string;
   sessionDate: string;
+  /** The stock item asked for (missing = typed by hand) */
+  stockItemId?: string;
+  /** Units taken from the stock when it was delivered (given back if it goes back to pending/approved) */
+  stockDeducted?: number;
+  /** Conversation between the coach and the office about this request */
+  comments?: RequestComment[];
+  /** When the status last changed (ISO) */
+  statusChangedAt?: string;
 }
 
-export interface ClubEvent {
+export interface RequestComment {
   id: string;
-  title: string;
-  category: 'Competition' | 'Hackathon' | 'Exhibition' | 'Masterclass';
-  date: string;
-  time: string;
-  location: string;
-  description: string;
-  spotsLeft: number;
-  isRegistered: boolean;
+  authorName: string;
+  role: 'admin' | 'trainer';
+  text: string;
+  at: string; // ISO
 }
+
+export type StockStatus = 'available' | 'in_use' | 'maintenance' | 'broken' | 'lost';
+
+export interface StockCategory {
+  id: string;
+  name: string;
+  color: string; // hex
+  deletedAt?: string;
+}
+
+/** A place where things are kept (Lab A, cupboard 3…) */
+export interface StockLocation {
+  id: string;
+  name: string;
+  deletedAt?: string;
+}
+
+/** Club equipment. Trainers only see items that are not hidden from them (and not where they are). */
+export interface StockItem {
+  id: string;
+  name: string;
+  reference?: string; // model, SKU…
+  categoryId?: string;
+  locationId?: string;
+  /** Old items only: one state for all the pieces. Replaced by `units`. */
+  status?: StockStatus;
+  /** Total number of pieces */
+  quantity: number;
+  /** Pieces that are not available, by state; the rest of `quantity` is available (see utils/stock.ts) */
+  units?: Partial<Record<Exclude<StockStatus, 'available'>, number>>;
+  unit?: string; // pcs, m, kits…
+  minQuantity?: number; // low-stock alert below or at this
+  imageUrl?: string;
+  notes?: string;
+  hiddenFromTrainers?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/** Every change of a stock quantity */
+export interface StockMovement {
+  id: string;
+  itemId: string;
+  delta: number;
+  reason: 'adjust' | 'request' | 'request_undo' | 'created';
+  requestId?: string;
+  note?: string;
+  at: string;
+  by: string;
+}
+

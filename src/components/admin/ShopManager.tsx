@@ -29,6 +29,7 @@ import { CATEGORY_EMOJI, ONE_SIZE, PRODUCT_CATEGORIES, orderTime, stockKeys, tot
 import { useLanguage, useT } from '../../i18n';
 import { useConfirm } from '../common/ConfirmProvider';
 import { shopMessages } from '../../i18n/messages/shop';
+import { ModalPortal } from '../common/ModalPortal';
 
 // Labels are message keys, translated at render
 const SIZE_PRESETS: { label: 'presetKidsAdult' | 'presetAdult' | 'presetOneSize'; sizes: string[] }[] = [
@@ -503,130 +504,132 @@ export const ShopManager: React.FC = () => {
 
       {/* Create / edit product modal */}
       {draft && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleSave} className="duo-card p-6 bg-white max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-black text-slate-800">
-              {products.some((p) => p.id === draft.id) ? t('editProduct') : t('newProduct')}
-            </h3>
-            <div className="space-y-3 text-xs font-bold text-slate-700">
-              <div>
-                <label className="block mb-1">{t('fieldName')}</label>
-                <input
-                  required
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder={t('namePlaceholder')}
-                  className={inputCls}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <form onSubmit={handleSave} className="duo-card hover:transform-none! p-6 bg-white max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-base font-black text-slate-800">
+                {products.some((p) => p.id === draft.id) ? t('editProduct') : t('newProduct')}
+              </h3>
+              <div className="space-y-3 text-xs font-bold text-slate-700">
                 <div>
-                  <label className="block mb-1">{t('fieldType')}</label>
-                  <select
-                    value={draft.category}
-                    onChange={(e) => setDraft({ ...draft, category: e.target.value as ProductCategory })}
-                    className={`${inputCls} cursor-pointer`}
-                  >
-                    {PRODUCT_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {CATEGORY_EMOJI[c]} {t(`cat_${c}`)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block mb-1">{t('fieldPrice')}</label>
+                  <label className="block mb-1">{t('fieldName')}</label>
                   <input
-                    type="number"
-                    min={0}
                     required
-                    value={draft.price}
-                    onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })}
-                    className={`${inputCls} font-mono`}
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    placeholder={t('namePlaceholder')}
+                    className={inputCls}
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block mb-1">{t('fieldDescription')}</label>
-                <textarea
-                  rows={2}
-                  value={draft.description}
-                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                  className={inputCls}
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1">{t('fieldSizes')}</label>
-                <input
-                  value={draft.sizesText}
-                  onChange={(e) => setDraft({ ...draft, sizesText: e.target.value })}
-                  placeholder="S, M, L"
-                  className={`${inputCls} font-mono`}
-                />
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {SIZE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setDraft({ ...draft, sizesText: preset.sizes.join(', ') })}
-                      className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-[10px] font-black cursor-pointer"
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1">{t('fieldType')}</label>
+                    <select
+                      value={draft.category}
+                      onChange={(e) => setDraft({ ...draft, category: e.target.value as ProductCategory })}
+                      className={`${inputCls} cursor-pointer`}
                     >
-                      {t(preset.label)}
-                    </button>
-                  ))}
+                      {PRODUCT_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {CATEGORY_EMOJI[c]} {t(`cat_${c}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1">{t('fieldPrice')}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      required
+                      value={draft.price}
+                      onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })}
+                      className={`${inputCls} font-mono`}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block mb-1">{t('fieldPhoto')}</label>
-                <div className="flex items-center gap-3">
-                  {draft.imageUrl && <img src={draft.imageUrl} alt="" className="w-14 h-14 rounded-xl object-cover border" />}
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="px-3 py-2 btn-duo-secondary text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>{draft.imageUrl ? t('change') : t('upload')}</span>
-                  </button>
-                  {draft.imageUrl && (
+                <div>
+                  <label className="block mb-1">{t('fieldDescription')}</label>
+                  <textarea
+                    rows={2}
+                    value={draft.description}
+                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1">{t('fieldSizes')}</label>
+                  <input
+                    value={draft.sizesText}
+                    onChange={(e) => setDraft({ ...draft, sizesText: e.target.value })}
+                    placeholder="S, M, L"
+                    className={`${inputCls} font-mono`}
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {SIZE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setDraft({ ...draft, sizesText: preset.sizes.join(', ') })}
+                        className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-[10px] font-black cursor-pointer"
+                      >
+                        {t(preset.label)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-1">{t('fieldPhoto')}</label>
+                  <div className="flex items-center gap-3">
+                    {draft.imageUrl && <img src={draft.imageUrl} alt="" className="w-14 h-14 rounded-xl object-cover border" />}
                     <button
                       type="button"
-                      onClick={() => setDraft({ ...draft, imageUrl: '' })}
-                      className="text-rose-600 text-xs font-bold cursor-pointer"
+                      onClick={() => fileRef.current?.click()}
+                      className="px-3 py-2 btn-duo-secondary text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                     >
-                      {t('remove')}
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{draft.imageUrl ? t('change') : t('upload')}</span>
                     </button>
-                  )}
-                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
+                    {draft.imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setDraft({ ...draft, imageUrl: '' })}
+                        className="text-rose-600 text-xs font-bold cursor-pointer"
+                      >
+                        {t('remove')}
+                      </button>
+                    )}
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
+                  </div>
                 </div>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.isActive}
+                    onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span>{t('onSaleCheckbox')}</span>
+                </label>
+                <p className="text-[11px] font-medium text-slate-500">{t('stockHint')}</p>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={draft.isActive}
-                  onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                <span>{t('onSaleCheckbox')}</span>
-              </label>
-              <p className="text-[11px] font-medium text-slate-500">{t('stockHint')}</p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setDraft(null)} className="px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
-                {t('cancel')}
-              </button>
-              <button type="submit" disabled={isSaving} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
-                {t('saveProduct')}
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setDraft(null)} className="px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
+                  {t('cancel')}
+                </button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
+                  {t('saveProduct')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

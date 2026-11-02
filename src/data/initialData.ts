@@ -1,4 +1,4 @@
-import { Trainer, Group, Student, Product, ProductOrder, SessionRecord, MaterialRequest, ClubEvent, FacebookPost } from '../types';
+import { Trainer, Group, Student, Product, ProductOrder, SessionRecord, MaterialRequest } from '../types';
 
 // Photos live in /public/photos so their URLs are stable and can be stored in the database
 const eurobotSpainChampions = '/photos/eurobot_spain_champions.jpg';
@@ -399,194 +399,19 @@ export const INITIAL_MATERIAL_REQUESTS: MaterialRequest[] = [
   }
 ];
 
-export const INITIAL_EVENTS: ClubEvent[] = [
-  {
-    id: 'evt-01',
-    title: 'National Junior Robotics Olympiad 2026',
-    category: 'Competition',
-    date: 'October 24, 2026',
-    time: '09:00 - 18:00',
-    location: 'Palais des Congrès, Tunis',
-    description: 'Premier national challenge where junior robotics squads compete in precision maze solving and autonomous payload deliveries.',
-    spotsLeft: 12,
-    isRegistered: false
-  },
-  {
-    id: 'evt-02',
-    title: 'Junior AI & Game Hackathon: 48h Challenge',
-    category: 'Hackathon',
-    date: 'November 14, 2026',
-    time: '10:00 - 17:00',
-    location: 'Discovery Club Junior Innovation Arena',
-    description: 'Fun coding hackathon where teams of 3 build eco-friendly smart city simulations and games in Python & Scratch.',
-    spotsLeft: 18,
-    isRegistered: true
-  },
-  {
-    id: 'evt-03',
-    title: 'Autumn STEM Maker Exhibition & Parent Demo Day',
-    category: 'Exhibition',
-    date: 'December 05, 2026',
-    time: '14:00 - 18:30',
-    location: 'Discovery Club Junior Main Campus',
-    description: 'Students demonstrate their functional robots, electronic gadgets, and software to parents, mentors, and industry guests.',
-    spotsLeft: 45,
-    isRegistered: false
-  }
-];
-
-export const FACEBOOK_POSTS: FacebookPost[] = [
-  {
-    id: 'fb-01',
-    caption: '🏆 HISTORIQUE ! Notre équipe "Discovery 2" remporte la 1ère PLACE MONDIALE à la compétition internationale Eurobot Junior 2026 en Espagne ! 🇹🇳 Félicitations à nos jeunes génies tunisiens qui ont conçu, programmé et piloté un rover 100% autonome. La relève technologique est assurée à Manouba !',
-    date: 'Hier à 18:30',
-    imageUrl: eurobotSpainChampions,
-    likes: 542,
-    comments: 118,
-    tag: '🏆 Eurobot Champions',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-02',
-    caption: '📜 Trophée Don Quichotte & Diplôme Officiel : "EUROBOT SPAIN JUNIOR INT. FINALS - FIRST PLACE - DISCOVERY 2" ! Remis à l’Université d’Alcalá de Henares en présence du doyen de l’École Polytechnique Bernardo Alarcos et des sponsors technologiques maxon, JLCPCB et 2ingenia.',
-    date: 'Il y a 2 jours',
-    imageUrl: eurobotSpainTrophyCert,
-    likes: 498,
-    comments: 73,
-    tag: '🏆 Eurobot Champions',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-03',
-    caption: '🎖️ Cérémonie d’Honneur Solennelle : L’équipe de Discovery Club Junior reçue et félicitée sous les armoiries nationales tunisiennes par les hauts responsables de la Jeunesse et des Sports ! Fiers de porter haut les couleurs de la Tunisie.',
-    date: 'Il y a 3 jours',
-    imageUrl: ministryHonorCeremony,
-    likes: 624,
-    comments: 142,
-    tag: '🇹🇳 Honneur National',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-04',
-    caption: '🇦🇹 RoboCup Junior European Championship 2026 à la Marx Halle de Vienne, Autriche ! La délégation de Manouba sur le tapis rouge avec le drapeau national et la chéchia tunisienne parmi plus de 20 pays participants.',
-    date: 'Il y a 4 jours',
-    imageUrl: robocupViennaMarxHalle,
-    likes: 445,
-    comments: 67,
-    tag: '🌍 Tournoi International',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-05',
-    caption: '🇪🇬 RoboCup Junior Egypt : Toute la délégation Discovery Club Junior réunie devant l’entrée officielle de la compétition ! Une semaine de défis, de rencontres et de robots autonomes.',
-    date: 'Il y a 5 jours',
-    imageUrl: robocupJuniorEgypt,
-    likes: 384,
-    comments: 46,
-    tag: '🌍 Tournoi International',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-06',
-    caption: '🥈 2ème PRIX au concours ODA Robots à Carthage ! Explosion de joie pour nos membres en sweats rouges. Bravo à toute l’équipe pour ce magnifique résultat !',
-    date: 'Il y a 1 semaine',
-    imageUrl: odaRobots2ndPrize,
-    likes: 412,
-    comments: 53,
-    tag: '🏆 Podium National',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-07',
-    caption: '🤖 Qualifications nationales Eurobot Junior Tunisie organisées par l’ATR : nos équipes, les arbitres et les organisateurs réunis autour de la table de jeu. Merci à tous pour cette belle journée !',
-    date: 'Il y a 1 semaine',
-    imageUrl: eurobotJuniorTunisiaQualif,
-    likes: 467,
-    comments: 82,
-    tag: '🇹🇳 Qualifications Nationales',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-08',
-    caption: '✈️ Départ vers le Championnat d’Europe RoboCup Junior ! Escale à l’aéroport d’Istanbul avec la banderole Discovery Club Junior et le drapeau tunisien. Allez les jeunes !',
-    date: 'Il y a 2 semaines',
-    imageUrl: istanbulAirportEuropeanChamp,
-    likes: 298,
-    comments: 34,
-    tag: '✈️ En Route',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-09',
-    caption: '🤝 Amitiés internationales : nos membres posent avec l’équipe de Thaïlande. La robotique, c’est aussi des rencontres avec des jeunes du monde entier !',
-    date: 'Il y a 2 semaines',
-    imageUrl: internationalFriendsThailand,
-    likes: 276,
-    comments: 29,
-    tag: '🌍 Tournoi International',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-10',
-    caption: '🏅 Réception officielle : l’équipe remet le trophée de la compétition aux responsables. Fiers de représenter la Tunisie à l’international !',
-    date: 'Il y a 3 semaines',
-    imageUrl: officialTrophyReception,
-    likes: 351,
-    comments: 41,
-    tag: '🇹🇳 Honneur National',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-11',
-    caption: '🎉 Eurobot Spain Junior : sur scène pour la remise des prix à l’Université d’Alcalá, drapeau tunisien en main !',
-    date: 'Il y a 3 semaines',
-    imageUrl: eurobotSpainStage,
-    likes: 520,
-    comments: 77,
-    tag: '🏆 Eurobot Champions',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  },
-  {
-    id: 'fb-12',
-    caption: '🌐 Tous les drapeaux réunis : Slovaquie, Tunisie, France, Italie, Égypte… nos jeunes partagent la passion de la robotique avec les délégations du monde entier.',
-    date: 'Il y a 1 mois',
-    imageUrl: nationsFlags,
-    likes: 233,
-    comments: 22,
-    tag: '🌍 Tournoi International',
-    postUrl: 'https://www.facebook.com/DiscoveryClubJunior/'
-  }
-];
 
 
 
+
+/**
+ * Default numbers offered in Admin → Landing page. 0 = not set: the counter is hidden on the
+ * home page until an admin enters the real figure.
+ */
 export const CLUB_STATS = {
-  activeStudents: 148,
-  workshopsCompleted: 320,
-  projectsBuilt: 610,
-  competitionsWon: 14,
-  parentSatisfactionRate: 98.6
+  activeStudents: 0,
+  workshopsCompleted: 0,
+  projectsBuilt: 0,
+  competitionsWon: 0
 };
 
-export const CLUB_ACHIEVEMENTS_TIMELINE = [
-  {
-    year: '2021',
-    title: 'Foundation of Discovery Club Junior',
-    description: 'Started as a weekend maker garage with 12 enthusiastic kids and 6 robotics starter kits.'
-  },
-  {
-    year: '2023',
-    title: 'National Robotics Cup Champions',
-    description: 'Our junior squad won 1st place in the Autonomous Rover Category against 40 regional academies.'
-  },
-  {
-    year: '2024',
-    title: 'STEM Pedagogy Accreditation',
-    description: 'Curriculum certified with international hands-on constructivist standards, introducing AI for young coders.'
-  },
-  {
-    year: '2025 - 2026',
-    title: 'Expanded Maker Labs & Smart Campus',
-    description: 'Over 140+ active young inventors, dedicated electronics cleanrooms, and official WRO tournament qualifiers.'
-  }
-];
+// The hall of fame lives in src/data/siteContent.ts (achievements)

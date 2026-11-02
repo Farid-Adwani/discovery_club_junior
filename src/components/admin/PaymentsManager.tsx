@@ -49,6 +49,7 @@ import {
   totalsOf,
   whatsappLink
 } from '../../utils/payments';
+import { ModalPortal } from '../common/ModalPortal';
 
 type GroupBy = 'all' | 'parent' | 'class';
 type Filter = 'all' | 'due' | 'paid' | 'scholarship' | 'arrears';
@@ -1241,126 +1242,128 @@ const PaymentModal: React.FC<{
   const input = 'w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:bg-white focus:border-[#c11e3d]';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
-      <form
-        onSubmit={save}
-        onClick={(e) => e.stopPropagation()}
-        className="duo-card hover:transform-none! p-6 bg-white max-w-md w-full space-y-4 max-h-[92vh] overflow-y-auto"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-black text-slate-800">
-              {t('modalTitle', { name: row.student.studentName, month: monthLabel(month, locale) })}
-            </h3>
-            <p className="text-[11px] font-semibold text-slate-500">
-              {row.student.parentName} · <span dir="ltr">{row.student.parentPhone}</span>
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 btn-duo-secondary cursor-pointer" aria-label={t('cancel')}>
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-50 border-2 border-slate-200 cursor-pointer text-xs font-bold text-slate-700">
-          <input type="checkbox" checked={scholarship} onChange={(e) => setScholarship(e.target.checked)} className="w-4 h-4 accent-[#c11e3d]" />
-          <GraduationCap className="w-4 h-4 text-slate-500" />
-          {t('scholarshipMonth')}
-        </label>
-
-        {!scholarship && (
-          <>
-            <div className="grid grid-cols-2 gap-3 text-xs font-bold text-slate-700">
-              <label className="space-y-1">
-                <span>{t('amountDue')}</span>
-                <input type="number" min={0} step="any" value={due} onChange={(e) => setDue(Number(e.target.value))} className={`${input} font-mono`} />
-              </label>
-              <label className="space-y-1">
-                <span>{t('amountPaid')}</span>
-                <input type="number" min={0} step="any" value={paid} onChange={(e) => setPaid(Number(e.target.value))} className={`${input} font-mono`} autoFocus />
-              </label>
-            </div>
-            <div className="flex gap-1.5">
-              {(
-                [
-                  ['full', due],
-                  ['half', Math.round(due / 2)],
-                  ['nothing', 0]
-                ] as const
-              ).map(([k, v]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setPaid(v)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-black border-2 cursor-pointer transition-colors ${
-                    paid === v ? 'bg-[#191919] text-white border-[#191919]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#c11e3d]'
-                  }`}
-                >
-                  {t(k)}
-                </button>
-              ))}
-              <span
-                className="ms-auto self-center text-[11px] font-black"
-                style={{ color: left > 0 ? STATUS.pending.color : STATUS.paid.color }}
-              >
-                {left > 0 ? t('balanceLeft', { amount: dt(left, locale) }) : left < 0 ? t('overpaid', { amount: dt(-left, locale) }) : t('settled')}
-              </span>
-            </div>
-
-            {paid > 0 && (
-              <>
-                <div className="space-y-1 text-xs font-bold text-slate-700">
-                  <span>{t('method')}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {METHODS.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMethod(m)}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-black border-2 cursor-pointer transition-colors ${
-                          method === m ? 'bg-[#c11e3d] text-white border-[#c11e3d]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#c11e3d]'
-                        }`}
-                      >
-                        {t(METHOD_KEYS[m])}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <label className="block space-y-1 text-xs font-bold text-slate-700">
-                  <span>{t('paidAt')}</span>
-                  <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={input} />
-                </label>
-              </>
-            )}
-          </>
-        )}
-
-        <label className="block space-y-1 text-xs font-bold text-slate-700">
-          <span>{t('note')}</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder={t('notePlaceholder')} className={input} />
-        </label>
-
-        <button
-          type="button"
-          onClick={() => onEditPrice(row.student)}
-          className="text-[11px] font-black text-[#c11e3d] hover:underline cursor-pointer"
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
+        <form
+          onSubmit={save}
+          onClick={(e) => e.stopPropagation()}
+          className="duo-card hover:transform-none! p-6 bg-white max-w-md w-full space-y-4 max-h-[92vh] overflow-y-auto"
         >
-          {t('changePrice')} <span className="inline-block rtl:rotate-180">&rarr;</span>
-        </button>
-
-        <div className="flex items-center gap-2 pt-2 border-t-2 border-slate-100">
-          {row.record && (
-            <button type="button" onClick={clear} className="px-3 py-2 btn-duo-secondary text-xs font-bold cursor-pointer text-[#c11e3d]">
-              {t('clearRecord')}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-slate-800">
+                {t('modalTitle', { name: row.student.studentName, month: monthLabel(month, locale) })}
+              </h3>
+              <p className="text-[11px] font-semibold text-slate-500">
+                {row.student.parentName} · <span dir="ltr">{row.student.parentPhone}</span>
+              </p>
+            </div>
+            <button type="button" onClick={onClose} className="p-1.5 btn-duo-secondary cursor-pointer" aria-label={t('cancel')}>
+              <X className="w-4 h-4" />
             </button>
+          </div>
+
+          <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-50 border-2 border-slate-200 cursor-pointer text-xs font-bold text-slate-700">
+            <input type="checkbox" checked={scholarship} onChange={(e) => setScholarship(e.target.checked)} className="w-4 h-4 accent-[#c11e3d]" />
+            <GraduationCap className="w-4 h-4 text-slate-500" />
+            {t('scholarshipMonth')}
+          </label>
+
+          {!scholarship && (
+            <>
+              <div className="grid grid-cols-2 gap-3 text-xs font-bold text-slate-700">
+                <label className="space-y-1">
+                  <span>{t('amountDue')}</span>
+                  <input type="number" min={0} step="any" value={due} onChange={(e) => setDue(Number(e.target.value))} className={`${input} font-mono`} />
+                </label>
+                <label className="space-y-1">
+                  <span>{t('amountPaid')}</span>
+                  <input type="number" min={0} step="any" value={paid} onChange={(e) => setPaid(Number(e.target.value))} className={`${input} font-mono`} autoFocus />
+                </label>
+              </div>
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    ['full', due],
+                    ['half', Math.round(due / 2)],
+                    ['nothing', 0]
+                  ] as const
+                ).map(([k, v]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setPaid(v)}
+                    className={`px-3 py-1 rounded-full text-[11px] font-black border-2 cursor-pointer transition-colors ${
+                      paid === v ? 'bg-[#191919] text-white border-[#191919]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#c11e3d]'
+                    }`}
+                  >
+                    {t(k)}
+                  </button>
+                ))}
+                <span
+                  className="ms-auto self-center text-[11px] font-black"
+                  style={{ color: left > 0 ? STATUS.pending.color : STATUS.paid.color }}
+                >
+                  {left > 0 ? t('balanceLeft', { amount: dt(left, locale) }) : left < 0 ? t('overpaid', { amount: dt(-left, locale) }) : t('settled')}
+                </span>
+              </div>
+
+              {paid > 0 && (
+                <>
+                  <div className="space-y-1 text-xs font-bold text-slate-700">
+                    <span>{t('method')}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {METHODS.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setMethod(m)}
+                          className={`px-3 py-1.5 rounded-xl text-[11px] font-black border-2 cursor-pointer transition-colors ${
+                            method === m ? 'bg-[#c11e3d] text-white border-[#c11e3d]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#c11e3d]'
+                          }`}
+                        >
+                          {t(METHOD_KEYS[m])}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="block space-y-1 text-xs font-bold text-slate-700">
+                    <span>{t('paidAt')}</span>
+                    <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={input} />
+                  </label>
+                </>
+              )}
+            </>
           )}
-          <button type="button" onClick={onClose} className="ms-auto px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
-            {t('cancel')}
+
+          <label className="block space-y-1 text-xs font-bold text-slate-700">
+            <span>{t('note')}</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder={t('notePlaceholder')} className={input} />
+          </label>
+
+          <button
+            type="button"
+            onClick={() => onEditPrice(row.student)}
+            className="text-[11px] font-black text-[#c11e3d] hover:underline cursor-pointer"
+          >
+            {t('changePrice')} <span className="inline-block rtl:rotate-180">&rarr;</span>
           </button>
-          <button type="submit" disabled={saving} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
-            {t('save')}
-          </button>
-        </div>
-      </form>
-    </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t-2 border-slate-100">
+            {row.record && (
+              <button type="button" onClick={clear} className="px-3 py-2 btn-duo-secondary text-xs font-bold cursor-pointer text-[#c11e3d]">
+                {t('clearRecord')}
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="ms-auto px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
+              {t('cancel')}
+            </button>
+            <button type="submit" disabled={saving} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-60">
+              {t('save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </ModalPortal>
   );
 };

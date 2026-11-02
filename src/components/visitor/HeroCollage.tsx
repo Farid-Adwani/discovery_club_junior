@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { photoSrcSet } from './photo';
 
 type Photo = { img: string; title: string; tag: string };
 
@@ -42,6 +43,8 @@ export const HeroCollage: React.FC<{
         <motion.img
           {...float(0.6)}
           src={back[0]}
+          srcSet={photoSrcSet(back[0])}
+          sizes="240px"
           alt=""
           className="w-full h-full object-cover rounded-3xl border-[5px] border-white shadow-2xl"
         />
@@ -55,6 +58,8 @@ export const HeroCollage: React.FC<{
         <motion.img
           {...float(1.4)}
           src={back[1]}
+          srcSet={photoSrcSet(back[1])}
+          sizes="240px"
           alt=""
           className="w-full h-full object-cover rounded-3xl border-[5px] border-white shadow-2xl"
         />
@@ -71,6 +76,8 @@ export const HeroCollage: React.FC<{
           <motion.img
             key={current.img}
             src={current.img}
+            srcSet={photoSrcSet(current.img)}
+            sizes="(min-width: 1024px) 420px, 90vw"
             alt={current.title}
             initial={{ opacity: 0, scale: 1.12 }}
             animate={{ opacity: 1, scale: 1 }}

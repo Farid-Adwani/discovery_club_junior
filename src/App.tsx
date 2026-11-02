@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { CLUB_PHOTOS } from './data/initialData';
 import { AppProvider, useApp } from './context/AppContext';
-import { LanguageProvider, useT } from './i18n';
+import { LanguageProvider, useLanguage, useT } from './i18n';
 import { ConfirmProvider } from './components/common/ConfirmProvider';
 import { commonMessages } from './i18n/messages/common';
 import { Header } from './components/common/Header';
@@ -14,29 +14,63 @@ import { Footer } from './components/common/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
 import { IntroReveal } from './components/common/IntroReveal';
 import { VisitorPortal } from './components/visitor/VisitorPortal';
-import { AdminDashboard } from './components/admin/AdminDashboard';
-import { TrainerPortal } from './components/trainer/TrainerPortal';
-import { ParentPortal } from './components/parent/ParentPortal';
-import { LoginPage } from './pages/LoginPage';
-import { ParentRegisterPage } from './pages/ParentRegisterPage';
+import { WhatsAppButton } from './components/visitor/WhatsAppButton';
+import { visitorMessages } from './i18n/messages/visitor';
+import { siteMessages } from './i18n/messages/site';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShieldAlert, LogIn, ArrowLeft, UserPlus, Sparkles, Lock, KeyRound } from 'lucide-react';
+import { LogIn, ArrowLeft, UserPlus, Lock } from 'lucide-react';
+
+// Portals and sign-in pages load on demand, so visitors of the home page don't download them
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const TrainerPortal = lazy(() => import('./components/trainer/TrainerPortal').then((m) => ({ default: m.TrainerPortal })));
+const ParentPortal = lazy(() => import('./components/parent/ParentPortal').then((m) => ({ default: m.ParentPortal })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const ParentRegisterPage = lazy(() => import('./pages/ParentRegisterPage').then((m) => ({ default: m.ParentRegisterPage })));
+const LegalPage = lazy(() => import('./pages/LegalPage'));
+
+const PUBLIC_PAGES = ['home', 'visitor', 'privacy', 'terms'];
+
+const PageSpinner: React.FC = () => {
+  const t = useT(siteMessages);
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-live="polite">
+      <span className="w-10 h-10 rounded-full border-4 border-rose-200 border-t-rose-600 animate-spin" />
+      <span className="sr-only">{t('loading')}</span>
+    </div>
+  );
+};
+
+/** Tab title and description in the visitor's language (search engines that run scripts pick them up too) */
+function usePageMeta() {
+  const { lang } = useLanguage();
+  const tv = useT(visitorMessages);
+  useEffect(() => {
+    const prefix = document.title.match(/^\(\d+\)\s*/)?.[0] || ''; // unread count kept by NotificationBell
+    document.title = prefix + tv('metaTitle');
+    const set = (selector: string, value: string) => document.querySelector(selector)?.setAttribute('content', value);
+    set('meta[name="description"]', tv('metaDescription'));
+    set('meta[property="og:title"]', tv('metaTitle'));
+    set('meta[property="og:description"]', tv('metaDescription'));
+    set('meta[property="og:locale"]', { en: 'en_GB', fr: 'fr_FR', ar: 'ar_TN' }[lang]);
+  }, [lang]);
+}
 
 const AppContent: React.FC = () => {
   const { currentPage, navigateTo, currentUser, isRestoringSession } = useApp();
   const t = useT(commonMessages);
+  usePageMeta();
 
   // Route security gate: check if user is authorized for protected portal pages
   const renderPage = () => {
     // After a refresh on a protected page, wait for the saved sign-in instead of showing "access denied"
     if (isRestoringSession && ['admin', 'trainer', 'parent'].includes(currentPage)) {
-      return (
-        <div key="page-restoring" className="min-h-[60vh] flex items-center justify-center" role="status" aria-live="polite">
-          <span className="w-10 h-10 rounded-full border-4 border-rose-200 border-t-rose-600 animate-spin" />
-        </div>
-      );
+      return <PageSpinner key="page-restoring" />;
     }
     switch (currentPage) {
+      case 'privacy':
+      case 'terms':
+        return <LegalPage key={`page-${currentPage}`} kind={currentPage} />;
+
       case 'login':
         return <LoginPage key="page-login" />;
 
@@ -102,13 +136,15 @@ const AppContent: React.FC = () => {
             exit={{ opacity: 0, scale: 0.98, y: -8 }}
             transition={{ type: 'spring', stiffness: 350, damping: 25 }}
           >
-            {renderPage()}
+            <Suspense fallback={<PageSpinner />}>{renderPage()}</Suspense>
           </motion.div>
         </AnimatePresence>
       </main>
 
       {/* Start-up reveal animation: home page only, once per visit */}
       {currentPage === 'home' && <IntroReveal />}
+
+      {PUBLIC_PAGES.includes(currentPage) && <WhatsAppButton />}
 
       {/* Global Notifications */}
       <ToastContainer />

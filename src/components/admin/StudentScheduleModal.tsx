@@ -8,6 +8,7 @@ import { scheduleMessages } from '../../i18n/messages/schedule';
 import { WeekSchedule } from '../common/WeekSchedule';
 import { useConfirm } from '../common/ConfirmProvider';
 import { WeekEntry, fromISODate } from '../../utils/schedule';
+import { ModalPortal } from '../common/ModalPortal';
 
 /** Admin: one student's week. Add courses / events / meetings, remove them, or cancel a class on one day. */
 export const StudentScheduleModal: React.FC<{ student: Student; onClose: () => void }> = ({ student, onClose }) => {
@@ -66,43 +67,45 @@ export const StudentScheduleModal: React.FC<{ student: Student; onClose: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        className="duo-card bg-white w-full max-w-6xl p-4 sm:p-6 space-y-4 max-h-[94vh] overflow-y-auto"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-black text-slate-900">{t('scheduleFor', { name: current.studentName })}</h3>
-            <p className="text-[11px] font-medium text-slate-500">{t('classesHint')}</p>
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-6xl p-4 sm:p-6 space-y-4 max-h-[94vh] overflow-y-auto"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">{t('scheduleFor', { name: current.studentName })}</h3>
+              <p className="text-[11px] font-medium text-slate-500">{t('classesHint')}</p>
+            </div>
+            <button onClick={onClose} aria-label={t('close')} className="p-2 rounded-xl hover:bg-slate-100 cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={onClose} aria-label={t('close')} className="p-2 rounded-xl hover:bg-slate-100 cursor-pointer">
-            <X className="w-5 h-5" />
-          </button>
+
+          <WeekSchedule students={[current]} editing={editing} />
+
+          {/* Add form */}
+          {addDate && (
+            <ScheduleItemForm
+              date={addDate}
+              canSave={studentIds.length > 0}
+              onClose={() => setAddDate(null)}
+              onSave={(fields) => addScheduleItem({ ...fields, studentIds })}
+            >
+              <PeoplePicker
+                label={t('forStudents')}
+                searchPlaceholder={t('searchStudents')}
+                people={students.map((s) => ({ id: s.id, name: s.studentName }))}
+                selected={studentIds}
+                onChange={setStudentIds}
+              />
+            </ScheduleItemForm>
+          )}
         </div>
-
-        <WeekSchedule students={[current]} editing={editing} />
-
-        {/* Add form */}
-        {addDate && (
-          <ScheduleItemForm
-            date={addDate}
-            canSave={studentIds.length > 0}
-            onClose={() => setAddDate(null)}
-            onSave={(fields) => addScheduleItem({ ...fields, studentIds })}
-          >
-            <PeoplePicker
-              label={t('forStudents')}
-              searchPlaceholder={t('searchStudents')}
-              people={students.map((s) => ({ id: s.id, name: s.studentName }))}
-              selected={studentIds}
-              onChange={setStudentIds}
-            />
-          </ScheduleItemForm>
-        )}
       </div>
-    </div>
+    </ModalPortal>
   );
 };

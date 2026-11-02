@@ -35,9 +35,6 @@ export const toastMessages = defineMessages({
 
     // generic
     somethingWrong: 'Something went wrong',
-    signInToRsvp: 'Please sign in to register for events.',
-    signInToLike: 'Please sign in to like posts.',
-    signInToComment: 'Please sign in to comment.',
 
     // sign in / out
     welcome: 'Welcome, {name}!',
@@ -73,6 +70,7 @@ export const toastMessages = defineMessages({
     attendanceSaved: 'Session attendance and evaluations saved for {date}!',
     equipmentSent: 'Equipment request sent to administration',
     equipmentUpdated: 'Equipment request updated',
+    landingSaved: 'Landing page saved',
     productSaved: 'Product "{name}" saved',
     productOnSale: 'Product is now on sale',
     productHidden: 'Product hidden from the shop',
@@ -84,10 +82,6 @@ export const toastMessages = defineMessages({
     orderMarked: 'Order marked {status}',
     trainerAdded: 'Trainer {name} added',
     trainerUpdated: 'Trainer {name} updated',
-    rsvpUpdated: 'Event registration updated',
-    postPublished: 'New post published to the club feed!',
-    postDeleted: 'Post deleted',
-    commentAdded: 'Comment added!'
   },
   fr: {
     roleAdmin: 'Admin',
@@ -118,9 +112,6 @@ export const toastMessages = defineMessages({
     accessRestricted: 'Accès restreint : votre compte n’a pas les droits {role}',
 
     somethingWrong: 'Un problème est survenu',
-    signInToRsvp: 'Connectez-vous pour vous inscrire aux événements.',
-    signInToLike: 'Connectez-vous pour aimer les publications.',
-    signInToComment: 'Connectez-vous pour commenter.',
 
     welcome: 'Bienvenue, {name} !',
     welcomeBack: 'Bon retour, {name} !',
@@ -154,6 +145,7 @@ export const toastMessages = defineMessages({
     attendanceSaved: 'Présences et évaluations de la séance du {date} enregistrées !',
     equipmentSent: 'Demande de matériel envoyée à l’administration',
     equipmentUpdated: 'Demande de matériel mise à jour',
+    landingSaved: 'Page d’accueil enregistrée',
     productSaved: 'Produit « {name} » enregistré',
     productOnSale: 'Le produit est maintenant en vente',
     productHidden: 'Produit masqué de la boutique',
@@ -165,10 +157,6 @@ export const toastMessages = defineMessages({
     orderMarked: 'Commande marquée : {status}',
     trainerAdded: 'Formateur {name} ajouté',
     trainerUpdated: 'Formateur {name} mis à jour',
-    rsvpUpdated: 'Inscription à l’événement mise à jour',
-    postPublished: 'Nouvelle publication sur le fil du club !',
-    postDeleted: 'Publication supprimée',
-    commentAdded: 'Commentaire ajouté !'
   },
   ar: {
     roleAdmin: 'المدير',
@@ -199,9 +187,6 @@ export const toastMessages = defineMessages({
     accessRestricted: 'وصول مقيّد: لا يملك حسابك صلاحيات {role}',
 
     somethingWrong: 'حدث خطأ ما',
-    signInToRsvp: 'يُرجى تسجيل الدخول للتسجيل في الفعاليات.',
-    signInToLike: 'يُرجى تسجيل الدخول للإعجاب بالمنشورات.',
-    signInToComment: 'يُرجى تسجيل الدخول للتعليق.',
 
     welcome: 'مرحبًا، {name}!',
     welcomeBack: 'مرحبًا بعودتك، {name}!',
@@ -235,6 +220,7 @@ export const toastMessages = defineMessages({
     attendanceSaved: 'تم حفظ الحضور والتقييمات لحصة {date}!',
     equipmentSent: 'تم إرسال طلب المعدّات إلى الإدارة',
     equipmentUpdated: 'تم تحديث طلب المعدّات',
+    landingSaved: 'تم حفظ الصفحة الرئيسية',
     productSaved: 'تم حفظ المنتج «{name}»',
     productOnSale: 'المنتج معروض للبيع الآن',
     productHidden: 'تم إخفاء المنتج من المتجر',
@@ -246,9 +232,5 @@ export const toastMessages = defineMessages({
     orderMarked: 'تم تعليم الطلب: {status}',
     trainerAdded: 'تمت إضافة المدرّب {name}',
     trainerUpdated: 'تم تحديث بيانات المدرّب {name}',
-    rsvpUpdated: 'تم تحديث التسجيل في الفعالية',
-    postPublished: 'تم نشر منشور جديد في صفحة النادي!',
-    postDeleted: 'تم حذف المنشور',
-    commentAdded: 'تمت إضافة التعليق!'
   }
 });

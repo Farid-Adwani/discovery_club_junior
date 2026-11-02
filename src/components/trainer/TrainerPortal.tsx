@@ -13,16 +13,26 @@ import {
   Sparkles,
   AlertCircle,
   Smile,
-  Check
+  Check,
+  X
 } from 'lucide-react';
 import { StudentAttendanceRecord } from '../../types';
-import { useT } from '../../i18n';
+import { useLanguage, useT } from '../../i18n';
 import { ageOf } from '../../utils/age';
 import { BirthdaysCard } from '../common/BirthdaysCard';
 import { WeekSchedule } from '../common/WeekSchedule';
+import { MyRequests, StockCatalog } from './MyRequests';
 import { scheduleMessages } from '../../i18n/messages/schedule';
 import { birthdayPeople } from '../../utils/birthdays';
 import { trainerMessages, dayKey } from '../../i18n/messages/trainer';
+
+// Attendance colors use Tailwind's green (not remapped by the brand theme), amber and rose
+const STATUS_STYLE = {
+  present: { icon: Check, active: 'bg-green-600 text-white', card: 'bg-white border-slate-200 border-s-green-500' },
+  late: { icon: Clock, active: 'bg-amber-400 text-amber-950', card: 'bg-amber-50/40 border-amber-200 border-s-amber-400' },
+  absent: { icon: X, active: 'bg-rose-500 text-white', card: 'bg-rose-50/40 border-rose-200 border-s-rose-500' },
+  unmarked: { icon: Clock, active: '', card: 'bg-slate-50 border-slate-200 border-s-slate-300' }
+} as const;
 
 export const TrainerPortal: React.FC = () => {
   const {
@@ -35,9 +45,15 @@ export const TrainerPortal: React.FC = () => {
     activeTrainerId,
     setActiveTrainerId,
     saveSessionAttendance,
-    createMaterialRequest
+    createMaterialRequest,
+    stockItems: allStockItems,
+    stockCategories,
+    materialRequests
   } = useApp();
+  // Admins previewing this space receive every item: keep only what coaches can see
+  const stockItems = allStockItems.filter((i) => !i.hiddenFromTrainers);
   const t = useT(trainerMessages);
+  const { locale } = useLanguage();
   const tsch = useT(scheduleMessages);
   const dayLabel = (day: string) => {
     const key = dayKey(day);
@@ -57,8 +73,10 @@ export const TrainerPortal: React.FC = () => {
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
   const [weekNumber, setWeekNumber] = useState(3);
   const [topicTaught, setTopicTaught] = useState(t('defaultTopic'));
-  const [validateSyllabus, setValidateSyllabus] = useState(true);
   const [trainerGlobalNotes, setTrainerGlobalNotes] = useState('');
+  // Edited since the sheet was opened or last saved
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Per-student attendance and mark (/20). Only edited students are stored here;
   // everyone else in the group uses the default (present, not rated yet).
@@ -74,17 +92,29 @@ export const TrainerPortal: React.FC = () => {
       setWeekNumber(savedSession.weekNumber);
       if (savedSession.topicTaught) setTopicTaught(savedSession.topicTaught);
       setTrainerGlobalNotes(savedSession.trainerNotes || '');
-      setValidateSyllabus(savedSession.isSyllabusValidated);
     }
+    setDirty(false);
   }, [savedSession?.id, savedSession?.updatedAt, activeGroup?.id, sessionDate]);
 
   // Material request state
   const [itemsNeeded, setItemsNeeded] = useState('');
-  const [quantity, setQuantity] = useState(t('defaultQuantity'));
+  const [quantity, setQuantity] = useState('1');
   const [urgency, setUrgency] = useState<'low' | 'medium' | 'urgent'>('medium');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+  // A request is either an item of the stock (the ones the admin made visible) or typed by hand
+  const [requestMode, setRequestMode] = useState<'stock' | 'manual'>(stockItems.length ? 'stock' : 'manual');
+  const [stockItemId, setStockItemId] = useState('');
+  const [stockSearch, setStockSearch] = useState('');
+  const [requestComment, setRequestComment] = useState('');
+  // The stock arrives after the first render: start on it once it is there, unless the coach is already typing
+  const hasStock = stockItems.length > 0;
+  useEffect(() => {
+    if (hasStock && !itemsNeeded) setRequestMode('stock');
+  }, [hasStock]);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const updateRecord = (studentId: string, patch: Partial<StudentAttendanceRecord>) => {
+    setDirty(true);
     setStudentRecords((prev) => ({
       ...prev,
       [studentId]: { ...(prev[studentId] || { studentId, status: 'present', remarks: '' }), ...patch }
@@ -110,31 +140,47 @@ export const TrainerPortal: React.FC = () => {
     e.preventDefault();
     if (!activeGroup) return;
 
-    await saveSessionAttendance(
+    setSaving(true);
+    const ok = await saveSessionAttendance(
       activeGroup.id,
       sessionDate,
       weekNumber,
       topicTaught,
       // Send every child in the group, not only the ones that were edited
       Object.fromEntries(groupStudents.map((st) => [st.id, recordFor(st.id)])),
-      validateSyllabus,
+      // Saving the sheet means the session took place, so its module counts as done
+      true,
       trainerGlobalNotes
     );
+    setSaving(false);
+    if (ok) setDirty(false);
   };
+
+  // Save button: send a new sheet, re-send after changes, or show it is already with the parents
+  const saveState: 'new' | 'changed' | 'sent' = !savedSession ? 'new' : dirty ? 'changed' : 'sent';
+  const sentAt = savedSession?.updatedAt
+    ? new Date(savedSession.updatedAt).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '';
 
   const handleMaterialRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemsNeeded || !activeGroup) return;
+    const fromStock = requestMode === 'stock';
+    if (!activeGroup || (fromStock ? !stockItemId : !itemsNeeded)) return;
 
     await createMaterialRequest({
       groupId: activeGroup.id,
-      itemsNeeded,
+      itemsNeeded: fromStock ? '' : itemsNeeded,
       quantity,
       urgency,
-      sessionDate
+      sessionDate,
+      ...(fromStock ? { stockItemId } : {}),
+      ...(requestComment.trim() ? { comment: requestComment.trim() } : {})
     });
 
     setItemsNeeded('');
+    setRequestComment('');
+    setStockItemId('');
+    setQuantity('1');
     setRequestSubmitted(true);
     setTimeout(() => setRequestSubmitted(false), 3000);
   };
@@ -203,28 +249,31 @@ export const TrainerPortal: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Student Roster & Live Grading */}
         <div className="lg:col-span-8 space-y-6">
-          <form onSubmit={handleSaveAttendance} className="duo-card duo-card-glow-blue p-6 sm:p-8 bg-white space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📋</span>
-                <div>
-                  <h3 className="text-base font-black text-slate-800">
-                    {t('sessionAttendance', { group: activeGroup?.name || t('classFallback') })}
-                  </h3>
-                  <div className="text-xs text-slate-500 font-medium">
-                    {t('studentsEnrolled', { count: groupStudents.length })}
-                  </div>
+          <form onSubmit={handleSaveAttendance} className="duo-card p-6 sm:p-8 bg-white space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b-2 border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-800">
+                  {t('sessionAttendance', { group: activeGroup?.name || t('classFallback') })}
+                </h3>
+                <div className="text-xs text-slate-500 font-medium">
+                  {t('studentsEnrolled', { count: groupStudents.length })}
                 </div>
               </div>
 
-              <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
-                {t('weekN', { n: weekNumber })}
+              {/* Whether this date already has a saved sheet */}
+              <span
+                className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full ${
+                  savedSession ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {savedSession ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                {t(savedSession ? 'sheetSaved' : 'sheetNew')}
               </span>
             </div>
 
             {/* Session Parameters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-bold text-slate-700">
-              <div>
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs font-bold text-slate-700">
+              <div className="sm:col-span-2">
                 <label className="block mb-1">{t('sessionDate')}</label>
                 <input
                   type="date"
@@ -234,22 +283,60 @@ export const TrainerPortal: React.FC = () => {
                 />
               </div>
 
-              <div className="sm:col-span-2">
+              <div>
+                <label className="block mb-1">{t('weekLabel')}</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={52}
+                  value={weekNumber}
+                  onChange={(e) => { setWeekNumber(Math.max(1, Number(e.target.value) || 1)); setDirty(true); }}
+                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="col-span-2 sm:col-span-3">
                 <label className="block mb-1">{t('topicTaught')}</label>
                 <input
                   type="text"
                   value={topicTaught}
-                  onChange={(e) => setTopicTaught(e.target.value)}
+                  onChange={(e) => { setTopicTaught(e.target.value); setDirty(true); }}
                   placeholder={t('topicPlaceholder')}
                   className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
                 />
               </div>
             </div>
 
-            {/* Student List with Easy 1-Tap Buttons */}
+            {/* Student list */}
             <div className="space-y-3 pt-2">
-              <div className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                {t('checkInMarks')}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-black text-slate-800 uppercase tracking-wider">{t('checkInMarks')}</div>
+                  {groupStudents.length > 0 && (
+                    <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                      {t('summaryCounts', {
+                        present: groupStudents.filter((s) => recordFor(s.id).status === 'present').length,
+                        late: groupStudents.filter((s) => recordFor(s.id).status === 'late').length,
+                        absent: groupStudents.filter((s) => recordFor(s.id).status === 'absent').length
+                      })}
+                      {' · '}
+                      {t('marksCount', {
+                        n: groupStudents.filter((s) => recordFor(s.id).rating !== undefined).length,
+                        total: groupStudents.filter((s) => recordFor(s.id).status !== 'absent').length
+                      })}
+                    </div>
+                  )}
+                </div>
+                {groupStudents.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => groupStudents.forEach((s) => handleStatusChange(s.id, 'present'))}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    {t('allPresent')}
+                  </button>
+                )}
               </div>
 
               {groupStudents.length === 0 ? (
@@ -260,80 +347,85 @@ export const TrainerPortal: React.FC = () => {
                 <div className="scroll-panel scroll-fade max-h-[620px] space-y-3 pe-1 py-2">
                 {groupStudents.map((student) => {
                   const record = recordFor(student.id);
+                  const isAbsent = record.status === 'absent';
 
                   return (
                     <div
                       key={student.id}
-                      className="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 hover:border-sky-300 hover:bg-sky-50/30 transition-all space-y-3 cursor-pointer"
+                      className={`p-4 rounded-2xl border-2 border-s-[6px] transition-colors space-y-3 ${STATUS_STYLE[record.status].card}`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-sky-500 text-white font-black flex items-center justify-center text-xs shadow-xs">
+                          <div className="w-10 h-10 rounded-xl bg-sky-500 text-white font-black flex items-center justify-center text-sm uppercase">
                             {student.studentName.slice(0, 1)}
                           </div>
                           <div>
-                            <div className="font-black text-slate-800 text-xs">
-                              {student.studentName}
-                            </div>
+                            <div className="font-black text-slate-800 text-sm">{student.studentName}</div>
                             <div className="text-[11px] text-slate-400 font-medium">
                               {t('ageParent', { age: ageOf(student), parent: student.parentName })}
                             </div>
                           </div>
                         </div>
 
-                        {/* 1-Tap Attendance Buttons */}
-                        <div className="flex items-center gap-1.5">
-                          {(['present', 'late', 'absent'] as const).map((st) => (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => handleStatusChange(student.id, st)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-black capitalize transition-all cursor-pointer ${
-                                record.status === st
-                                  ? st === 'present'
-                                    ? 'bg-emerald-500 text-white border-b-2 border-emerald-700 shadow-xs'
-                                    : st === 'late'
-                                    ? 'bg-amber-400 text-amber-950 border-b-2 border-amber-600 shadow-xs'
-                                    : 'bg-rose-500 text-white border-b-2 border-rose-700 shadow-xs'
-                                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                              }`}
-                            >
-                              {st === 'present' && t('statusPresent')}
-                              {st === 'late' && t('statusLate')}
-                              {st === 'absent' && t('statusAbsent')}
-                            </button>
-                          ))}
+                        {/* Attendance: one segmented control, the selected option is filled with its color */}
+                        <div role="radiogroup" className="inline-flex p-1 rounded-xl bg-white border-2 border-slate-200 self-start sm:self-auto">
+                          {(['present', 'late', 'absent'] as const).map((st) => {
+                            const Icon = STATUS_STYLE[st].icon;
+                            const active = record.status === st;
+                            return (
+                              <button
+                                key={st}
+                                type="button"
+                                role="radio"
+                                aria-checked={active}
+                                onClick={() => handleStatusChange(student.id, st)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-colors cursor-pointer ${
+                                  active ? STATUS_STYLE[st].active : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                                {st === 'present' && t('statusPresent')}
+                                {st === 'late' && t('statusLate')}
+                                {st === 'absent' && t('statusAbsent')}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {/* Mark /20 & Remarks */}
-                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pt-1 border-t border-slate-200/80">
-                        <label className="sm:col-span-4 flex items-center gap-2 text-xs">
-                          <span className="font-bold text-slate-500">{t('markLabel')}</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={20}
-                            step={0.5}
-                            value={record.rating ?? ''}
-                            disabled={record.status === 'absent'}
-                            onChange={(e) => handleRatingChange(student.id, e.target.value)}
-                            placeholder={record.status === 'absent' ? t('absentPlaceholder') : '—'}
-                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-800 text-center focus:outline-none focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
-                          />
-                          <span className="font-black text-slate-400">/ 20</span>
-                        </label>
+                      {/* Mark /20 & comment (an absent child is not rated) */}
+                      {isAbsent ? (
+                        <div className="pt-3 border-t border-rose-200/70 text-xs font-semibold text-rose-600">
+                          {t('notRated')}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center pt-3 border-t border-slate-200/80">
+                          <label className="flex items-center gap-2 text-xs shrink-0">
+                            <span className="font-bold text-slate-500">{t('markLabel')}</span>
+                            <span className="inline-flex items-center rounded-xl bg-white border-2 border-slate-200 focus-within:border-sky-500 overflow-hidden">
+                              <input
+                                type="number"
+                                min={0}
+                                max={20}
+                                step={0.5}
+                                value={record.rating ?? ''}
+                                onChange={(e) => handleRatingChange(student.id, e.target.value)}
+                                placeholder={t('absentPlaceholder')}
+                                className="w-14 py-1.5 bg-transparent text-sm font-black text-slate-800 text-center focus:outline-none"
+                              />
+                              <span className="pe-3 text-xs font-black text-slate-400">/20</span>
+                            </span>
+                          </label>
 
-                        <div className="sm:col-span-8">
                           <input
                             type="text"
                             value={record.remarks || ''}
                             onChange={(e) => handleRemarksChange(student.id, e.target.value)}
                             placeholder={t('remarksPlaceholder')}
-                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-sky-500 font-medium"
+                            className="flex-1 min-w-0 px-3 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-sky-500 font-medium"
                           />
                         </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -341,24 +433,29 @@ export const TrainerPortal: React.FC = () => {
               )}
             </div>
 
-            {/* Validation & Save */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={validateSyllabus}
-                  onChange={(e) => setValidateSyllabus(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 focus:ring-0"
-                />
-                <span>{t('validateSyllabus', { n: weekNumber })}</span>
-              </label>
+            {/* Save */}
+            <div className="pt-4 border-t-2 border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <p className="text-xs font-semibold text-slate-500">
+                {saveState === 'new' && t('saveHintNew')}
+                {saveState === 'changed' && <span className="text-amber-700">{t('saveHintChanged')}</span>}
+                {saveState === 'sent' && (sentAt ? t('saveHintSent', { when: sentAt }) : t('saveHintSentNoDate'))}
+              </p>
 
-              <button
-                type="submit"
-                className="w-full sm:w-auto px-8 py-3.5 btn-duo-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <span>{t('saveAttendance')}</span>
-              </button>
+              {saveState === 'sent' ? (
+                <span className="w-full sm:w-auto shrink-0 px-6 py-3 rounded-2xl bg-green-50 text-green-700 ring-2 ring-green-200 text-sm font-black flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  {t('sentToParents')}
+                </span>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-full sm:w-auto shrink-0 px-6 py-3 btn-duo-green text-sm font-black flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                >
+                  <Send className="w-4 h-4 rtl:-scale-x-100" />
+                  <span>{t(saveState === 'new' ? 'saveAttendance' : 'saveChanges')}</span>
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -379,26 +476,100 @@ export const TrainerPortal: React.FC = () => {
             </div>
 
             <form onSubmit={handleMaterialRequestSubmit} className="space-y-3.5 text-xs font-bold text-slate-700">
-              <div>
-                <label className="block mb-1">{t('itemsNeeded')}</label>
-                <input
-                  type="text"
-                  required
-                  value={itemsNeeded}
-                  onChange={(e) => setItemsNeeded(e.target.value)}
-                  placeholder={t('itemsPlaceholder')}
-                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
-                />
+              <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100">
+                {(['stock', 'manual'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setRequestMode(m)}
+                    className={`py-1.5 rounded-lg text-[11px] font-black cursor-pointer ${requestMode === m ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                  >
+                    {m === 'stock' ? t('fromStock') : t('somethingElse')}
+                  </button>
+                ))}
               </div>
+
+              {requestMode === 'stock' ? (
+                stockItems.length === 0 ? (
+                  <p className="p-3 rounded-xl bg-slate-50 text-[11px] font-semibold text-slate-500">{t('noStockItems')}</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowCatalog(true)}
+                      className="w-full py-2 rounded-xl border-2 border-dashed border-slate-300 text-[11px] font-black text-slate-600 hover:border-[#c11e3d] hover:text-[#c11e3d] cursor-pointer"
+                    >
+                      🔎 {t('browseStock')}
+                    </button>
+                    <input
+                      value={stockSearch}
+                      onChange={(e) => setStockSearch(e.target.value)}
+                      placeholder={t('searchStock')}
+                      className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
+                    />
+                    <ul className="scroll-panel max-h-56 space-y-1 rounded-xl border-2 border-slate-100 p-1">
+                      {stockItems
+                        .filter((it) => it.name.toLowerCase().includes(stockSearch.trim().toLowerCase()))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((it) => {
+                          const on = stockItemId === it.id;
+                          const cat = stockCategories.find((c) => c.id === it.categoryId);
+                          return (
+                            <li key={it.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setStockItemId(on ? '' : it.id);
+                                }}
+                                className={`w-full flex items-center gap-2.5 p-1.5 rounded-lg text-start cursor-pointer ${on ? 'bg-[#fdf2f4] ring-2 ring-[#c11e3d]' : 'hover:bg-slate-50'}`}
+                              >
+                                {it.imageUrl ? (
+                                  <img src={it.imageUrl} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                                ) : (
+                                  <span className="w-9 h-9 rounded-lg shrink-0 grid place-items-center text-base" style={{ background: `${cat?.color || '#94a3b8'}22` }}>
+                                    📦
+                                  </span>
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-xs font-black text-slate-800 truncate">{it.name}</span>
+                                  <span className={`block text-[10px] font-bold ${it.quantity > 0 ? 'text-[#15803d]' : 'text-[#c11e3d]'}`}>
+                                    {it.quantity > 0 ? t('availableCount', { count: `${it.quantity}${it.unit ? ` ${it.unit}` : ''}` }) : t('outOfStock')}
+                                    {cat ? <span className="text-slate-400"> · {cat.name}</span> : null}
+                                  </span>
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                    {!stockItemId && <p className="text-[10px] font-semibold text-slate-400">{t('chooseItem')}</p>}
+                  </div>
+                )
+              ) : (
+                <div>
+                  <label className="block mb-1">{t('itemsNeeded')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={itemsNeeded}
+                    onChange={(e) => setItemsNeeded(e.target.value)}
+                    placeholder={t('itemsPlaceholder')}
+                    className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block mb-1">{t('quantity')}</label>
                   <input
-                    type="text"
+                    type="number"
+                    required
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder={t('quantityPlaceholder')}
+                    onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ''))}
                     className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
                   />
                 </div>
@@ -417,9 +588,22 @@ export const TrainerPortal: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block mb-1">{t('comment')}</label>
+                <textarea
+                  rows={2}
+                  maxLength={1000}
+                  value={requestComment}
+                  onChange={(e) => setRequestComment(e.target.value)}
+                  placeholder={t('commentPh')}
+                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white"
+                />
+              </div>
+
               <button
                 type="submit"
-                className="w-full py-3 btn-duo-blue text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                disabled={requestMode === 'stock' && !stockItemId}
+                className="w-full py-3 btn-duo-blue text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{t('submitToAdmin')}</span>
@@ -431,6 +615,22 @@ export const TrainerPortal: React.FC = () => {
                 </div>
               )}
             </form>
+
+            {/* What happened to this coach's requests */}
+            <div className="pt-4 border-t-2 border-slate-100">
+              <MyRequests trainerId={currentTrainer.id} />
+            </div>
+            {showCatalog && (
+              <StockCatalog
+                onClose={() => setShowCatalog(false)}
+                onPick={(id) => {
+                  setRequestMode('stock');
+                  setStockItemId(id);
+                  if (!/^\d+$/.test(quantity.trim())) setQuantity('1');
+                  setShowCatalog(false);
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -38,6 +38,7 @@ import { isValidEmail, isValidPhone } from '../../utils/contact';
 import { whatsappLink } from '../../utils/payments';
 import { useConfirm } from '../common/ConfirmProvider';
 import { CoachScheduleModal } from './CoachScheduleModal';
+import { ModalPortal } from '../common/ModalPortal';
 
 const inputCls =
   'w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-[#c11e3d] focus:bg-white';
@@ -674,14 +675,16 @@ const Modal: React.FC<{ onClose: () => void; wide?: boolean; children: React.Rea
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className={`duo-card hover:transform-none! bg-white w-full ${wide ? 'max-w-lg' : 'max-w-sm'} p-5 sm:p-6 max-h-[92vh] overflow-y-auto`}
-      >
-        {children}
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className={`duo-card hover:transform-none! bg-white w-full ${wide ? 'max-w-lg' : 'max-w-sm'} p-5 sm:p-6 max-h-[92vh] overflow-y-auto`}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };
 

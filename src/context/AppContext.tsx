@@ -13,18 +13,19 @@ import {
   AdminProfile,
   SessionRecord,
   MaterialRequest,
-  ClubEvent,
   StudentAttendanceRecord,
-  FacebookPost,
   PaymentRecord,
   PaymentMethod,
-  SessionGuest
+  SessionGuest,
+  StockCategory,
+  StockItem,
+  StockLocation,
+  StockMovement
 } from '../types';
+import type { LandingContent } from '../data/landing';
 import {
   INITIAL_TRAINERS,
   INITIAL_GROUPS,
-  INITIAL_EVENTS,
-  FACEBOOK_POSTS
 } from '../data/initialData';
 import { api, ApiError } from '../api';
 import { clearSessionToken, getSessionToken, setSessionToken } from '../session';
@@ -47,18 +48,23 @@ interface Toast {
 interface ClubData {
   trainers: Trainer[];
   groups: Group[];
-  events: ClubEvent[];
-  facebookPosts: FacebookPost[];
   products: Product[];
   students: Student[];
   sessions: SessionRecord[];
+  /** Admin: attendance sheets are loaded from this date (YYYY-MM-DD) */
+  sessionsFrom?: string;
   orders: ProductOrder[];
   materialRequests: MaterialRequest[];
   scheduleItems?: ScheduleItem[];
   payments?: PaymentRecord[];
   deletedStudents?: Student[];
+  stockItems?: StockItem[];
+  stockCategories?: StockCategory[];
+  stockLocations?: StockLocation[];
+  stockMovements?: StockMovement[];
   staffMembers?: StaffMember[];
   adminProfiles?: AdminProfile[];
+  landing?: LandingContent;
 }
 
 interface AppContextType {
@@ -70,12 +76,19 @@ interface AppContextType {
   currentUser: AppUser | null;
   setCurrentUser: (user: AppUser | null) => void;
   loginWithEmailPassword: (email: string, pass: string) => Promise<boolean>;
+  /** Public landing page texts, hidden sections, counters (Admin → Landing page) */
+  landing: LandingContent;
+  saveLanding: (content: LandingContent) => Promise<boolean>;
   registerParentAccount: (data: {
     parentName: string;
     parentEmail: string;
     password: string;
     parentPhone: string;
     children: { name: string; birthDate: string; notes?: string }[];
+    /** Ticked "I accept the terms & privacy policy" (required) */
+    acceptedTerms: boolean;
+    /** Allows the club to publish photos of the children */
+    photoConsent: boolean;
   }) => Promise<void>;
   logout: () => Promise<void>;
   isLoginModalOpen: boolean;
@@ -103,9 +116,11 @@ interface AppContextType {
   products: Product[];
   orders: ProductOrder[];
   sessions: SessionRecord[];
+  /** Admin: the oldest date of the loaded attendance sheets ('' = all of them, e.g. for coaches and parents) */
+  sessionsFrom: string;
+  /** Admin: also load attendance sheets from this date (YYYY-MM-DD), when it is older than the ones loaded */
+  loadSessionsFrom: (date: string) => Promise<void>;
   materialRequests: MaterialRequest[];
-  events: ClubEvent[];
-  facebookPosts: FacebookPost[];
 
 
   /** Reload everything from the server (after changes made outside these helpers) */
@@ -173,8 +188,18 @@ interface AppContextType {
     quantity: string;
     urgency: 'low' | 'medium' | 'urgent';
     sessionDate: string;
+    stockItemId?: string;
+    comment?: string;
   }) => Promise<void>;
-  updateMaterialRequestStatus: (requestId: string, status: MaterialRequest['status']) => Promise<void>;
+  /** Coach (own requests) or admin: add a message to a request */
+  addRequestComment: (requestId: string, text: string) => Promise<boolean>;
+  /** Admin: change a request's status and/or its stock item (null = unlink). Delivering takes it from the stock. */
+  updateMaterialRequestStatus: (requestId: string, status?: MaterialRequest['status'], stockItemId?: string | null, reason?: string) => Promise<boolean>;
+  /** Stock (admin: everything; coaches: the items visible to them) */
+  stockItems: StockItem[];
+  stockCategories: StockCategory[];
+  stockLocations: StockLocation[];
+  stockMovements: StockMovement[];
 
   // Team (admin)
   saveStaffMember: (member: Omit<StaffMember, 'id' | 'createdAt'> & { id?: string }) => Promise<boolean>;
@@ -201,19 +226,13 @@ interface AppContextType {
   updateTrainer: (trainer: Trainer) => Promise<void>;
 
   // Event registration
-  toggleEventRegistration: (eventId: string) => Promise<void>;
 
-  // Facebook & Community Feed
-  likeFacebookPost: (postId: string) => Promise<void>;
-  addFacebookPost: (post: Omit<FacebookPost, 'id' | 'likes' | 'comments'>) => Promise<void>;
-  deleteFacebookPost: (postId: string) => Promise<void>;
-  addFacebookComment: (postId: string, text: string, authorName?: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // The current page lives in the address bar (#/admin, #/login…) so a refresh reopens the same page
-const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent'];
+const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent', 'privacy', 'terms'];
 const PORTALS: AppPage[] = ['admin', 'trainer', 'parent'];
 
 function pageFromHash(): AppPage {
@@ -332,16 +351,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [trainers, setTrainers] = useState<Trainer[]>(INITIAL_TRAINERS);
   const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
   const [products, setProducts] = useState<Product[]>([]);
+  const [landing, setLanding] = useState<LandingContent>({});
   const [orders, setOrders] = useState<ProductOrder[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [stockCategories, setStockCategories] = useState<StockCategory[]>([]);
+  const [stockLocations, setStockLocations] = useState<StockLocation[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [deletedStudents, setDeletedStudents] = useState<(Student & { deletedAt?: string })[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [adminProfiles, setAdminProfiles] = useState<AdminProfile[]>([]);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [sessionsFrom, setSessionsFrom] = useState('');
+  // Older attendance sheets the admin asked for; the server sends the last few months by default
+  const sessionsFromRequest = useRef('');
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
-  const [events, setEvents] = useState<ClubEvent[]>(INITIAL_EVENTS);
-  const [facebookPosts, setFacebookPosts] = useState<FacebookPost[]>(FACEBOOK_POSTS);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     const id = Date.now().toString() + Math.random().toString().slice(2, 6);
@@ -382,18 +407,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refresh = async () => {
     const seq = ++refreshSeq.current;
     try {
-      const data = await api<ClubData>('/data');
+      const data = await api<ClubData>(sessionsFromRequest.current ? `/data?sessionsFrom=${sessionsFromRequest.current}` : '/data');
       if (seq !== refreshSeq.current) return;
       setTrainers(data.trainers);
       setGroups(data.groups);
-      setEvents(data.events);
-      setFacebookPosts(data.facebookPosts);
       setProducts(data.products || []);
+      setLanding(data.landing || {});
       setStudents(data.students);
       setSessions(data.sessions);
+      setSessionsFrom(data.sessionsFrom || '');
       setOrders(data.orders || []);
       setScheduleItems(data.scheduleItems || []);
       setPayments(data.payments || []);
+      setStockItems(data.stockItems || []);
+      setStockCategories(data.stockCategories || []);
+      setStockLocations(data.stockLocations || []);
+      setStockMovements(data.stockMovements || []);
       setDeletedStudents(data.deletedStudents || []);
       setStaffMembers(data.staffMembers || []);
       setAdminProfiles(data.adminProfiles || []);
@@ -429,6 +458,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return profile;
   };
 
+  const loadSessionsFrom = async (date: string) => {
+    if (!sessionsFrom || date >= sessionsFrom) return;
+    sessionsFromRequest.current = date;
+    await refresh();
+  };
+
   /** Runs an API write, then reloads data. Errors are shown as a toast. */
   const mutate = async (fn: () => Promise<unknown>, successMessage?: string): Promise<boolean> => {
     try {
@@ -441,12 +476,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       await refresh();
     }
-  };
-
-  const requireSignIn = (message: string) => {
-    if (currentUser) return true;
-    showToast(message, 'info');
-    return false;
   };
 
   // Restores the session after a page reload
@@ -506,8 +535,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string;
     parentPhone: string;
     children: { name: string; birthDate: string; notes?: string }[];
+    acceptedTerms: boolean;
+    photoConsent: boolean;
   }) => {
-    const form = { parentName: data.parentName, parentPhone: data.parentPhone, children: data.children };
+    const form = {
+      parentName: data.parentName,
+      parentPhone: data.parentPhone,
+      children: data.children,
+      acceptedTerms: data.acceptedTerms,
+      photoConsent: data.photoConsent
+    };
     try {
       if (currentUser) {
         // Already signed in: just add the children to this account
@@ -526,6 +563,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = async () => {
+    // Stop this device's notifications for this account. The browser keeps its permission,
+    // so the next sign-in registers the device again without asking (NotificationBell).
+    try {
+      const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/sw.js') : undefined;
+      const sub = await reg?.pushManager?.getSubscription();
+      if (sub) await api('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } });
+    } catch {
+      // Never block signing out
+    }
     try {
       await api('/auth/logout', { method: 'POST' });
     } catch {
@@ -654,6 +700,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     quantity: string;
     urgency: 'low' | 'medium' | 'urgent';
     sessionDate: string;
+    stockItemId?: string;
+    comment?: string;
   }) => {
     await mutate(
       () => api('/material-requests', { method: 'POST', body: { ...data, trainerId: activeTrainerId } }),
@@ -661,12 +709,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const updateMaterialRequestStatus = async (requestId: string, status: MaterialRequest['status']) => {
-    await mutate(
-      () => api(`/admin/material-requests/${requestId}`, { method: 'PATCH', body: { status } }),
+  const addRequestComment = (requestId: string, text: string) =>
+    mutate(() => api(`/material-requests/${requestId}/comments`, { method: 'POST', body: { text } }));
+
+  const updateMaterialRequestStatus = (requestId: string, status?: MaterialRequest['status'], stockItemId?: string | null, reason?: string) =>
+    mutate(
+      () => api(`/admin/material-requests/${requestId}`, { method: 'PATCH', body: { status, stockItemId, reason } }),
       tt('equipmentUpdated')
     );
-  };
 
   // ---------- own profile ----------
 
@@ -769,37 +819,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await mutate(() => api(`/admin/trainers/${trainer.id}`, { method: 'PUT', body: trainer }), tt('trainerUpdated', { name: trainer.name }));
   };
 
-  // ---------- events ----------
+  // ---------- landing page ----------
 
-  const toggleEventRegistration = async (eventId: string) => {
-    if (!requireSignIn(tt('signInToRsvp'))) return;
-    await mutate(() => api(`/events/${eventId}/rsvp`, { method: 'POST' }), tt('rsvpUpdated'));
-  };
-
-  // ---------- community feed ----------
-
-  const likeFacebookPost = async (postId: string) => {
-    if (!requireSignIn(tt('signInToLike'))) return;
-    await mutate(() => api(`/posts/${postId}/like`, { method: 'POST' }));
-  };
-
-  const addFacebookPost = async (postData: Omit<FacebookPost, 'id' | 'likes' | 'comments'>) => {
-    await mutate(() => api('/admin/posts', { method: 'POST', body: postData }), tt('postPublished'));
-  };
-
-  const deleteFacebookPost = async (postId: string) => {
-    await mutate(() => api(`/admin/posts/${postId}`, { method: 'DELETE' }), tt('postDeleted'));
-  };
-
-  // The author name always comes from the signed-in account
-  const addFacebookComment = async (postId: string, text: string, _authorName?: string) => {
-    if (!text.trim() || !requireSignIn(tt('signInToComment'))) return;
-    await mutate(() => api(`/posts/${postId}/comments`, { method: 'POST', body: { text } }), tt('commentAdded'));
-  };
+  const saveLanding = (content: LandingContent) =>
+    mutate(() => api('/admin/site-content/landing', { method: 'PUT', body: content }), tt('landingSaved'));
 
   return (
     <AppContext.Provider
       value={{
+        landing,
+        saveLanding,
         role,
         setRole,
         currentPage,
@@ -835,9 +864,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeStudentFromScheduleItem,
         removeTrainerFromScheduleItem,
         sessions,
+        sessionsFrom,
+        loadSessionsFrom,
         materialRequests,
-        events,
-        facebookPosts,
         toasts,
         showToast,
         isFirebaseConnected,
@@ -845,6 +874,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateStudentStatus,
         updateStudentPrice,
         payments,
+        addRequestComment,
+        stockItems,
+        stockCategories,
+        stockLocations,
+        stockMovements,
         refreshData: refresh,
         savePayment,
         markPaymentsPaid,
@@ -871,11 +905,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateOrderStatus,
         addTrainer,
         updateTrainer,
-        toggleEventRegistration,
-        likeFacebookPost,
-        addFacebookPost,
-        deleteFacebookPost,
-        addFacebookComment,
       }}
     >
       {children}

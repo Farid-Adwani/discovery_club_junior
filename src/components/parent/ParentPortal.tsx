@@ -39,6 +39,7 @@ import { ltr, useLanguage, useT } from '../../i18n';
 import { ageOf } from '../../utils/age';
 import { parentMessages } from '../../i18n/messages/parent';
 import { shopMessages } from '../../i18n/messages/shop';
+import { ModalPortal } from '../common/ModalPortal';
 
 /* ---------- attendance & marks building blocks ---------- */
 
@@ -334,95 +335,97 @@ const OrderConfirmModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-4"
-      onClick={() => !isPlacing && onCancel()}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        className="duo-card bg-white w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-4"
+        onClick={() => !isPlacing && onCancel()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-black text-slate-900">{t('confirmOrderTitle')}</h3>
-          <button onClick={onCancel} disabled={isPlacing} aria-label={t('cancel')} className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          className="duo-card hover:transform-none! bg-white w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-black text-slate-900">{t('confirmOrderTitle')}</h3>
+            <button onClick={onCancel} disabled={isPlacing} aria-label={t('cancel')} className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-        <div className="flex gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
-          <img
-            src={product.imageUrl || CLUB_PHOTOS.teamInClubColors}
-            alt=""
-            className="w-20 h-20 rounded-xl object-contain bg-white border border-slate-200 shrink-0"
-          />
-          <div className="min-w-0 text-xs space-y-1">
-            <div className="text-sm font-black text-slate-900">
-              {CATEGORY_EMOJI[product.category]} {product.name}
-            </div>
-            {size !== ONE_SIZE && (
-              <div className="font-bold text-slate-600">
-                {t('orderSize')}: <span className="font-mono">{size}</span>
+          <div className="flex gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+            <img
+              src={product.imageUrl || CLUB_PHOTOS.teamInClubColors}
+              alt=""
+              className="w-20 h-20 rounded-xl object-contain bg-white border border-slate-200 shrink-0"
+            />
+            <div className="min-w-0 text-xs space-y-1">
+              <div className="text-sm font-black text-slate-900">
+                {CATEGORY_EMOJI[product.category]} {product.name}
               </div>
-            )}
-            <div className="font-black text-slate-900">{t('priceDT', { price: product.price })}</div>
-            <div className={`text-[11px] font-bold ${inStock ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {inStock ? t('inStock') : t('outOfStock')}
+              {size !== ONE_SIZE && (
+                <div className="font-bold text-slate-600">
+                  {t('orderSize')}: <span className="font-mono">{size}</span>
+                </div>
+              )}
+              <div className="font-black text-slate-900">{t('priceDT', { price: product.price })}</div>
+              <div className={`text-[11px] font-bold ${inStock ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {inStock ? t('inStock') : t('outOfStock')}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <div className="text-xs font-black text-slate-700">{t('orderForWhichChild')}</div>
-          <div className="grid gap-2">
-            {kids.map((c) => (
-              <label
-                key={c.id}
-                className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                  childId === c.id ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="order-child"
-                  checked={childId === c.id}
-                  onChange={() => setChildId(c.id)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm font-black text-slate-800">{c.studentName}</span>
-              </label>
-            ))}
+          <div className="space-y-2">
+            <div className="text-xs font-black text-slate-700">{t('orderForWhichChild')}</div>
+            <div className="grid gap-2">
+              {kids.map((c) => (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                    childId === c.id ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="order-child"
+                    checked={childId === c.id}
+                    onChange={() => setChildId(c.id)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-black text-slate-800">{c.studentName}</span>
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="flex gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isPlacing}
-            className="flex-1 py-3 btn-duo-secondary text-xs font-bold cursor-pointer"
-          >
-            {t('cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={isPlacing || !child}
-            className="flex-[2] py-3 btn-duo-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-          >
-            {isPlacing ? (
-              <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-            ) : (
-              <ShoppingBag className="w-4 h-4" />
-            )}
-            <span>{t('confirmOrderFor', { price: product.price })}</span>
-          </button>
-        </div>
-      </motion.div>
-    </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isPlacing}
+              className="flex-1 py-3 btn-duo-secondary text-xs font-bold cursor-pointer"
+            >
+              {t('cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={isPlacing || !child}
+              className="flex-[2] py-3 btn-duo-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              {isPlacing ? (
+                <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <ShoppingBag className="w-4 h-4" />
+              )}
+              <span>{t('confirmOrderFor', { price: product.price })}</span>
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </ModalPortal>
   );
 };
 
@@ -579,54 +582,56 @@ export const ParentPortal: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* All mentor marks */}
       {isMarksOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-4"
-          onClick={() => setIsMarksOpen(false)}
-        >
+        <ModalPortal>
           <div
-            className="w-full max-w-xl duo-card bg-white p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-4"
+            onClick={() => setIsMarksOpen(false)}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-black text-amber-600 uppercase tracking-wider">{t('mentorEvaluation')}</div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('marksModalTitle', { name: activeStudent.studentName, avg: averageMark ?? '—' })}
-                </h3>
+            <div
+              className="w-full max-w-xl duo-card hover:transform-none! bg-white p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs font-black text-amber-600 uppercase tracking-wider">{t('mentorEvaluation')}</div>
+                  <h3 className="text-lg font-black text-slate-800">
+                    {t('marksModalTitle', { name: activeStudent.studentName, avg: averageMark ?? '—' })}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMarksOpen(false)}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 cursor-pointer"
+                  aria-label={t('close')}
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsMarksOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 cursor-pointer"
-                aria-label={t('close')}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {markHistory.length === 0 ? (
-              <p className="py-6 text-center text-xs font-medium text-slate-400">{t('noMarksGiven')}</p>
-            ) : (
-              <>
-                <div className="rounded-xl bg-slate-50 border border-slate-100 px-2 pt-1">
-                  <MarkSparkline marks={marksOldestFirst} />
-                </div>
-                <div className="scroll-panel scroll-fade max-h-[52vh] -mx-1 px-1 py-2 space-y-2.5">
-                  {markHistory.map(({ sess, record }, i) => (
-                    <SessionRow
-                      key={sess.id}
-                      sess={sess}
-                      record={record}
-                      className={classNameOf(sess.groupId)}
-                      classColor={classColorOf(sess.groupId)}
-                      index={i}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
+              {markHistory.length === 0 ? (
+                <p className="py-6 text-center text-xs font-medium text-slate-400">{t('noMarksGiven')}</p>
+              ) : (
+                <>
+                  <div className="rounded-xl bg-slate-50 border border-slate-100 px-2 pt-1">
+                    <MarkSparkline marks={marksOldestFirst} />
+                  </div>
+                  <div className="scroll-panel scroll-fade max-h-[52vh] -mx-1 px-1 py-2 space-y-2.5">
+                    {markHistory.map(({ sess, record }, i) => (
+                      <SessionRow
+                        key={sess.id}
+                        sess={sess}
+                        record={record}
+                        className={classNameOf(sess.groupId)}
+                        classColor={classColorOf(sess.groupId)}
+                        index={i}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Header + child switcher (photo tabs) */}

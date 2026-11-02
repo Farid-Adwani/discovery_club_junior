@@ -32,6 +32,7 @@ import { api } from '../../api';
 import { useConfirm } from '../common/ConfirmProvider';
 import { addMonths, currentMonth, monthLabel, monthRange } from '../../utils/payments';
 import { fromISODate, toISODate } from '../../utils/schedule';
+import { ModalPortal } from '../common/ModalPortal';
 
 type Source = 'manual' | 'tuition' | 'shop';
 type Mode = 'month' | 'year';
@@ -806,11 +807,13 @@ const Modal: React.FC<{ onClose: () => void; wide?: boolean; children: React.Rea
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`duo-card hover:transform-none! bg-white w-full ${wide ? 'max-w-2xl' : 'max-w-md'} p-5 sm:p-6 max-h-[92vh] overflow-y-auto`}>
-        {children}
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} className={`duo-card hover:transform-none! bg-white w-full ${wide ? 'max-w-2xl' : 'max-w-md'} p-5 sm:p-6 max-h-[92vh] overflow-y-auto`}>
+          {children}
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };
 

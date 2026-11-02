@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Boxes,
   Cake,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   DollarSign,
+  Globe,
   Landmark,
   LayoutGrid,
   Package,
-  Share2,
   TrendingUp,
   Users
 } from 'lucide-react';
@@ -29,9 +30,10 @@ const TABS: { id: Tab; icon: React.ElementType }[] = [
   { id: 'attendance', icon: ClipboardList },
   { id: 'payments', icon: DollarSign },
   { id: 'cash', icon: Landmark },
+  { id: 'stock', icon: Boxes },
   { id: 'inventory', icon: Package },
   { id: 'team', icon: Cake },
-  { id: 'facebook', icon: Share2 }
+  { id: 'site', icon: Globe }
 ];
 
 /**
@@ -39,7 +41,7 @@ const TABS: { id: Tab; icon: React.ElementType }[] = [
  * Scrolls sideways on small screens (with arrows), keeps the open tab in view, and shows what is waiting.
  */
 export const AdminNav: React.FC<{ active: Tab; onOpen: (tab: Tab) => void }> = ({ active, onOpen }) => {
-  const { students, payments, orders, isFirebaseConnected } = useApp();
+  const { students, payments, orders, materialRequests, isFirebaseConnected } = useApp();
   const t = useT(hubMessages);
   const { dir } = useLanguage();
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -49,7 +51,8 @@ export const AdminNav: React.FC<{ active: Tab; onOpen: (tab: Tab) => void }> = (
   const badges: Partial<Record<Tab, number>> = {
     students: students.filter((s) => s.status === 'waitlist').length,
     payments: monthRows(currentMonth(), students, payments).filter((r) => r.outstanding > 0).length,
-    inventory: orders.filter((o) => o.status === 'requested').length
+    inventory: orders.filter((o) => o.status === 'requested').length,
+    stock: materialRequests.filter((r) => r.status === 'pending').length
   };
 
   const updateEdges = () => {
@@ -65,7 +68,13 @@ export const AdminNav: React.FC<{ active: Tab; onOpen: (tab: Tab) => void }> = (
     if (!el) return;
     const ro = new ResizeObserver(updateEdges);
     ro.observe(el);
-    return () => ro.disconnect();
+    // The tabs get wider once the web fonts are loaded: check again then
+    document.fonts?.ready.then(updateEdges);
+    const late = setTimeout(updateEdges, 800);
+    return () => {
+      ro.disconnect();
+      clearTimeout(late);
+    };
   }, []);
   // Keep the open tab visible
   useEffect(() => {

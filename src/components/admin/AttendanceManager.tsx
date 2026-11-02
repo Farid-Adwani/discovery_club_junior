@@ -79,7 +79,7 @@ const draftFrom = (s: SessionRecord): Draft => ({
 
 /** Admin "Attendance" tab: one sheet per class and date, shared with the trainer portal; prints a real paper sheet. */
 export const AttendanceManager: React.FC = () => {
-  const { groups, students, sessions, trainers, saveSessionAttendance } = useApp();
+  const { groups, students, sessions, sessionsFrom, loadSessionsFrom, trainers, saveSessionAttendance } = useApp();
   const t = useT(attendanceMessages);
   const { locale } = useLanguage();
   const confirm = useConfirm();
@@ -102,7 +102,9 @@ export const AttendanceManager: React.FC = () => {
     [sessions, groupId]
   );
   const saved = classSessions.find((s) => s.date === date);
-  const defaultWeek = classSessions.filter((s) => s.date < date).length + 1;
+  // Older sheets may not be loaded, so the week follows the last sheet before this date
+  const lastBefore = classSessions.find((s) => s.date < date);
+  const defaultWeek = lastBefore ? lastBefore.weekNumber + 1 : 1;
 
   const [draft, setDraft] = useState<Draft>(() => (saved ? draftFrom(saved) : emptyDraft(defaultWeek)));
   const [dirty, setDirty] = useState(false);
@@ -133,7 +135,18 @@ export const AttendanceManager: React.FC = () => {
     if (g) setDateState(lastClassDate(g));
   };
   const setDate = async (d: string) => {
-    if (d && d !== date && (await leaveOk())) setDateState(d);
+    if (!d || d === date || !(await leaveOk())) return;
+    setDateState(d);
+    // A date before the loaded sheets: fetch the older ones too
+    loadSessionsFrom(d);
+  };
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadOlder = async () => {
+    const d = new Date(`${sessionsFrom}T00:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() - 6);
+    setLoadingOlder(true);
+    await loadSessionsFrom(d.toISOString().slice(0, 10));
+    setLoadingOlder(false);
   };
 
   const change = (fn: (d: Draft) => Draft) => {
@@ -745,6 +758,15 @@ export const AttendanceManager: React.FC = () => {
                 );
               })}
             </ul>
+          )}
+          {sessionsFrom && (
+            <button
+              onClick={loadOlder}
+              disabled={loadingOlder}
+              className="w-full text-xs font-black text-slate-500 hover:text-slate-800 py-2 rounded-xl hover:bg-slate-50 cursor-pointer disabled:opacity-60"
+            >
+              {loadingOlder ? t('historyLoading') : t('historyOlder')}
+            </button>
           )}
         </aside>
       </div>
