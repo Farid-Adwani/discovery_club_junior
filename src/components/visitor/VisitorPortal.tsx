@@ -28,6 +28,7 @@ import { useIntroOpened } from '../common/IntroReveal';
 import { WhatsAppIcon } from './WhatsAppButton';
 import { photoSrcSet } from './photo';
 import { CircuitBackground, CodeTyper, CountUp, Gear, Oscilloscope, Reveal, RobotArm } from './RoboticsArt';
+import { CodeRobotGame } from './CodeRobotGame';
 import { HeroCollage } from './HeroCollage';
 import { useT, useLanguage } from '../../i18n';
 import { visitorMessages } from '../../i18n/messages/visitor';
@@ -432,6 +433,20 @@ export const VisitorPortal: React.FC = () => {
         </div>
       </section>
         </>
+      )}
+
+      {/* 3b. MINI GAME: program the robot with blocks */}
+      {show('game') && (
+        <section id="game" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <Reveal className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('gameEyebrow')}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('gameTitle')}</h2>
+            <p className="text-sm text-slate-600 font-medium">{t('gameText')}</p>
+          </Reveal>
+          <Reveal>
+            <CodeRobotGame onRegister={goRegister} />
+          </Reveal>
+        </section>
       )}
 
       {/* 4. ROBOT LAB: animated arm soldering a board */}

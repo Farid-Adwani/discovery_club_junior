@@ -5,7 +5,7 @@
  */
 
 /** Sections that can be hidden (the hero always shows) */
-export const LANDING_SECTIONS = ['belt', 'how', 'lab', 'countdown', 'fame', 'programs', 'coaches', 'testimonials', 'shop', 'faq', 'contact', 'cta'] as const;
+export const LANDING_SECTIONS = ['belt', 'how', 'game', 'lab', 'countdown', 'fame', 'programs', 'coaches', 'testimonials', 'shop', 'faq', 'contact', 'cta'] as const;
 export type LandingSection = (typeof LANDING_SECTIONS)[number];
 
 export const LANDING_LANGS = ['fr', 'en', 'ar'] as const;
@@ -23,6 +23,7 @@ export const LANDING_TEXT_GROUPS: { id: 'hero' | 'stats' | LandingSection; keys:
     id: 'how',
     keys: ['howEyebrow', 'howTitle', 'howText', 'stepBuildTitle', 'stepBuildText', 'stepWireTitle', 'stepWireText', 'stepCodeTitle', 'stepCodeText', 'stepCompeteTitle', 'stepCompeteText']
   },
+  { id: 'game', keys: ['gameEyebrow', 'gameTitle', 'gameText'] },
   { id: 'lab', keys: ['labEyebrow', 'labTitleBefore', 'labTitleHighlight', 'labText', 'handsOnTitle', 'handsOnText', 'parentsLoopTitle', 'parentsLoopText'] },
   { id: 'countdown', keys: ['nextEyebrow', 'nextTitle', 'nextText'] },
   { id: 'fame', keys: ['fameEyebrow', 'fameTitle', 'fameText', 'fameFirstPlace'] },
@@ -38,7 +39,7 @@ export const LANDING_TEXT_GROUPS: { id: 'hero' | 'stats' | LandingSection; keys:
 export const LANDING_TEXT_KEYS: ReadonlySet<string> = new Set(LANDING_TEXT_GROUPS.flatMap((g) => g.keys));
 
 /** Shown as a multi-line field */
-export const LANDING_LONG_KEYS: ReadonlySet<string> = new Set(['heroIntro', 'howText', 'labText', 'nextText', 'fameText', 'programsText', 'ctaText', 'stepBuildText', 'stepWireText', 'stepCodeText', 'stepCompeteText', 'coachesText', 'contactText']);
+export const LANDING_LONG_KEYS: ReadonlySet<string> = new Set(['heroIntro', 'howText', 'labText', 'nextText', 'fameText', 'programsText', 'ctaText', 'stepBuildText', 'stepWireText', 'stepCodeText', 'stepCompeteText', 'coachesText', 'contactText', 'gameText']);
 
 export const LANDING_STAT_KEYS = ['builders', 'workshops', 'robots', 'trophies'] as const;
 export type LandingStat = (typeof LANDING_STAT_KEYS)[number];
