@@ -1,4 +1,4 @@
 # Keep the address in sync with siteUrl in src/data/siteContent.ts
 User-agent: *
 Allow: /
-Sitemap: https://discovery-club-junior.vercel.app/sitemap.xml
+Sitemap: https://www.discoveryclubjunior.com/sitemap.xml

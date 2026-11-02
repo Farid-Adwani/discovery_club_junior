@@ -25,7 +25,7 @@ const EMPTY: Localized = { en: '', fr: '', ar: '' };
 
 export const SITE_CONTENT = {
   /** Public address of the website, without a trailing slash. Used for sharing previews and search engines. */
-  siteUrl: 'https://discovery-club-junior.vercel.app', // TODO: your real domain
+  siteUrl: 'https://www.discoveryclubjunior.com',
 
   /** Official name used in the legal pages */
   legalName: 'Discovery Club Junior',
