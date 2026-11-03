@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useApp } from '../../context/AppContext';
 import {
   HeartHandshake,
+  UserPlus,
   Calendar,
   Clock,
   MapPin,
@@ -35,11 +36,12 @@ import { DAY_INDEX } from '../../utils/schedule';
 import { scheduleMessages } from '../../i18n/messages/schedule';
 import { isValidEmail, isValidPhone } from '../../utils/contact';
 import { CATEGORY_EMOJI, ONE_SIZE, orderTime } from '../../utils/shop';
-import { ltr, useLanguage, useT } from '../../i18n';
+import { useLanguage, useT } from '../../i18n';
 import { ageOf } from '../../utils/age';
 import { parentMessages } from '../../i18n/messages/parent';
 import { shopMessages } from '../../i18n/messages/shop';
 import { ModalPortal } from '../common/ModalPortal';
+import { AddChildrenModal } from './AddChildrenModal';
 
 /* ---------- attendance & marks building blocks ---------- */
 
@@ -429,6 +431,9 @@ const OrderConfirmModal: React.FC<{
   );
 };
 
+/** Set by the public registration page when a signed-in parent wants to add a child */
+export const ADD_CHILD_FLAG = 'dcj-open-add-child';
+
 export const ParentPortal: React.FC = () => {
   const {
     students,
@@ -459,6 +464,19 @@ export const ParentPortal: React.FC = () => {
     : students.filter(
         (s) => linkedIds.includes(s.id) || s.parentUid === currentUser?.uid || s.parentEmail.toLowerCase() === parentEmail
       );
+
+  // Register more children (also opened when a signed-in parent comes from the public registration page)
+  const [isAddingChild, setIsAddingChild] = useState(() => {
+    try {
+      const asked = sessionStorage.getItem(ADD_CHILD_FLAG) === '1';
+      sessionStorage.removeItem(ADD_CHILD_FLAG);
+      return asked;
+    } catch {
+      return false;
+    }
+  });
+  const knownPhone = currentUser?.parentPhone || myChildren.find((c) => c.parentPhone)?.parentPhone || '';
+  const addChildModal = isAddingChild && !isAdminViewer && <AddChildrenModal knownPhone={knownPhone} onClose={() => setIsAddingChild(false)} />;
 
   // Selected student
   const activeStudent = myChildren.find((s) => s.id === activeParentStudentId) || myChildren[0];
@@ -569,11 +587,15 @@ export const ParentPortal: React.FC = () => {
 
   if (!activeStudent) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-2">
+      <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-3">
         <h1 className="text-2xl font-black text-slate-800">{t('noChildrenTitle')}</h1>
-        <p className="text-xs text-slate-500 font-medium">
-          {t('noChildrenText', { email: currentUser?.email ? ltr(currentUser.email) : t('thisAccount') })}
-        </p>
+        <p className="text-sm text-slate-500 font-medium">{t('noChildrenText')}</p>
+        {!isAdminViewer && (
+          <button type="button" onClick={() => setIsAddingChild(true)} className="mt-2 px-6 py-3 btn-duo-green text-sm font-black inline-flex items-center gap-2 cursor-pointer">
+            <UserPlus className="w-4 h-4" /> {t('acButton')}
+          </button>
+        )}
+        {addChildModal}
       </div>
     );
   }
@@ -647,8 +669,9 @@ export const ParentPortal: React.FC = () => {
           <p className="text-xs text-slate-500 font-medium mt-0.5">{t('journeySubtitle')}</p>
         </div>
 
+        <div className="flex items-center gap-2 min-w-0">
         {myChildren.length > 1 && (
-          <div className="scroll-panel flex gap-2 pb-1 -mb-1">
+          <div className="scroll-panel flex gap-2 pb-1 -mb-1 min-w-0">
             {myChildren.map((s) => {
               const active = s.id === activeStudent.id;
               return (
@@ -677,7 +700,20 @@ export const ParentPortal: React.FC = () => {
             })}
           </div>
         )}
+        {!isAdminViewer && (
+          <button
+            type="button"
+            onClick={() => setIsAddingChild(true)}
+            title={t('acButton')}
+            className="shrink-0 flex items-center gap-1.5 h-[46px] px-4 rounded-full border-2 border-dashed border-sky-300 text-sky-700 text-xs font-black hover:bg-sky-50 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span className={myChildren.length > 1 ? 'hidden sm:inline' : ''}>{t('acButton')}</span>
+          </button>
+        )}
+        </div>
       </div>
+      {addChildModal}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Child profile card */}

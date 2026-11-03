@@ -45,7 +45,8 @@ const inputCls =
 
 type Role = AccountSummary['role'];
 type StaffDraft = { id?: string; name: string; role: StaffMember['role']; jobTitle: string; birthDate: string };
-type AccountDraft = { role: Role; name: string; email: string; phone: string; specialization: string; password: string; studentIds: string[] };
+type NewChild = { name: string; birthDate: string };
+type AccountDraft = { role: Role; name: string; email: string; phone: string; specialization: string; password: string; studentIds: string[]; newChildren: NewChild[] };
 
 const ROLE_META: Record<Role, { icon: React.ElementType; bg: string; ink: string; key: 'roleAdmin' | 'roleCoach' | 'roleParent'; sub: 'roleAdminSub' | 'roleCoachSub' | 'roleParentSub' }> = {
   admin: { icon: ShieldCheck, bg: '#191919', ink: '#ffffff', key: 'roleAdmin', sub: 'roleAdminSub' },
@@ -187,7 +188,7 @@ export const TeamManager: React.FC = () => {
 
   // ---------- actions ----------
   const openCreate = (preset: Partial<AccountDraft> = {}) =>
-    setAccountDraft({ role: 'parent', name: '', email: '', phone: '', specialization: '', password: generatePassword(), studentIds: [], ...preset });
+    setAccountDraft({ role: 'parent', name: '', email: '', phone: '', specialization: '', password: generatePassword(), studentIds: [], newChildren: [], ...preset });
 
   const createAccount = async (draft: AccountDraft) => {
     setIsSaving(true);
@@ -201,7 +202,8 @@ export const TeamManager: React.FC = () => {
           phone: draft.phone.trim() || undefined,
           specialization: draft.specialization.trim() || undefined,
           password: draft.password,
-          studentIds: draft.role === 'parent' ? draft.studentIds : undefined
+          studentIds: draft.role === 'parent' ? draft.studentIds : undefined,
+          newChildren: draft.role === 'parent' ? draft.newChildren.filter((c) => c.name.trim() && c.birthDate).map((c) => ({ ...c, name: c.name.trim() })) : undefined
         }
       });
       setAccountDraft(null);
@@ -741,7 +743,14 @@ const CreateAccountModal: React.FC<{
   }, [emailLower, draft.role]);
 
   const phoneOk = draft.role === 'parent' ? isValidPhone(draft.phone) : !draft.phone.trim() || isValidPhone(draft.phone);
-  const valid = draft.name.trim() && isValidEmail(draft.email) && draft.password.length >= 6 && phoneOk;
+  // A new child row is either complete or left empty
+  const childrenOk = draft.newChildren.every((c) => (c.name.trim() && c.birthDate) || (!c.name.trim() && !c.birthDate));
+  const valid = draft.name.trim() && isValidEmail(draft.email) && draft.password.length >= 6 && phoneOk && childrenOk;
+  const setChild = (idx: number, patch: Partial<NewChild>) => set({ newChildren: draft.newChildren.map((c, i) => (i === idx ? { ...c, ...patch } : c)) });
+  // Same ages as the parents' registration form (3 to 22)
+  const now = new Date();
+  const childMin = new Date(now.getFullYear() - 22, now.getMonth(), now.getDate()).toISOString().slice(0, 10);
+  const childMax = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate()).toISOString().slice(0, 10);
   const q = childSearch.trim().toLowerCase();
   const childOptions = students
     .filter((s) => !q || s.studentName.toLowerCase().includes(q) || s.parentName.toLowerCase().includes(q))
@@ -829,6 +838,49 @@ const CreateAccountModal: React.FC<{
                 <ChildChecklist options={childOptions} selected={draft.studentIds} onChange={(studentIds) => set({ studentIds })} />
               </>
             )}
+
+            {/* Children not registered yet: created with the account, on the waitlist */}
+            <div className="pt-2 space-y-2">
+              <span className="block text-xs font-bold text-slate-700">{t('newChildrenTitle')}</span>
+              {draft.newChildren.map((c, idx) => (
+                <div key={idx} className="flex flex-wrap sm:flex-nowrap items-center gap-2 p-2 rounded-xl bg-slate-50 border-2 border-slate-100">
+                  <input
+                    value={c.name}
+                    maxLength={120}
+                    autoFocus={idx === draft.newChildren.length - 1}
+                    onChange={(e) => setChild(idx, { name: e.target.value })}
+                    placeholder={t('newChildName')}
+                    aria-label={t('newChildName')}
+                    className={`${inputCls} text-xs py-1.5 flex-1 min-w-40`}
+                  />
+                  <input
+                    type="date"
+                    min={childMin}
+                    max={childMax}
+                    value={c.birthDate}
+                    onChange={(e) => setChild(idx, { birthDate: e.target.value })}
+                    aria-label={t('newChildBirth')}
+                    title={t('newChildBirth')}
+                    className={`${inputCls} text-xs py-1.5 w-40`}
+                  />
+                  {c.birthDate && <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">{t('newChildAge', { age: ageOf({ birthDate: c.birthDate, studentAge: 0 }) })}</span>}
+                  <button type="button" onClick={() => set({ newChildren: draft.newChildren.filter((_, i) => i !== idx) })} aria-label={t('newChildRemove')} title={t('newChildRemove')} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {!childrenOk && <p className="text-[11px] font-bold text-rose-600">{t('newChildIncomplete')}</p>}
+              {draft.newChildren.length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => set({ newChildren: [...draft.newChildren, { name: '', birthDate: '' }] })}
+                  className="w-full py-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-600 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> {t('newChildAdd')}
+                </button>
+              )}
+              {draft.newChildren.length > 0 && <p className="text-[11px] font-semibold text-slate-400">{t('newChildrenHint')}</p>}
+            </div>
           </div>
         )}
 

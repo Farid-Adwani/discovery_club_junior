@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CLUB_PHOTOS } from '../data/initialData';
 import { useApp } from '../context/AppContext';
+import { ADD_CHILD_FLAG } from '../components/parent/ParentPortal';
 import {
   HeartHandshake,
   ArrowLeft,
@@ -28,8 +29,21 @@ export const ParentRegisterPage: React.FC = () => {
   const {
     registerParentAccount,
     navigateTo,
-    isFirebaseConnected
+    isFirebaseConnected,
+    currentUser
   } = useApp();
+
+  // A parent who is already signed in adds children from their space (no new account, email or password)
+  const isSignedInParent = !!currentUser?.roles.includes('parent');
+  useEffect(() => {
+    if (!isSignedInParent) return;
+    try {
+      sessionStorage.setItem(ADD_CHILD_FLAG, '1');
+    } catch {
+      // The parent can still use the "Add a child" button there
+    }
+    navigateTo('parent');
+  }, [isSignedInParent]);
 
   const t = useT(authMessages);
   const ts = useT(siteMessages);

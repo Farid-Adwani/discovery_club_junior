@@ -40,6 +40,7 @@ export const toastMessages = defineMessages({
     welcome: 'Welcome, {name}!',
     welcomeBack: 'Welcome back, {name}!',
     accountCreated: 'Account created! Welcome to the Parent Portal, {name}!',
+    childrenAdded: 'Registration sent! The club will place {count} child(ren) in a class soon.',
     signedOut: 'Signed out. Returned to Public Visitor portal.',
 
     // admin & trainer actions
@@ -116,6 +117,7 @@ export const toastMessages = defineMessages({
     welcome: 'Bienvenue, {name} !',
     welcomeBack: 'Bon retour, {name} !',
     accountCreated: 'Compte créé ! Bienvenue dans l’Espace Parents, {name} !',
+    childrenAdded: 'Inscription envoyée ! Le club placera bientôt {count} enfant(s) dans une classe.',
     signedOut: 'Vous êtes déconnecté. Retour à l’espace visiteur.',
 
     studentStatusUpdated: 'Statut de l’élève mis à jour : {status}',
@@ -191,6 +193,7 @@ export const toastMessages = defineMessages({
     welcome: 'مرحبًا، {name}!',
     welcomeBack: 'مرحبًا بعودتك، {name}!',
     accountCreated: 'تم إنشاء الحساب! مرحبًا بك في فضاء الأولياء، {name}!',
+    childrenAdded: 'تم إرسال التسجيل! سيضع النادي {count} طفل/أطفال في قسم قريبًا.',
     signedOut: 'تم تسجيل الخروج. عدت إلى فضاء الزوّار.',
 
     studentStatusUpdated: 'تم تحديث حالة التلميذ إلى: {status}',

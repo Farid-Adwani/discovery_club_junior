@@ -79,6 +79,8 @@ interface AppContextType {
   /** Public landing page texts, hidden sections, counters (Admin → Landing page) */
   landing: LandingContent;
   saveLanding: (content: LandingContent) => Promise<boolean>;
+  /** A signed-in parent registers more children on their account (they start on the waitlist) */
+  addMyChildren: (data: { parentPhone: string; children: { name: string; birthDate: string; notes?: string }[] }) => Promise<boolean>;
   registerParentAccount: (data: {
     parentName: string;
     parentEmail: string;
@@ -527,6 +529,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addMyChildren = async (data: { parentPhone: string; children: { name: string; birthDate: string; notes?: string }[] }) => {
+    if (!currentUser) return false;
+    const ok = await mutate(
+      () =>
+        api('/parents/register', {
+          method: 'POST',
+          body: { parentName: currentUser.displayName, parentPhone: data.parentPhone, children: data.children }
+        }),
+      tt('childrenAdded', { count: data.children.length })
+    );
+    // The account's list of children changed
+    if (ok) await loadProfile();
+    return ok;
+  };
+
   // A parent can register several children at once. No course is picked here:
   // each child lands on the waitlist and the admin places them in a group.
   const registerParentAccount = async (data: {
@@ -838,6 +855,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         loginWithEmailPassword,
         registerParentAccount,
+        addMyChildren,
         logout,
         isLoginModalOpen,
         setIsLoginModalOpen,

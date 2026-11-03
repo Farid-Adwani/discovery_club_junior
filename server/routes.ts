@@ -560,6 +560,43 @@ router.get(
  * A new account must accept the terms and privacy policy. Publishing photos of the child is a separate, optional
  * choice; a parent adding a child later keeps their earlier choice unless the form gives a new one.
  */
+/** New children on the waitlist, linked to a parent account (registration, parent space, admin) */
+function addChildren(
+  batch: FirebaseFirestore.WriteBatch,
+  uid: string,
+  parent: { parentName: string; parentPhone: string; parentEmail: string; photoConsent: boolean },
+  children: unknown,
+  defaultNote: string
+): string[] {
+  if (!Array.isArray(children) || children.length === 0 || children.length > 10) {
+    throw new HttpError(400, 'Please add between 1 and 10 children.');
+  }
+  const ids: string[] = [];
+  for (const child of children) {
+    const id = newId('std');
+    ids.push(id);
+    const student: Student & { parentUid: string } = {
+      id,
+      parentUid: uid,
+      ...parent,
+      studentName: str(child?.name, "Child's name", { max: 120 }),
+      ...(() => {
+        const dob = birthDate(child?.birthDate);
+        // studentAge is kept for older screens; the site always shows the age computed from birthDate
+        return { birthDate: dob, studentAge: ageFromBirthDate(dob) };
+      })(),
+      groupIds: [],
+      status: 'waitlist',
+      registeredAt: today(),
+      standardMonthlyPrice: 0,
+      paymentStatus: 'pending',
+      notes: str(child?.notes, 'Notes', { max: 1000, optional: true }) || defaultNote
+    };
+    batch.set(col('students').doc(id), student);
+  }
+  return ids;
+}
+
 function addParentRegistration(
   batch: FirebaseFirestore.WriteBatch,
   uid: string,
@@ -572,35 +609,7 @@ function addParentRegistration(
   if (!existing && b.acceptedTerms !== true) throw new HttpError(400, 'Please accept the terms and the privacy policy.');
   const photoConsent = typeof b.photoConsent === 'boolean' ? b.photoConsent : existing?.photoConsent === true;
   const consentAt = new Date().toISOString();
-  if (!Array.isArray(b.children) || b.children.length === 0 || b.children.length > 10) {
-    throw new HttpError(400, 'Please add between 1 and 10 children.');
-  }
-  const ids: string[] = [];
-  for (const child of b.children) {
-    const id = newId('std');
-    ids.push(id);
-    const student: Student & { parentUid: string } = {
-      id,
-      parentUid: uid,
-      parentName,
-      parentPhone,
-      parentEmail: accountEmail,
-      studentName: str(child?.name, "Child's name", { max: 120 }),
-      ...(() => {
-        const dob = birthDate(child?.birthDate);
-        // studentAge is kept for older screens; the site always shows the age computed from birthDate
-        return { birthDate: dob, studentAge: ageFromBirthDate(dob) };
-      })(),
-      groupIds: [],
-      status: 'waitlist',
-      registeredAt: today(),
-      standardMonthlyPrice: 0,
-      paymentStatus: 'pending',
-      photoConsent,
-      notes: str(child?.notes, 'Notes', { max: 1000, optional: true }) || 'Registered through Parent Portal Account Registration'
-    };
-    batch.set(col('students').doc(id), student);
-  }
+  const ids = addChildren(batch, uid, { parentName, parentPhone, parentEmail: accountEmail, photoConsent }, b.children, 'Registered through Parent Portal Account Registration');
   batch.set(
     col('users').doc(uid),
     {
@@ -1476,6 +1485,12 @@ adminRouter.post(
     batch.set(col('accounts').doc(uid), account);
 
     const studentIds = role === 'parent' ? await linkChildren(batch, uid, b.studentIds ?? []) : [];
+    // Children the admin registers here for the first time (they start on the waitlist, like any registration)
+    if (role === 'parent' && Array.isArray(b.newChildren) && b.newChildren.length) {
+      studentIds.push(
+        ...addChildren(batch, uid, { parentName: name, parentPhone: phoneNumber, parentEmail: accountEmail, photoConsent: false }, b.newChildren, 'Registered by the club')
+      );
+    }
     batch.set(
       col('users').doc(uid),
       {
