@@ -1697,8 +1697,8 @@ adminRouter.post(
     const account = (await col('accounts').doc(req.params.id).get()).data() as Account | undefined;
     if (!account) throw new HttpError(404, 'Account not found.');
     const profile = await resolveProfile(account);
-    // Only families: never another admin's or a coach's account
-    if (profile.roles.some((r) => r !== 'parent')) throw new HttpError(403, 'Only parent accounts can be viewed.');
+    // Only families: never an admin's or a coach's account (parents also carry the 'visitor' role)
+    if (profile.role !== 'parent') throw new HttpError(403, 'Only parent accounts can be viewed.');
     res.json({ token: await createSession(account.id, req.user!.displayName) });
   })
 );
