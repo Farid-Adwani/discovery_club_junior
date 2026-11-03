@@ -47,6 +47,8 @@ export const commonMessages = defineMessages({
 
     // Footer
     footerTagline: 'Robotics, coding, electronics and AI for kids and teens in Manouba — training the creators of tomorrow.',
+    viewAsBanner: 'You are inside the account of {name} (parent). Everything you do here is done in their name.',
+    viewAsBack: 'Back to admin',
     followFacebook: 'Follow on Facebook',
     clubPortals: 'Quick links',
     portalPublic: 'Home & admissions',
@@ -119,6 +121,8 @@ export const commonMessages = defineMessages({
     roleExplorer: 'Explorateur',
 
     footerTagline: 'Robotique, code, électronique et IA pour enfants et ados à Manouba — nous formons les créateurs de demain.',
+    viewAsBanner: 'Vous êtes dans le compte de {name} (parent). Tout ce que vous faites ici est fait en son nom.',
+    viewAsBack: 'Revenir à l’admin',
     followFacebook: 'Suivez-nous sur Facebook',
     clubPortals: 'Accès rapide',
     portalPublic: 'Accueil et inscriptions',
@@ -186,6 +190,8 @@ export const commonMessages = defineMessages({
     roleExplorer: 'مستكشف',
 
     footerTagline: 'الروبوتيك والبرمجة والإلكترونيك والذكاء الاصطناعي للأطفال والمراهقين في منوبة — نكوّن مبدعي الغد.',
+    viewAsBanner: 'أنت داخل حساب {name} (ولي). كل ما تفعله هنا يتم باسمه.',
+    viewAsBack: 'العودة إلى الإدارة',
     followFacebook: 'تابعونا على فيسبوك',
     clubPortals: 'روابط سريعة',
     portalPublic: 'الرئيسية والتسجيلات',

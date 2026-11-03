@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Pencil,
   AlertCircle,
   CalendarDays,
   Camera,
@@ -34,6 +35,7 @@ import { fromISODate, weekdayName } from '../../utils/schedule';
 import { currentMonth, monthRows, PaymentRow } from '../../utils/payments';
 import { useConfirm } from '../common/ConfirmProvider';
 import { StudentScheduleModal } from './StudentScheduleModal';
+import { StudentFormModal } from './StudentFormModal';
 import { classPriceOf } from './PriceModal';
 
 type Filter = 'all' | 'waitlist' | 'noClass' | 'enrolled' | 'trash';
@@ -103,6 +105,8 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
   const [search, setSearch] = useState('');
   const [scheduleStudent, setScheduleStudent] = useState<Student | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   // Cards or compact list, remembered in this browser
   const [view, setViewState] = useState<'cards' | 'list'>(() => {
     try {
@@ -375,11 +379,18 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
       <section className="relative overflow-hidden rounded-3xl bg-[#191919] text-white p-5 sm:p-6">
         <div className="absolute -top-20 -end-16 w-72 h-72 rounded-full bg-[#c11e3d]/40 blur-3xl pointer-events-none" />
         <div className="relative">
-          <h3 className="text-xl sm:text-2xl font-black flex items-center gap-2">
-            <Users className="w-6 h-6 text-[#ff6b86]" />
-            {t('title')}
-          </h3>
-          <p className="text-xs font-medium text-white/60 mt-0.5">{t('subtitle')}</p>
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div>
+              <h3 className="text-xl sm:text-2xl font-black flex items-center gap-2">
+                <Users className="w-6 h-6 text-[#ff6b86]" />
+                {t('title')}
+              </h3>
+              <p className="text-xs font-medium text-white/60 mt-0.5">{t('subtitle')}</p>
+            </div>
+            <button type="button" onClick={() => setIsAdding(true)} className="self-start shrink-0 px-4 py-2.5 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer">
+              <UserPlus className="w-4 h-4" /> {t('nsButton')}
+            </button>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-4">
             {stats.map((s) => (
               <button
@@ -475,7 +486,7 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
                   <div className="min-w-0 flex-1">
                     <div className="font-black text-slate-700 truncate">{st.studentName}</div>
                     <div className="text-[11px] font-semibold text-slate-400 truncate">
-                      {st.parentName} · {st.groupIds.map((id) => groups.find((g) => g.id === id)?.name).filter(Boolean).join(', ') || t('noClass')}
+                      {st.parentName || t('noParent')} · {st.groupIds.map((id) => groups.find((g) => g.id === id)?.name).filter(Boolean).join(', ') || t('noClass')}
                     </div>
                   </div>
                   {st.deletedAt && <span className="hidden sm:inline text-[11px] font-semibold text-slate-400">{t('deletedOn', { date: formatDate(st.deletedAt) })}</span>}
@@ -550,15 +561,17 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
 
                   {/* Parent */}
                   <div className="min-w-0 ps-[52px] lg:ps-0">
-                    <div className="text-xs font-bold text-slate-700 truncate">{st.parentName}</div>
-                    <a
-                      href={`tel:${st.parentPhone.replace(/\s/g, '')}`}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-[#c11e3d]"
-                      dir="ltr"
-                    >
-                      <Phone className="w-3 h-3" />
-                      {st.parentPhone}
-                    </a>
+                    <div className={`text-xs font-bold truncate ${st.parentName ? 'text-slate-700' : 'text-slate-400 italic'}`}>{st.parentName || t('noParent')}</div>
+                    {st.parentPhone && (
+                      <a
+                        href={`tel:${st.parentPhone.replace(/\s/g, '')}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-[#c11e3d]"
+                        dir="ltr"
+                      >
+                        <Phone className="w-3 h-3" />
+                        {st.parentPhone}
+                      </a>
+                    )}
                   </div>
 
                   {/* Classes */}
@@ -631,6 +644,9 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
 
                   {/* Actions (top corner on phones) */}
                   <div className="absolute top-2.5 end-2 lg:static flex items-center justify-end gap-0.5">
+                    <IconAction onClick={() => setEditingStudent(st)} label={t('nsEditButton')}>
+                      <Pencil className="w-4 h-4" />
+                    </IconAction>
                     <IconAction onClick={() => setScheduleStudent(st)} label={t('schedule')}>
                       <CalendarDays className="w-4 h-4" />
                     </IconAction>
@@ -680,17 +696,21 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
                   {/* Parent */}
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
                     <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">{t('parent')}</div>
-                    <div className="font-black text-slate-800 truncate">{st.parentName}</div>
-                    <a href={`tel:${st.parentPhone.replace(/\s/g, '')}`} className="flex items-center gap-1.5 text-slate-600 hover:text-[#c11e3d] font-semibold">
-                      <Phone className="w-3.5 h-3.5 shrink-0" />
-                      <span dir="ltr">{st.parentPhone}</span>
-                    </a>
-                    <a href={`mailto:${st.parentEmail}`} className="flex items-center gap-1.5 text-slate-600 hover:text-[#c11e3d] font-semibold min-w-0">
-                      <Mail className="w-3.5 h-3.5 shrink-0" />
-                      <span dir="ltr" className="truncate">
-                        {st.parentEmail}
-                      </span>
-                    </a>
+                    <div className={`font-black truncate ${st.parentName ? 'text-slate-800' : 'text-slate-400 italic'}`}>{st.parentName || t('noParent')}</div>
+                    {st.parentPhone && (
+                      <a href={`tel:${st.parentPhone.replace(/\s/g, '')}`} className="flex items-center gap-1.5 text-slate-600 hover:text-[#c11e3d] font-semibold">
+                        <Phone className="w-3.5 h-3.5 shrink-0" />
+                        <span dir="ltr">{st.parentPhone}</span>
+                      </a>
+                    )}
+                    {st.parentEmail && (
+                      <a href={`mailto:${st.parentEmail}`} className="flex items-center gap-1.5 text-slate-600 hover:text-[#c11e3d] font-semibold min-w-0">
+                        <Mail className="w-3.5 h-3.5 shrink-0" />
+                        <span dir="ltr" className="truncate">
+                          {st.parentEmail}
+                        </span>
+                      </a>
+                    )}
                   </div>
 
                   {/* Classes */}
@@ -734,6 +754,9 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
                   <Fee st={st} />
                   <div className="flex items-center gap-1.5">
                     <StatusSwitch st={st} />
+                    <button onClick={() => setEditingStudent(st)} title={t('nsEditButton')} aria-label={t('nsEditButton')} className="p-2 btn-duo-secondary cursor-pointer">
+                      <Pencil className="w-4 h-4" />
+                    </button>
                     <button onClick={() => setScheduleStudent(st)} title={t('schedule')} aria-label={t('schedule')} className="p-2 btn-duo-secondary cursor-pointer">
                       <CalendarDays className="w-4 h-4" />
                     </button>
@@ -748,6 +771,8 @@ export const StudentsManager: React.FC<{ onEditPrice: (student: Student) => void
         </div>
       )}
 
+      {isAdding && <StudentFormModal initialStatus={filter === 'waitlist' ? 'waitlist' : 'accepted'} onClose={() => setIsAdding(false)} />}
+      {editingStudent && <StudentFormModal student={editingStudent} onClose={() => setEditingStudent(null)} />}
       {scheduleStudent && <StudentScheduleModal student={scheduleStudent} onClose={() => setScheduleStudent(null)} />}
     </div>
   );

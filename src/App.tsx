@@ -11,6 +11,7 @@ import { ConfirmProvider } from './components/common/ConfirmProvider';
 import { commonMessages } from './i18n/messages/common';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
+import { ViewAsBanner } from './components/common/ViewAsBanner';
 import { ToastContainer } from './components/common/ToastContainer';
 import { IntroReveal } from './components/common/IntroReveal';
 import { VisitorPortal } from './components/visitor/VisitorPortal';
@@ -125,6 +126,7 @@ const AppContent: React.FC = () => {
       {/* overflow-x-clip, not hidden: "hidden" makes this a scroll box and the header would stop staying on top */}
       {/* Top Header with Brand, Navigation & Live Auth State */}
       <Header />
+      <ViewAsBanner />
 
       {/* Main Content Area with fluid animation transition */}
       <main className="flex-1 relative z-10">

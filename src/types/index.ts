@@ -24,6 +24,8 @@ export interface AppUser {
   studentIds?: string[]; // all children linked to this parent
   parentPhone?: string;
   childName?: string;
+  /** Set when an admin opened this parent's account with "View as this parent" (the admin's name) */
+  viewedBy?: string;
 }
 
 /** 'waitlist' = pending (shown as "Pending"); older 'active' records are read as 'accepted' */

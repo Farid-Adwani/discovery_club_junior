@@ -11,6 +11,7 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'faridadwani2000@gmail.com')
 
 /** A sign-in stays valid this long (a new sign-in is needed after) */
 const SESSION_DAYS = 30;
+const VIEW_AS_MS = 2 * 3_600_000;
 
 /** Stored in `accounts/{id}`. The id is the account's uid (older accounts kept their Firebase uid). */
 export interface Account {
@@ -121,13 +122,15 @@ export async function deleteAccount(accountId: string) {
 /** Only a hash of the token is stored, so a database leak doesn't give working sessions. */
 const sessionDocId = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
-export async function createSession(accountId: string): Promise<string> {
+/** `viewedBy`: an admin looking at a parent's account ("View as this parent"); such sessions last 2 hours. */
+export async function createSession(accountId: string, viewedBy?: string): Promise<string> {
   const token = crypto.randomBytes(32).toString('base64url');
   const now = Date.now();
   await db.collection('sessions').doc(sessionDocId(token)).set({
     accountId,
     createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + SESSION_DAYS * 86_400_000).toISOString()
+    expiresAt: new Date(now + (viewedBy ? VIEW_AS_MS : SESSION_DAYS * 86_400_000)).toISOString(),
+    ...(viewedBy ? { viewedBy } : {})
   });
   return token;
 }
@@ -200,7 +203,8 @@ async function loadSessionUser(sessionId: string): Promise<{ accountId: string; 
   if (!session || session.expiresAt < new Date().toISOString()) return null;
   const account = (await db.collection('accounts').doc(session.accountId).get()).data() as Account | undefined;
   if (!account) return null;
-  return { accountId: account.id, user: await resolveProfile(account) };
+  const user = await resolveProfile(account);
+  return { accountId: account.id, user: session.viewedBy ? { ...user, viewedBy: session.viewedBy } : user };
 }
 
 function cachedSessionUser(sessionId: string): Promise<AppUser | null> {

@@ -304,6 +304,7 @@ router.put(
   '/me/profile',
   requireUser,
   ah(async (req, res) => {
+    if (req.user!.viewedBy) throw new HttpError(403, 'Not available while viewing a parent’s account.');
     const user = req.user!;
     const b = req.body || {};
     const update: Record<string, unknown> = {};
@@ -359,6 +360,8 @@ router.post(
   '/push/subscribe',
   requireUser,
   ah(async (req, res) => {
+    // An admin viewing a parent's account must not receive that family's notifications
+    if (req.user!.viewedBy) return res.json({ ok: true });
     const sub = req.body?.subscription;
     if (!sub || typeof sub.endpoint !== 'string' || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) {
       throw new HttpError(400, 'Subscription is invalid.');
@@ -392,6 +395,7 @@ router.post(
   '/push/test',
   requireUser,
   ah(async (req, res) => {
+    if (req.user!.viewedBy) throw new HttpError(403, 'Not available while viewing a parent’s account.');
     if (!vapidPublicKey()) throw new HttpError(503, 'Push notifications are not configured on the server (VAPID keys).');
     const subs = (await col('push_subscriptions').where('userId', '==', req.user!.uid).get()).docs.map((d) => d.data());
     if (!subs.length) throw new HttpError(404, 'No device is registered for push yet.');
@@ -1208,6 +1212,142 @@ adminRouter.delete(
   })
 );
 
+/** The admin's student form (add and edit): every field of a child, the parent and the classes. */
+async function readStudentForm(b: Record<string, any>, current?: Student) {
+  const optional = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && !v.trim());
+
+  // Parent: an account, contact details only, or nobody
+  let parent = { parentName: '', parentPhone: '', parentEmail: '' };
+  let parentUid: string | undefined;
+  if (!optional(b.parentUid)) {
+    parentUid = str(b.parentUid, 'Parent', { max: 100 });
+    const account = (await col('accounts').doc(parentUid).get()).data() as Account | undefined;
+    if (!account) throw new HttpError(404, 'Parent account not found.');
+    const stored = (await col('users').doc(parentUid).get()).data() || {};
+    parent = { parentName: String(stored.displayName || ''), parentPhone: String(stored.parentPhone || ''), parentEmail: account.email };
+  } else {
+    parent = {
+      parentName: optional(b.parentName) ? '' : str(b.parentName, 'Parent name', { max: 120 }),
+      parentPhone: optional(b.parentPhone) ? '' : phone(b.parentPhone),
+      parentEmail: optional(b.parentEmail) ? '' : email(b.parentEmail)
+    };
+  }
+
+  // Classes: a class the child joins must have a free place
+  const groups: Group[] = [];
+  for (const gid of Array.isArray(b.groupIds) ? b.groupIds.slice(0, 10) : []) {
+    const group = await getGroup(str(gid, 'Class', { max: 100 }));
+    if (!group) throw new HttpError(404, 'Class not found.');
+    const joining = !current?.groupIds.includes(group.id);
+    if (joining && group.maxCapacity && (await enrolledCount(group.id)) >= group.maxCapacity) {
+      throw new HttpError(409, `"${group.name}" is full (${group.maxCapacity} places).`);
+    }
+    if (!groups.some((g) => g.id === group.id)) groups.push(group);
+  }
+
+  const registeredAt = optional(b.registeredAt) ? current?.registeredAt || today() : str(b.registeredAt, 'Registration date', { max: 10 });
+  if (!DATE_RE.test(registeredAt)) throw new HttpError(400, 'Registration date is invalid.');
+  const dob = birthDate(b.birthDate);
+
+  return {
+    parentUid,
+    parent,
+    groups,
+    fields: {
+      studentName: str(b.name, "Child's name", { max: 120 }),
+      birthDate: dob,
+      studentAge: ageFromBirthDate(dob),
+      notes: str(b.notes, 'Notes', { max: 1000, optional: true }),
+      photoConsent: b.photoConsent === true,
+      registeredAt,
+      // With a class the child is accepted; without one the admin chooses
+      status: (groups.length || b.status === 'accepted' ? 'accepted' : 'waitlist') as Student['status']
+    },
+    // Dinars from the form, millimes in the database; null = follow the classes
+    customPrice: optional(b.customMonthlyPrice) ? null : toMillimes(num(b.customMonthlyPrice, 'Price', { min: 0, max: 10000 })),
+    scholarship: b.scholarship === true
+  };
+}
+
+/**
+ * The admin registers a child directly. The parent is optional: an existing parent account,
+ * just contact details (no account), or nobody yet. Classes are optional too; with a class the child is accepted.
+ */
+adminRouter.post(
+  '/students',
+  ah(async (req, res) => {
+    const form = await readStudentForm(req.body || {});
+    const id = newId('std');
+    // Prices are in millimes here (getGroup reads them that way); writeMoney marks the document
+    const standardMonthlyPrice = form.groups.reduce((sum, g) => sum + g.pricePerMonth, 0);
+    const student: Student = {
+      id,
+      ...(form.parentUid ? { parentUid: form.parentUid } : {}),
+      ...form.parent,
+      ...form.fields,
+      notes: form.fields.notes || 'Registered by the club',
+      groupIds: form.groups.map((g) => g.id),
+      standardMonthlyPrice,
+      ...(form.customPrice !== null && form.customPrice !== standardMonthlyPrice ? { customMonthlyPrice: form.customPrice } : {}),
+      paymentStatus: form.scholarship ? 'scholarship' : 'pending'
+    };
+    const batch = db.batch();
+    batch.set(col('students').doc(id), writeMoney(student));
+    if (form.parentUid) batch.set(col('users').doc(form.parentUid), { studentIds: FieldValue.arrayUnion(id) }, { merge: true });
+    await batch.commit();
+    if (form.parentUid) {
+      forgetProfile(form.parentUid);
+      for (const g of form.groups) await notify([form.parentUid], 'child_class', { child: student.studentName, class: g.name }, '#/parent');
+    }
+    res.status(201).json({ id });
+  })
+);
+
+/** The admin edits a child: every field, the parent (moving the child between accounts) and the classes. */
+adminRouter.put(
+  '/students/:id',
+  ah(async (req, res) => {
+    const ref = col('students').doc(req.params.id);
+    const snap = await ref.get();
+    if (!isLive(snap)) throw new HttpError(404, 'Child not found.');
+    const current = normalizeStudent(snap.data()!);
+    const form = await readStudentForm(req.body || {}, current);
+    const groupIds = form.groups.map((g) => g.id);
+    const enrollment = await enrollmentFields(groupIds, snap.data());
+
+    const update: Record<string, unknown> = {
+      ...enrollment,
+      ...form.parent,
+      ...form.fields,
+      notes: form.fields.notes || FieldValue.delete(),
+      groupIds,
+      parentUid: form.parentUid ?? FieldValue.delete(),
+      customMonthlyPrice: form.customPrice === null || form.customPrice === enrollment.standardMonthlyPrice ? FieldValue.delete() : form.customPrice,
+      // A scholarship lasts; taking it away goes back to "to pay" for this month
+      ...(form.scholarship ? { paymentStatus: 'scholarship' } : current.paymentStatus === 'scholarship' ? { paymentStatus: 'pending' } : {})
+    };
+
+    const batch = db.batch();
+    batch.update(ref, update);
+    if (current.parentUid !== form.parentUid) {
+      if (current.parentUid) batch.set(col('users').doc(current.parentUid), { studentIds: FieldValue.arrayRemove(current.id) }, { merge: true });
+      if (form.parentUid) batch.set(col('users').doc(form.parentUid), { studentIds: FieldValue.arrayUnion(current.id) }, { merge: true });
+    }
+    await batch.commit();
+    for (const uid of [current.parentUid, form.parentUid]) if (uid) forgetProfile(uid);
+
+    if (form.parentUid) {
+      if (current.status === 'waitlist' && form.fields.status === 'accepted') {
+        await notify([form.parentUid], 'child_accepted', { child: form.fields.studentName }, '#/parent');
+      }
+      for (const g of form.groups.filter((g) => !current.groupIds.includes(g.id))) {
+        await notify([form.parentUid], 'child_class', { child: form.fields.studentName, class: g.name }, '#/parent');
+      }
+    }
+    res.json({ ok: true });
+  })
+);
+
 /** Add a child to a class (a child can be in several classes). */
 adminRouter.post(
   '/students/:id/classes',
@@ -1443,12 +1583,35 @@ adminRouter.get(
 );
 
 /** Gives children to a parent account (students.parentUid); returns their ids. */
-async function linkChildren(batch: FirebaseFirestore.WriteBatch, uid: string, studentIds: unknown) {
+async function linkChildren(
+  batch: FirebaseFirestore.WriteBatch,
+  uid: string,
+  studentIds: unknown,
+  known?: { parentName: string; parentPhone: string; parentEmail: string }
+) {
   if (!Array.isArray(studentIds) || studentIds.length > 20) throw new HttpError(400, 'Too many children.');
   const ids = [...new Set(studentIds.map((v) => str(v, 'Child', { max: 100 })))];
+  // Children registered by the club without a parent get this account's name, phone and email
+  let contact: { parentName: string; parentPhone: string; parentEmail: string } | null = known ?? null;
   for (const id of ids) {
-    if (!isLive(await col('students').doc(id).get())) throw new HttpError(404, 'Child not found.');
-    batch.update(col('students').doc(id), { parentUid: uid });
+    const snap = await col('students').doc(id).get();
+    if (!isLive(snap)) throw new HttpError(404, 'Child not found.');
+    const st = snap.data() as Partial<Student>;
+    const missing = !st.parentName || !st.parentPhone || !st.parentEmail;
+    if (missing && !contact) {
+      const [account, user] = await Promise.all([col('accounts').doc(uid).get(), col('users').doc(uid).get()]);
+      contact = { parentName: String(user.get('displayName') || ''), parentPhone: String(user.get('parentPhone') || ''), parentEmail: String(account.get('email') || '') };
+    }
+    batch.update(col('students').doc(id), {
+      parentUid: uid,
+      ...(missing && contact
+        ? {
+            ...(!st.parentName && contact.parentName ? { parentName: contact.parentName } : {}),
+            ...(!st.parentPhone && contact.parentPhone ? { parentPhone: contact.parentPhone } : {}),
+            ...(!st.parentEmail && contact.parentEmail ? { parentEmail: contact.parentEmail } : {})
+          }
+        : {})
+    });
   }
   return ids;
 }
@@ -1484,7 +1647,7 @@ adminRouter.post(
     batch.create(accountEmailRef(accountEmail), { accountId: uid }); // fails if the email was taken meanwhile
     batch.set(col('accounts').doc(uid), account);
 
-    const studentIds = role === 'parent' ? await linkChildren(batch, uid, b.studentIds ?? []) : [];
+    const studentIds = role === 'parent' ? await linkChildren(batch, uid, b.studentIds ?? [], { parentName: name, parentPhone: phoneNumber, parentEmail: accountEmail }) : [];
     // Children the admin registers here for the first time (they start on the waitlist, like any registration)
     if (role === 'parent' && Array.isArray(b.newChildren) && b.newChildren.length) {
       studentIds.push(
@@ -1524,6 +1687,19 @@ adminRouter.post(
     }
     forgetAllProfiles();
     res.status(201).json((await accountSummaries()).find((a) => a.id === uid));
+  })
+);
+
+/** "View as this parent": a session on a parent's account, marked with the admin's name, for 2 hours. */
+adminRouter.post(
+  '/accounts/:id/view-as',
+  ah(async (req, res) => {
+    const account = (await col('accounts').doc(req.params.id).get()).data() as Account | undefined;
+    if (!account) throw new HttpError(404, 'Account not found.');
+    const profile = await resolveProfile(account);
+    // Only families: never another admin's or a coach's account
+    if (profile.roles.some((r) => r !== 'parent')) throw new HttpError(403, 'Only parent accounts can be viewed.');
+    res.json({ token: await createSession(account.id, req.user!.displayName) });
   })
 );
 

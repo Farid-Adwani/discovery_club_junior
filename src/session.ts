@@ -28,3 +28,26 @@ export function clearSessionToken() {
 }
 
 let memoryToken: string | null = null;
+
+/**
+ * "View as this parent": the admin's own token waits here while the parent's account is open,
+ * and comes back with "Back to admin". Kept in localStorage so a reload doesn't lose it.
+ */
+const ADMIN_KEY = 'dcj-admin-session';
+
+export function getAdminReturnToken(): string | null {
+  try {
+    return localStorage.getItem(ADMIN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminReturnToken(token: string | null) {
+  try {
+    if (token) localStorage.setItem(ADMIN_KEY, token);
+    else localStorage.removeItem(ADMIN_KEY);
+  } catch {
+    // storage blocked: "Back to admin" will ask to sign in again
+  }
+}

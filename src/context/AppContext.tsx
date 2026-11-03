@@ -28,7 +28,7 @@ import {
   INITIAL_GROUPS,
 } from '../data/initialData';
 import { api, ApiError } from '../api';
-import { clearSessionToken, getSessionToken, setSessionToken } from '../session';
+import { clearSessionToken, getAdminReturnToken, getSessionToken, setAdminReturnToken, setSessionToken } from '../session';
 import { translate } from '../i18n';
 import { toastMessages } from '../i18n/messages/toasts';
 
@@ -67,6 +67,24 @@ interface ClubData {
   landing?: LandingContent;
 }
 
+/** What the admin's student form (add and edit) sends */
+export interface StudentFormInput {
+  name: string;
+  birthDate: string;
+  notes?: string;
+  photoConsent: boolean;
+  registeredAt?: string;
+  groupIds: string[];
+  status: 'waitlist' | 'accepted';
+  parentUid?: string;
+  parentName?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  /** DT; null follows the classes' prices */
+  customMonthlyPrice: number | null;
+  scholarship: boolean;
+}
+
 interface AppContextType {
   role: UserRole;
   setRole: (role: UserRole) => void;
@@ -93,6 +111,15 @@ interface AppContextType {
     photoConsent: boolean;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Admin: add a child (no id) or edit one, with every field. The parent is optional (account, contact
+   * details only, or nobody). `photo`: a new data URL, null to remove it, undefined to keep it.
+   */
+  saveStudent: (data: StudentFormInput, id?: string, photo?: string | null) => Promise<boolean>;
+  /** Admin: open a parent's account to see and do exactly what they can ("View as this parent") */
+  viewAsParent: (accountId: string) => Promise<void>;
+  /** Leave the parent's account and come back to the admin's own */
+  stopViewingAs: () => Promise<void>;
   isLoginModalOpen: boolean;
   setIsLoginModalOpen: (open: boolean) => void;
   authModalInitialTab: 'login' | 'register-parent';
@@ -579,7 +606,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const saveStudent = (data: StudentFormInput, id?: string, photo?: string | null) =>
+    mutate(async () => {
+      const studentId = id ?? (await api<{ id: string }>('/admin/students', { method: 'POST', body: data })).id;
+      if (id) await api(`/admin/students/${id}`, { method: 'PUT', body: data });
+      if (photo !== undefined) await api(`/students/${studentId}/photo`, { method: 'PUT', body: { photo } });
+    }, tt(id ? 'studentSaved' : 'studentCreated', { name: data.name }));
+
+  const viewAsParent = async (accountId: string) => {
+    const adminToken = getSessionToken();
+    try {
+      const { token } = await api<{ token: string }>(`/admin/accounts/${accountId}/view-as`, { method: 'POST' });
+      if (adminToken) setAdminReturnToken(adminToken);
+      setSessionToken(token);
+      const [profile] = await Promise.all([loadProfile(), refresh()]);
+      if (profile) {
+        showToast(tt('viewingAs', { name: profile.displayName }), 'info');
+        openPortalFor(profile);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : tt('networkError'), 'error');
+    }
+  };
+
+  const stopViewingAs = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' }); // ends the 2-hour parent session
+    } catch {
+      // It expires by itself
+    }
+    const adminToken = getAdminReturnToken();
+    setAdminReturnToken(null);
+    if (!adminToken) {
+      clearSessionToken();
+      setCurrentUser(null);
+      setRoleState('visitor');
+      navigateTo('login');
+      refresh();
+      return;
+    }
+    setSessionToken(adminToken);
+    const [profile] = await Promise.all([loadProfile(), refresh()]);
+    if (profile) {
+      showToast(tt('backToAdmin'), 'info');
+      openPortalFor(profile);
+    } else navigateTo('login');
+  };
+
   const logout = async () => {
+    // Signing out of a parent's account opened by an admin goes back to the admin
+    if (currentUser?.viewedBy) return stopViewingAs();
     // Stop this device's notifications for this account. The browser keeps its permission,
     // so the next sign-in registers the device again without asking (NotificationBell).
     try {
@@ -856,6 +932,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithEmailPassword,
         registerParentAccount,
         addMyChildren,
+        viewAsParent,
+        stopViewingAs,
+        saveStudent,
         logout,
         isLoginModalOpen,
         setIsLoginModalOpen,

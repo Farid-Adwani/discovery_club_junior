@@ -123,7 +123,7 @@ const BirthDateField: React.FC<{ trainer: Trainer }> = ({ trainer }) => {
 
 /** Admin "Team" tab: the club team, and every sign-in account (create admins, coaches and parents). */
 export const TeamManager: React.FC = () => {
-  const { trainers, staffMembers, groups, students, currentUser, saveStaffMember, deleteStaffMember, showToast, refreshData } = useApp();
+  const { trainers, staffMembers, groups, students, currentUser, saveStaffMember, deleteStaffMember, showToast, refreshData, viewAsParent } = useApp();
   const t = useT(teamMessages);
   const { locale } = useLanguage();
   const confirm = useConfirm();
@@ -542,9 +542,14 @@ export const TeamManager: React.FC = () => {
 
                       <div className="flex items-center justify-end gap-0.5 ps-[52px] lg:ps-0">
                         {a.role === 'parent' && (
-                          <IconBtn label={t('linkChildren')} onClick={() => setChildrenFor(a)}>
-                            <Baby className="w-4 h-4" />
-                          </IconBtn>
+                          <>
+                            <IconBtn label={t('viewAsParent')} onClick={() => viewAsParent(a.id)}>
+                              <Eye className="w-4 h-4" />
+                            </IconBtn>
+                            <IconBtn label={t('linkChildren')} onClick={() => setChildrenFor(a)}>
+                              <Baby className="w-4 h-4" />
+                            </IconBtn>
+                          </>
                         )}
                         <IconBtn label={t('resetPassword')} onClick={() => setPasswordFor(a)}>
                           <KeyRound className="w-4 h-4" />

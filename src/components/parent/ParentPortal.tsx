@@ -42,6 +42,7 @@ import { parentMessages } from '../../i18n/messages/parent';
 import { shopMessages } from '../../i18n/messages/shop';
 import { ModalPortal } from '../common/ModalPortal';
 import { AddChildrenModal } from './AddChildrenModal';
+import { ViewAsFamilyPicker } from './ViewAsFamilyPicker';
 
 /* ---------- attendance & marks building blocks ---------- */
 
@@ -587,6 +588,8 @@ export const ParentPortal: React.FC = () => {
 
   if (!activeStudent) {
     return (
+      <>
+      {isAdminViewer && <ViewAsFamilyPicker />}
       <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-3">
         <h1 className="text-2xl font-black text-slate-800">{t('noChildrenTitle')}</h1>
         <p className="text-sm text-slate-500 font-medium">{t('noChildrenText')}</p>
@@ -597,10 +600,13 @@ export const ParentPortal: React.FC = () => {
         )}
         {addChildModal}
       </div>
+      </>
     );
   }
 
   return (
+    <>
+    {isAdminViewer && <ViewAsFamilyPicker />}
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* All mentor marks */}
       {isMarksOpen && (
@@ -1304,5 +1310,6 @@ export const ParentPortal: React.FC = () => {
         />
       )}
     </div>
+    </>
   );
 };
