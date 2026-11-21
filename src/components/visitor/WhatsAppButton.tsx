@@ -1,7 +1,6 @@
 import React from 'react';
-import { useT } from '../../i18n';
-import { visitorMessages } from '../../i18n/messages/visitor';
 import { whatsappLink } from '../../data/siteContent';
+import { useLandingT, useSite } from '../common/siteHooks';
 
 /** WhatsApp logo (lucide has none) */
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -10,10 +9,10 @@ export const WhatsAppIcon: React.FC<{ className?: string }> = ({ className }) =>
   </svg>
 );
 
-/** Floating "chat with us" button, shown on public pages once a WhatsApp number is set in siteContent. */
+/** Floating "chat with us" button, shown on public pages once a WhatsApp number is set (Admin → Landing page → contact). */
 export const WhatsAppButton: React.FC = () => {
-  const t = useT(visitorMessages);
-  const href = whatsappLink(t('whatsappHello'));
+  const t = useLandingT();
+  const href = whatsappLink(useSite(), t('whatsappHello'));
   if (!href) return null;
   return (
     <a

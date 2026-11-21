@@ -5,8 +5,8 @@ import { AppPage } from '../../types';
 import { useLanguage, useT } from '../../i18n';
 import { commonMessages } from '../../i18n/messages/common';
 import { siteMessages } from '../../i18n/messages/site';
-import { visitorMessages } from '../../i18n/messages/visitor';
-import { SITE_CONTENT, mapsLink, whatsappLink } from '../../data/siteContent';
+import { mapsLink, pick, whatsappLink } from '../../data/siteContent';
+import { useLandingT, useSite } from './siteHooks';
 import { WhatsAppIcon } from '../visitor/WhatsAppButton';
 import { ArrowUp, ArrowUpRight, Clock, Cpu, Code2, Facebook, Instagram, Mail, MapPin, Phone, Trophy, Bot } from 'lucide-react';
 
@@ -22,10 +22,11 @@ export const Footer: React.FC = () => {
   const { navigateTo } = useApp();
   const t = useT(commonMessages);
   const ts = useT(siteMessages);
-  const tv = useT(visitorMessages);
+  const tv = useLandingT();
+  const site = useSite();
   const { lang } = useLanguage();
-  const { contact, address, openingHours } = SITE_CONTENT;
-  const wa = whatsappLink(tv('whatsappHello'));
+  const { contact, address, openingHours } = site;
+  const wa = whatsappLink(site, tv('whatsappHello'));
 
   const links: { page: AppPage; label: string }[] = [
     { page: 'home', label: t('portalPublic') },
@@ -33,13 +34,14 @@ export const Footer: React.FC = () => {
     { page: 'login', label: t('portalSignIn') }
   ];
 
-  const heading = 'text-[11px] font-black uppercase tracking-[0.18em] text-white/70 mb-5';
+  const heading = 'font-hand text-2xl leading-none text-[#ffb3c1] mb-5';
 
   return (
-    <footer className="relative bg-ink text-white/70 text-sm">
+    <footer className="relative bg-heading text-white/70 text-sm">
       <div className="h-1 bg-gradient-to-r from-brand-dark via-brand to-brand-dark" />
+      <div className="absolute inset-0 paper-dots-light opacity-30 pointer-events-none" aria-hidden="true" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-x-10 gap-y-12">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-4 space-y-5">
@@ -47,9 +49,9 @@ export const Footer: React.FC = () => {
               <img
                 src={CLUB_PHOTOS.clubAvatar}
                 alt={t('logoAlt')}
-                className="w-12 h-12 rounded-2xl object-cover bg-white ring-2 ring-white/10"
+                className="w-12 h-12 rounded-full object-cover bg-white p-0.5 ring-2 ring-white/15"
               />
-              <span className="text-lg font-black tracking-tight text-white">Discovery Junior</span>
+              <span className="font-display text-2xl font-semibold tracking-tight text-white">Discovery Junior</span>
             </div>
             <p className="max-w-sm leading-relaxed text-white/60">{t('footerTagline')}</p>
             <div className="flex flex-wrap gap-2">
@@ -118,19 +120,19 @@ export const Footer: React.FC = () => {
             <ul className="space-y-4">
               <li>
                 <a
-                  href={mapsLink()}
+                  href={mapsLink(site)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-start gap-3 hover:text-white transition-colors"
                 >
                   <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
-                  <span>{[address.street[lang], address.city[lang]].filter(Boolean).join(', ')}</span>
+                  <span>{[pick(address.street, lang), pick(address.city, lang)].filter(Boolean).join(', ')}</span>
                 </a>
               </li>
-              {openingHours[lang] && (
+              {pick(openingHours, lang) && (
                 <li className="flex items-start gap-3">
                   <Clock className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
-                  <span>{openingHours[lang]}</span>
+                  <span>{pick(openingHours, lang)}</span>
                 </li>
               )}
               {contact.phone && (

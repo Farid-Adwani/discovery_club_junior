@@ -2,8 +2,11 @@
  * ============================================================================
  *  PUBLIC WEBSITE CONTENT — EDIT THIS FILE
  * ============================================================================
- * Contact details, map, FAQ, testimonials, coaches, achievements and the
+ * Contact details, map, FAQ, testimonials, achievements and the
  * club-specific parts of the privacy policy and terms.
+ *
+ * These are the DEFAULTS: admins can change all of it in Admin → Landing page
+ * (saved in the database); a part they changed replaces the one below.
  *
  * Rules:
  *  - An empty string '' or an empty list [] means "not filled in yet": the
@@ -17,6 +20,7 @@
  */
 
 import { CLUB_PHOTOS } from './initialData';
+import type { LText, SiteInfo } from './landing';
 
 export type Localized = { en: string; fr: string; ar: string };
 
@@ -85,14 +89,6 @@ export const SITE_CONTENT = {
   testimonials: [
     // { quote: L('…', '…', '…'), author: 'Sana B.', role: L('Mother of Adam, 11', 'Maman d’Adam, 11 ans', 'أم آدم، 11 سنة') }
   ] as { quote: Localized; author: string; role: Localized }[],
-
-  /**
-   * Coaches shown on the home page. Empty list = the trainers added in Admin → Team are shown
-   * (name, specialty and photo only).
-   */
-  coaches: [
-    // { name: 'Karim', role: L('Robotics coach', 'Coach robotique', 'مدرب روبوتيك'), photo: '/photos/coach_karim.jpg' }
-  ] as { name: string; role: Localized; photo?: string }[],
 
   /** Hall of fame, newest first. Leave `year` empty to hide the badge. */
   achievements: [
@@ -171,16 +167,36 @@ export const SITE_CONTENT = {
   }
 };
 
+/** The site's content: the defaults above with the parts changed in Admin → Landing page */
+export function resolveSite(over?: SiteInfo) {
+  const d = SITE_CONTENT;
+  return {
+    siteUrl: d.siteUrl,
+    legalName: over?.legal?.legalName || d.legalName,
+    contact: over?.contact ?? d.contact,
+    address: over?.address ?? d.address,
+    openingHours: over?.openingHours ?? d.openingHours,
+    faq: (over?.faq ?? d.faq) as { q: Localized; a: Localized; draft?: boolean }[],
+    testimonials: over?.testimonials ?? d.testimonials,
+    legal: over?.legal ? { ...d.legal, ...over.legal } : d.legal
+  };
+}
+export type Site = ReturnType<typeof resolveSite>;
+
+/** The text in this language, else in another one */
+export const pick = (t: LText | Localized | undefined, lang: keyof Localized) => (t ? t[lang] || t.en || t.fr || t.ar : '');
+const anyText = (t?: Localized) => !!t && !!(t.en || t.fr || t.ar);
+
 /** WhatsApp link, optionally with a prefilled message */
-export const whatsappLink = (text?: string) =>
-  SITE_CONTENT.contact.whatsapp ? `https://wa.me/${SITE_CONTENT.contact.whatsapp.replace(/\D/g, '')}${text ? `?text=${encodeURIComponent(text)}` : ''}` : '';
+export const whatsappLink = (site: Site, text?: string) =>
+  site.contact.whatsapp ? `https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}${text ? `?text=${encodeURIComponent(text)}` : ''}` : '';
 
-export const hasMap = () => !!(SITE_CONTENT.address.lat && SITE_CONTENT.address.lng);
+export const hasMap = (site: Site) => !!(site.address.lat && site.address.lng);
 
-export const mapsLink = () =>
-  hasMap()
-    ? `https://www.google.com/maps/search/?api=1&query=${SITE_CONTENT.address.lat},${SITE_CONTENT.address.lng}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(SITE_CONTENT.address.street.en || 'Discovery Club Junior Manouba')}`;
+export const mapsLink = (site: Site) =>
+  hasMap(site)
+    ? `https://www.google.com/maps/search/?api=1&query=${site.address.lat},${site.address.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.address.street.en || site.address.city.en || 'Discovery Club Junior Manouba')}`;
 
 /** FAQ entries that are filled in (drafts are hidden) */
-export const publishedFaq = () => SITE_CONTENT.faq.filter((f) => !f.draft && f.q.en && f.a.en);
+export const publishedFaq = (site: Site) => site.faq.filter((f) => !f.draft && anyText(f.q) && anyText(f.a));

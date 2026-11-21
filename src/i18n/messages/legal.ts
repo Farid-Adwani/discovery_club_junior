@@ -51,7 +51,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         title: '5. Who can see the data',
         body: [
           'Parents see only their own children. Trainers see what they need to teach their classes. Club administrators see the data needed to run the club.',
-          'The site runs on Google Firebase (database) and Vercel (hosting). Their servers may be located outside Tunisia, in particular in the European Union or the United States; they process the data only on our behalf. We never sell personal data and never use it for advertising.'
+          'The site, its database and the photos are kept on a server that the club rents from a hosting company. That company stores the data only on our behalf and may not use it for anything else. We never sell personal data and never use it for advertising.'
         ]
       },
       {
@@ -124,7 +124,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         title: '5. Destinataires',
         body: [
           'Les parents ne voient que leurs propres enfants. Les entraîneurs voient ce dont ils ont besoin pour leurs cours. Les administrateurs du club voient les données nécessaires à son fonctionnement.',
-          'Le site fonctionne avec Google Firebase (base de données) et Vercel (hébergement). Leurs serveurs peuvent se trouver hors de Tunisie, notamment dans l’Union européenne ou aux États-Unis ; ils traitent les données uniquement pour notre compte. Nous ne vendons jamais de données personnelles et ne les utilisons jamais à des fins publicitaires.'
+          'Le site, sa base de données et les photos sont conservés sur un serveur que le club loue à un hébergeur. Cet hébergeur stocke les données uniquement pour notre compte et ne peut pas les utiliser à d’autres fins. Nous ne vendons jamais de données personnelles et ne les utilisons jamais à des fins publicitaires.'
         ]
       },
       {
@@ -197,7 +197,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         title: '5. من يطّلع على المعطيات',
         body: [
           'لا يرى الولي إلا أطفاله. ويرى المدربون ما يحتاجونه لتدريس حصصهم. ويرى مسيّرو النادي المعطيات اللازمة لتسييره.',
-          'يعمل الموقع بخدمات Google Firebase (قاعدة البيانات) وVercel (الاستضافة). قد تكون خوادمها خارج تونس، خاصة في الاتحاد الأوروبي أو الولايات المتحدة، وهي تعالج المعطيات لحسابنا فقط. لا نبيع المعطيات الشخصية أبدًا ولا نستعملها في الإشهار.'
+          'يُحفظ الموقع وقاعدة بياناته والصور على خادم يستأجره النادي من شركة استضافة. تخزّن هذه الشركة المعطيات لحسابنا فقط ولا يحق لها استعمالها لأي غرض آخر. لا نبيع المعطيات الشخصية أبدًا ولا نستعملها في الإشهار.'
         ]
       },
       {

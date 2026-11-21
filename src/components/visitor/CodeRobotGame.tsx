@@ -221,7 +221,7 @@ export const CodeRobotGame: React.FC<{ onRegister: () => void }> = ({ onRegister
 
   if (allDone) {
     return (
-      <div className="duo-card hover:transform-none! bg-white p-8 sm:p-12 text-center space-y-4">
+      <div className="rounded-[28px] bg-white soft-shadow p-8 sm:p-12 text-center space-y-4">
         <div className="w-20 h-20 mx-auto rounded-3xl bg-[#c11e3d] text-white grid place-items-center shadow-lg">
           <Bot className="w-10 h-10" />
         </div>
@@ -241,7 +241,7 @@ export const CodeRobotGame: React.FC<{ onRegister: () => void }> = ({ onRegister
   }
 
   return (
-    <div className="duo-card hover:transform-none! bg-white p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6">
+    <div className="rounded-[28px] bg-white soft-shadow p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6">
       {/* Board */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

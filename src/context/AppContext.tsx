@@ -23,6 +23,7 @@ import {
   StockMovement
 } from '../types';
 import type { LandingContent } from '../data/landing';
+import type { TimelineEdits } from '../data/timelineEdits';
 import {
   INITIAL_TRAINERS,
   INITIAL_GROUPS,
@@ -65,6 +66,7 @@ interface ClubData {
   staffMembers?: StaffMember[];
   adminProfiles?: AdminProfile[];
   landing?: LandingContent;
+  timelineEdits?: TimelineEdits;
 }
 
 /** What the admin's student form (add and edit) sends */
@@ -97,6 +99,10 @@ interface AppContextType {
   /** Public landing page texts, hidden sections, counters (Admin → Landing page) */
   landing: LandingContent;
   saveLanding: (content: LandingContent) => Promise<boolean>;
+  /** The admins' changes to the photo albums of "Our journey" */
+  timelineEdits: TimelineEdits;
+  /** Saves the album changes; with `quiet`, no "saved" message (when saved together with the texts) */
+  saveTimeline: (edits: TimelineEdits, quiet?: boolean) => Promise<boolean>;
   /** A signed-in parent registers more children on their account (they start on the waitlist) */
   addMyChildren: (data: { parentPhone: string; children: { name: string; birthDate: string; notes?: string }[] }) => Promise<boolean>;
   registerParentAccount: (data: {
@@ -261,7 +267,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // The current page lives in the address bar (#/admin, #/login…) so a refresh reopens the same page
-const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent', 'privacy', 'terms'];
+const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent', 'privacy', 'terms', 'museum'];
 const PORTALS: AppPage[] = ['admin', 'trainer', 'parent'];
 
 function pageFromHash(): AppPage {
@@ -381,6 +387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
   const [products, setProducts] = useState<Product[]>([]);
   const [landing, setLanding] = useState<LandingContent>({});
+  const [timelineEdits, setTimelineEdits] = useState<TimelineEdits>({});
   const [orders, setOrders] = useState<ProductOrder[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -442,6 +449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setGroups(data.groups);
       setProducts(data.products || []);
       setLanding(data.landing || {});
+      setTimelineEdits(data.timelineEdits || {});
       setStudents(data.students);
       setSessions(data.sessions);
       setSessionsFrom(data.sessionsFrom || '');
@@ -916,12 +924,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const saveLanding = (content: LandingContent) =>
     mutate(() => api('/admin/site-content/landing', { method: 'PUT', body: content }), tt('landingSaved'));
+  const saveTimeline = (edits: TimelineEdits, quiet = false) =>
+    mutate(() => api('/admin/site-content/timeline', { method: 'PUT', body: edits }), quiet ? undefined : tt('landingSaved'));
 
   return (
     <AppContext.Provider
       value={{
         landing,
         saveLanding,
+        timelineEdits,
+        saveTimeline,
         role,
         setRole,
         currentPage,

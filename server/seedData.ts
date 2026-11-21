@@ -1,4 +1,4 @@
-import { db } from './firebaseAdmin';
+import { db } from './db.js';
 import {
   INITIAL_TRAINERS,
   INITIAL_GROUPS,

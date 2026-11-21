@@ -9,3 +9,6 @@ coverage/
 
 # Firebase service-account keys (never commit)
 *firebase-adminsdk*.json
+
+# Database and uploaded images (personal data: never commit; back them up instead)
+/data/

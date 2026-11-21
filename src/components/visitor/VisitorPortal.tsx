@@ -1,16 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
-  Bot,
+  Code2,
   Cpu,
   Trophy,
-  Globe2,
+  Wrench,
+  Zap,
   MapPin,
   Clock,
   ArrowRight,
-  Zap,
   Users,
-  HeartHandshake,
   UserPlus,
   Phone,
   Mail,
@@ -18,22 +17,28 @@ import {
   ChevronDown,
   Send
 } from 'lucide-react';
-import { CLUB_PHOTOS, INITIAL_TRAINERS } from '../../data/initialData';
-import { SITE_CONTENT, hasMap, mapsLink, publishedFaq, whatsappLink } from '../../data/siteContent';
+import { CLUB_PHOTOS } from '../../data/initialData';
+import { hasContactInfo, landingCoaches } from './sections';
+import { hasMap, mapsLink, pick, publishedFaq, whatsappLink } from '../../data/siteContent';
+import { DEFAULT_HERO_PHOTOS, DEFAULT_HIGHLIGHT, DEFAULT_POLAROID } from '../../data/landingDefaults';
+import { useLandingT, useSite } from '../common/siteHooks';
 import { CLASS_DEFAULT_IMAGE, WEEK_DAYS, WeekDay } from '../../types';
 import { weekdayName } from '../../utils/schedule';
-import { CATEGORY_EMOJI } from '../../utils/shop';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useIntroOpened } from '../common/IntroReveal';
 import { WhatsAppIcon } from './WhatsAppButton';
 import { photoSrcSet } from './photo';
-import { CircuitBackground, CodeTyper, CountUp, Gear, Oscilloscope, Reveal, RobotArm } from './RoboticsArt';
+import { CountUp, Reveal } from './RoboticsArt';
+import { FloatingDoodles, GearDoodle, Ribbon, SectionTitle, SparkDoodle, Sticker, Squiggle } from './Decor';
+import { CircuitTraces, CodeArt, CompeteArt, ElectronicsArt, MechanicsArt, PanelScrews, RobotMascot } from './LabArt';
 import { CodeRobotGame } from './CodeRobotGame';
 import { HeroCollage } from './HeroCollage';
-import { useT, useLanguage } from '../../i18n';
-import { visitorMessages } from '../../i18n/messages/visitor';
+import { useLanguage } from '../../i18n';
 import type { LandingSection } from '../../data/landing';
+import { takeReturn } from '../museum/returnTo';
 
+// The photo timeline (300+ photos listed) loads in its own chunk, after the top of the page
+const TimelineSection = lazy(() => import('./TimelineSection').then((m) => ({ default: m.TimelineSection })));
 
 export const VisitorPortal: React.FC = () => {
   // The hero waits for the start-up intro (if it is playing) and animates in as soon as it opens or is skipped
@@ -42,19 +47,13 @@ export const VisitorPortal: React.FC = () => {
   const {
     groups,
     navigateTo,
-    products,
     landing,
     trainers
   } = useApp();
-  const tDefault = useT(visitorMessages);
-  const { dir, locale, lang } = useLanguage();
-  // Texts the admin changed in Admin → Landing page win over the default wording
-  const t = ((key, vars) => {
-    const custom = landing.text?.[lang]?.[key];
-    return custom ? custom.replace(/\{(\w+)\}/g, (m: string, name: string) => (vars && name in vars ? String(vars[name]) : m)) : tDefault(key, vars);
-  }) as typeof tDefault;
-  // Admins receive hidden products too; the public page only shows what is on sale
-  const productsOnSale = products.filter((p) => p.isActive);
+  // Texts and club details, with the changes made in Admin → Landing page
+  const t = useLandingT();
+  const site = useSite();
+  const { locale, lang } = useLanguage();
 
   const [dayFilter, setDayFilter] = useState<'all' | WeekDay>('all');
   const [trial, setTrial] = useState({ parent: '', child: '', age: '', cls: '', phone: '' });
@@ -89,6 +88,27 @@ export const VisitorPortal: React.FC = () => {
   const shownClassesAll = [...groups].sort((a, b) => WEEK_DAYS.indexOf(a.dayOfWeek) - WEEK_DAYS.indexOf(b.dayOfWeek) || a.timeSlot.localeCompare(b.timeSlot));
 
   const goRegister = () => navigateTo('register-parent');
+  const goMuseum = () => navigateTo('museum');
+
+  // Back from the 3D museum: scroll to the section the visitor came from (it loads lazily, so wait for it)
+  useEffect(() => {
+    const id = takeReturn();
+    if (!id) return;
+    // The sections above it also load lazily and grow: scroll again once they have settled
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let tries = 0;
+    const find = setInterval(() => {
+      const el = document.getElementById(id);
+      if (!el && ++tries <= 40) return;
+      clearInterval(find);
+      // instant: the page has smooth scrolling, which would scroll through everything above
+      if (el) [0, 350, 900].forEach((ms) => timers.push(setTimeout(() => el.scrollIntoView({ block: 'start', behavior: 'instant' }), ms)));
+    }, 100);
+    return () => {
+      clearInterval(find);
+      timers.forEach(clearTimeout);
+    };
+  }, []);
   const scrollToSection = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   // Rotating word in the hero headline
@@ -100,24 +120,9 @@ export const VisitorPortal: React.FC = () => {
     return () => clearInterval(timer);
   }, [reduceMotion]);
 
-  // Photo conveyor belt: the club's photos
-  const beltPhotos = [
-    { img: CLUB_PHOTOS.eurobotSpainChampions, title: t('belt1Title'), tag: t('belt1Tag') },
-    { img: CLUB_PHOTOS.eurobotSpainTrophyCert, title: t('belt2Title'), tag: '📜 Alcalá de Henares' },
-    { img: CLUB_PHOTOS.robocupViennaMarxHalle, title: t('belt3Title'), tag: '🇦🇹 Marx Halle' },
-    { img: CLUB_PHOTOS.ministryHonorCeremony, title: t('belt4Title'), tag: t('belt4Tag') },
-    { img: CLUB_PHOTOS.robocupJuniorEgypt, title: t('belt5Title'), tag: '🇪🇬 RoboCup Junior' },
-    { img: CLUB_PHOTOS.odaRobots2ndPrize, title: t('belt6Title'), tag: t('belt6Tag') },
-    { img: CLUB_PHOTOS.eurobotSpainStage, title: t('belt7Title'), tag: '🎉 Eurobot Spain' },
-    { img: CLUB_PHOTOS.eurobotJuniorTunisiaQualif, title: t('belt8Title'), tag: '🇹🇳 ATR · INSAT' },
-    { img: CLUB_PHOTOS.istanbulAirportEuropeanChamp, title: t('belt9Title'), tag: '✈️ Istanbul' },
-    { img: CLUB_PHOTOS.robocupEgyptTeam, title: t('belt10Title'), tag: t('belt10Tag') },
-    { img: CLUB_PHOTOS.nationsFlags, title: t('belt11Title'), tag: t('belt11Tag') },
-    { img: CLUB_PHOTOS.officialTrophyReception, title: t('belt12Title'), tag: t('belt12Tag') },
-    { img: CLUB_PHOTOS.internationalFriendsThailand, title: t('belt13Title'), tag: t('belt13Tag') },
-    { img: CLUB_PHOTOS.airportDepartureTunis, title: t('belt14Title'), tag: '✈️ Tunis-Carthage' },
-    { img: CLUB_PHOTOS.airportDeparturePalestine, title: t('belt15Title'), tag: t('belt15Tag') }
-  ];
+  // Club moments that take turns in the hero collage (Admin → Landing page → photos, or the built-in ones)
+  const media = landing.media;
+  const heroPhotos = (media?.heroPhotos?.length ? media.heroPhotos : DEFAULT_HERO_PHOTOS).map((p) => ({ img: p.img, title: pick(p.title, lang), tag: pick(p.tag, lang) }));
 
   // Counters set in Admin → Landing page; one without a number is not shown
   const stats = [
@@ -127,18 +132,15 @@ export const VisitorPortal: React.FC = () => {
     { value: landing.stats?.trophies ?? 0, suffix: '', label: t('statTrophies') }
   ].filter((s) => s.value > 0);
 
-  // Content from src/data/siteContent.ts: a section shows only once it has something real in it
-  const { contact, address } = SITE_CONTENT;
-  const achievements = SITE_CONTENT.achievements;
-  const faq = publishedFaq();
-  const testimonials = SITE_CONTENT.testimonials;
-  // The built-in demo trainers are never shown: only the ones loaded from the club's data
-  const coaches = SITE_CONTENT.coaches.length
-    ? SITE_CONTENT.coaches.map((c) => ({ name: c.name, role: c.role[lang], photo: c.photo }))
-    : (trainers === INITIAL_TRAINERS ? [] : trainers).map((tr) => ({ name: tr.name, role: tr.specialty || tr.specialization, photo: tr.avatar }));
-  const waHref = whatsappLink(t('whatsappHello'));
+  // Club details: a section shows only once it has something real in it
+  const { contact, address } = site;
+  const faq = publishedFaq(site);
+  const testimonials = site.testimonials;
+  // Same rules as the header's section links (sections.ts)
+  const coaches = landingCoaches(trainers);
+  const waHref = whatsappLink(site, t('whatsappHello'));
   const canBookTrial = !!(contact.whatsapp || contact.email);
-  const hasContact = canBookTrial || !!contact.phone || hasMap();
+  const hasContact = hasContactInfo(site);
   const goTrial = () => scrollToSection('contact');
 
   // The trial request goes out as a prefilled WhatsApp message (or an email): nothing is stored on the site
@@ -152,86 +154,51 @@ export const VisitorPortal: React.FC = () => {
       phone: trial.phone.trim()
     });
     const href = contact.whatsapp
-      ? whatsappLink(text)
+      ? whatsappLink(site, text)
       : `mailto:${contact.email}?subject=${encodeURIComponent(t('trialSubject'))}&body=${encodeURIComponent(text)}`;
     window.open(href, '_blank', 'noopener');
   };
   const inputClass =
-    'w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-500 focus:outline-none focus:border-sky-600 focus:bg-white';
+    'w-full px-4 py-3 bg-paper border border-line rounded-2xl text-sm font-semibold text-heading placeholder-muted focus:outline-none focus:border-brand focus:bg-white';
 
   const ageLabel = (min?: number, max?: number) =>
     min && max ? t('ageRange', { min, max }) : min ? t('agePlus', { min }) : max ? t('ageRange', { min: 3, max }) : '';
   const levelLabel = { beginner: t('levelBeginner'), intermediate: t('levelIntermediate'), advanced: t('levelAdvanced') };
 
+  // The four steps, each on its own pastel card with an icon badge sitting on the top edge
   const steps = [
-    {
-      n: '01',
-      title: t('stepBuildTitle'),
-      text: t('stepBuildText'),
-      art: (
-        <div className="relative w-[190px] h-full mx-auto">
-          <Gear size={104} teeth={16} duration={16} color="#c11e3d" className="absolute left-[8px] top-[4px]" />
-          <Gear size={68} teeth={10} duration={10} reverse color="#191919" windows={4} className="absolute left-[100px] top-[6px]" />
-        </div>
-      )
-    },
-    {
-      n: '02',
-      title: t('stepWireTitle'),
-      text: t('stepWireText'),
-      art: <Oscilloscope className="w-full h-full" />
-    },
-    {
-      n: '03',
-      title: t('stepCodeTitle'),
-      text: t('stepCodeText'),
-      art: <CodeTyper className="w-full h-full" />
-    },
-    {
-      n: '04',
-      title: t('stepCompeteTitle'),
-      text: t('stepCompeteText'),
-      art: (
-        <div className="shine w-full h-full rounded-xl bg-gradient-to-br from-sky-700 via-sky-900 to-[#191919] flex items-center justify-center">
-          <Trophy className="w-14 h-14 text-amber-300 drop-shadow-[0_0_14px_rgba(252,211,77,0.6)]" />
-        </div>
-      )
-    }
+    { n: '01', icon: Wrench, art: <MechanicsArt />, title: t('stepBuildTitle'), text: t('stepBuildText'), bg: 'bg-pastel-rose' },
+    { n: '02', icon: Zap, art: <ElectronicsArt />, title: t('stepWireTitle'), text: t('stepWireText'), bg: 'bg-pastel-sun' },
+    { n: '03', icon: Code2, art: <CodeArt />, title: t('stepCodeTitle'), text: t('stepCodeText'), bg: 'bg-pastel-mint' },
+    { n: '04', icon: Trophy, art: <CompeteArt />, title: t('stepCompeteTitle'), text: t('stepCompeteText'), bg: 'bg-pastel-sky' }
   ];
+  const COACH_BG = ['bg-pastel-rose', 'bg-pastel-sky', 'bg-pastel-sun', 'bg-pastel-mint', 'bg-pastel-lilac'];
+  const ribbonWords = t('ribbonWords').split('|').map((w) => w.trim()).filter(Boolean);
+  const cardSoft = 'rounded-[28px] bg-white soft-shadow';
 
   return (
-    <div className="space-y-24 pb-24 relative overflow-x-hidden">
-      {/* 1. HERO: circuit board, gear train and the club logo */}
-      <section className="relative overflow-hidden bg-[#141414] text-white">
-        <CircuitBackground className="absolute inset-0 w-full h-full" />
-        {/* Keeps the circuit lines from crossing the headline */}
-        <div className="absolute inset-y-0 start-0 w-full lg:w-[68%] bg-gradient-to-r rtl:bg-gradient-to-l from-[#141414] via-[#141414]/90 to-transparent pointer-events-none" />
-        <div className="absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-sky-600/25 blur-[120px] pointer-events-none" />
-        <div className="absolute -bottom-48 right-0 w-[560px] h-[560px] rounded-full bg-sky-900/40 blur-[120px] pointer-events-none" />
+    <div className="space-y-24 pb-24 relative overflow-x-hidden bg-paper">
+      {/* 1. HERO: light paper, serif headline with a handwritten word, the arch of photos */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-[#fff3f5] via-paper to-paper">
+        <div className="absolute inset-0 paper-dots opacity-60" aria-hidden="true" />
+        <CircuitTraces sides="end" className="opacity-80" />
+        <FloatingDoodles />
 
         <div
           key={introOpened ? 'shown' : 'waiting'}
-          className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10 md:pt-20 ${introOpened ? '' : 'invisible'}`}
+          className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-6 md:pt-14 ${introOpened ? '' : 'invisible'}`}
         >
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-7 space-y-7">
-              <motion.div
-                initial={{ opacity: 0, y: -12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0 }}
-                className="flex flex-wrap items-center gap-2"
-              >
-                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-black tracking-wide backdrop-blur">
-                  <span className="w-2 h-2 rounded-full bg-sky-500 led-blink" />
-                  {t('heroBadgeEurobot')}
-                </span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-6 items-center">
+            <div className="lg:col-span-6 space-y-7">
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-2.5">
+                <Sticker>{t('heroBadgeEurobot')}</Sticker>
                 <a
                   href={contact.facebook}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 border border-line text-xs font-semibold text-muted hover:text-brand hover:border-brand/40 transition-colors"
                 >
-                  <img src={CLUB_PHOTOS.clubLogo} alt="" className="w-4 h-4 rounded-full bg-white object-contain" />
+                  <img src={CLUB_PHOTOS.clubLogo} alt="" className="w-4 h-4 rounded-full object-contain" />
                   {t('heroFans')}
                 </a>
               </motion.div>
@@ -240,35 +207,38 @@ export const VisitorPortal: React.FC = () => {
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.1 }}
-                className="text-4xl sm:text-5xl lg:text-[4.2rem] font-black tracking-tight leading-[1.05]"
+                className="font-display text-[2.7rem] sm:text-6xl lg:text-[4.3rem] font-semibold tracking-tight leading-[1.04] text-heading"
               >
                 {t('heroLine1')} <br className="hidden sm:inline" />
                 {t('heroBeforeWord') && <>{t('heroBeforeWord')} </>}
                 <span className="sr-only">{HERO_WORDS[0]}</span>
-                <span className="relative inline-flex overflow-hidden align-bottom text-sky-500 pb-1" aria-hidden="true">
-                  <AnimatePresence mode="popLayout" initial={false}>
-                    <motion.span
-                      key={HERO_WORDS[heroWordIdx]}
-                      initial={{ y: '100%', opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: '-100%', opacity: 0 }}
-                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                      className="inline-block"
-                    >
-                      {HERO_WORDS[heroWordIdx]}
-                    </motion.span>
-                  </AnimatePresence>
+                <span className="relative inline-flex align-baseline font-hand text-brand text-[1.2em] leading-none px-1" aria-hidden="true">
+                  <span className="relative inline-flex overflow-hidden pb-2">
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span
+                        key={HERO_WORDS[heroWordIdx]}
+                        initial={{ y: '100%', opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: '-100%', opacity: 0 }}
+                        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                        className="inline-block"
+                      >
+                        {HERO_WORDS[heroWordIdx]}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
+                  <Squiggle className="absolute -bottom-1 inset-x-0 h-3 w-full text-gold" />
                 </span>
                 {t('heroAfterWord') && <> {t('heroAfterWord')}</>}
                 <br />
-                <span className="text-white/90">{t('heroLine3')}</span>
+                <span className="italic font-medium text-heading/80">{t('heroLine3')}</span>
               </motion.h1>
 
               <motion.p
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.25 }}
-                className="text-base sm:text-lg text-white/75 font-medium leading-relaxed max-w-xl"
+                className="text-base sm:text-lg text-muted leading-relaxed max-w-xl"
               >
                 {t('heroIntro')}
               </motion.p>
@@ -277,448 +247,182 @@ export const VisitorPortal: React.FC = () => {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.4 }}
-                className="flex flex-wrap items-center gap-4"
+                className="flex flex-wrap items-center gap-3.5"
               >
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={goRegister}
-                  className="px-8 py-4 btn-duo-green text-sm font-black flex items-center gap-2.5 cursor-pointer shadow-[0_10px_40px_-8px_rgba(193,30,61,0.7)]"
-                >
+                <button onClick={goRegister} className="pill-primary px-7 py-4 text-sm">
                   <UserPlus className="w-4 h-4" />
-                  <span>{t('registerChild')}</span>
+                  {t('registerChild')}
                   <ArrowRight className="w-4 h-4 rtl:rotate-180" />
-                </motion.button>
+                </button>
                 {canBookTrial && show('contact') && (
-                  <motion.button
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={goTrial}
-                    className="px-7 py-4 rounded-2xl bg-white text-[#191919] text-sm font-black hover:bg-white/90 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <Send className="w-4 h-4 text-sky-600 rtl:-scale-x-100" />
-                    <span>{t('tryFree')}</span>
-                  </motion.button>
+                  <button onClick={goTrial} className="pill-outline px-6 py-3.5 text-sm">
+                    <Send className="w-4 h-4 rtl:-scale-x-100" />
+                    {t('tryFree')}
+                  </button>
                 )}
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => scrollToSection('programs')}
-                  className="px-7 py-4 rounded-2xl border-2 border-white/20 text-sm font-black text-white hover:bg-white/10 hover:border-white/40 transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  <Cpu className="w-4 h-4 text-sky-400" />
-                  <span>{t('explorePrograms')}</span>
-                </motion.button>
+                <button onClick={() => scrollToSection('programs')} className="pill-outline px-6 py-3.5 text-sm">
+                  <GearDoodle className="w-4 h-4" />
+                  {t('explorePrograms')}
+                </button>
               </motion.div>
 
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-white/70">
-                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-sky-500" /> {t('heroLocation')}</span>
-                <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-sky-500" /> {t('heroHardware')}</span>
-                <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-sky-500" /> {t('heroPodiums')}</span>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-muted">
+                <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-brand" /> {t('heroLocation')}</span>
+                <span className="flex items-center gap-1.5"><Users className="w-4 h-4 text-brand" /> {t('chipAges')}</span>
+                <span className="flex items-center gap-1.5"><Trophy className="w-4 h-4 text-gold" /> {t('heroPodiums')}</span>
               </div>
             </div>
 
-            <div className="lg:col-span-5 py-2">
+            <div className="lg:col-span-6">
               <HeroCollage
-                photos={[beltPhotos[0], beltPhotos[3], beltPhotos[2], beltPhotos[5], beltPhotos[10]]}
-                back={[CLUB_PHOTOS.eurobotSpainTrophyCert, CLUB_PHOTOS.robocupEgyptTeam]}
+                photos={heroPhotos}
+                polaroid={{ img: media?.polaroid || DEFAULT_POLAROID, caption: t('heroPolaroid') }}
+                highlight={{ img: media?.highlight || DEFAULT_HIGHLIGHT, tag: t('heroPodiums'), title: t('heroCountries') }}
+                ringText={t('heroRingText')}
+                note={t('heroHandNote')}
                 logo={CLUB_PHOTOS.clubLogo}
                 logoAlt="Discovery Club Junior"
-                delay={0}
-                chips={[
-                  { icon: <Trophy className="w-4 h-4 text-amber-500" />, text: t('chipTrophy') },
-                  { icon: <Globe2 className="w-4 h-4 text-[#c11e3d]" />, text: t('chipWorld') },
-                  { icon: <Users className="w-4 h-4 text-slate-700" />, text: t('chipAges') }
-                ]}
               />
             </div>
           </div>
 
           {/* live counters */}
           {stats.length > 0 && (
-          <div className={`mt-14 grid grid-cols-2 gap-3 sm:gap-4 ${stats.length >= 4 ? 'md:grid-cols-4' : stats.length === 3 ? 'md:grid-cols-3' : ''}`}>
-            {stats.map((s, i) => (
-              <Reveal key={s.label} delay={0.5 + i * 0.08} y={20}>
-                <div className="rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur px-5 py-4 hover:border-sky-500/60 hover:bg-white/[0.07] transition-colors">
-                  <div className="text-3xl sm:text-4xl font-black font-mono text-white">
-                    <CountUp to={s.value} suffix={s.suffix} delay={0.5} />
-                  </div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-white/70 mt-1">{s.label}</div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-          )}
-        </div>
-        {/* angled bottom edge */}
-        <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="relative block w-full h-10 sm:h-14 text-[#f8fafc]" aria-hidden="true">
-          <path d="M0 60 L0 30 L1440 0 L1440 60 Z" fill="currentColor" />
-        </svg>
-      </section>
-
-      {/* 2. PHOTO CONVEYOR BELT */}
-      {show('belt') && (
-        <>
-      <section className="-mt-16 space-y-5">
-        <Reveal className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div>
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('beltEyebrow')}</span>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('beltTitle')}</h2>
-          </div>
-        </Reveal>
-        <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
-          <div className="marquee-track flex w-max gap-4 py-2">
-            {[...beltPhotos, ...beltPhotos].map((item, idx) => (
-              <div
-                key={idx}
-                className="group relative w-64 sm:w-72 h-44 sm:h-48 shrink-0 rounded-2xl overflow-hidden border-2 border-white shadow-lg"
-              >
-                <img
-                  src={item.img}
-                  srcSet={photoSrcSet(item.img)}
-                  sizes="288px"
-                  alt={idx < beltPhotos.length ? item.title : ''}
-                  aria-hidden={idx >= beltPhotos.length || undefined}
-                  loading="lazy"
-                  decoding="async"
-                  width={288}
-                  height={192}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#191919]/90 via-[#191919]/10 to-transparent" />
-                <div className="absolute bottom-3 start-3 end-3 text-start text-white">
-                  <span className="text-[10px] font-black text-amber-300 block truncate">{item.tag}</span>
-                  <span className="text-sm font-black leading-tight block truncate">{item.title}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-        </>
-      )}
-
-      {/* 3. HOW IT WORKS: build, wire, code, compete */}
-      {show('how') && (
-        <>
-      <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-        <Reveal className="text-center max-w-2xl mx-auto space-y-3">
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('howEyebrow')}</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('howTitle')}</h2>
-          <p className="text-sm text-slate-600 font-medium">
-            {t('howText')}
-          </p>
-        </Reveal>
-
-        <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* circuit trace connecting the steps */}
-          <svg className="hidden lg:block absolute left-[12%] right-[12%] top-[86px] h-4 w-[76%] pointer-events-none" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
-            <line x1="0" y1="2" x2="100" y2="2" stroke="#e2e8f0" strokeWidth="0.6" />
-            <line x1="0" y1="2" x2="100" y2="2" stroke="#c11e3d" strokeWidth="0.9" pathLength={100} className="pcb-signal" style={{ animationDuration: '3s' }} />
-          </svg>
-          {steps.map((step, i) => (
-            <Reveal key={step.n} delay={i * 0.12}>
-              <motion.div whileHover={{ y: -8 }} className="duo-card relative h-full p-5 bg-white space-y-4">
-                <div className="h-32 rounded-xl bg-slate-50 border border-slate-100 p-2 overflow-hidden">{step.art}</div>
-                <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-xl bg-[#191919] text-white font-mono font-black text-sm flex items-center justify-center shadow-md">
-                    {step.n}
-                  </span>
-                  <h3 className="text-xl font-black text-slate-900">{step.title}</h3>
-                </div>
-                <p className="text-sm text-slate-600 font-medium leading-relaxed">{step.text}</p>
-              </motion.div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-        </>
-      )}
-
-      {/* 3b. MINI GAME: program the robot with blocks */}
-      {show('game') && (
-        <section id="game" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <Reveal className="text-center max-w-2xl mx-auto space-y-3">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('gameEyebrow')}</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('gameTitle')}</h2>
-            <p className="text-sm text-slate-600 font-medium">{t('gameText')}</p>
-          </Reveal>
-          <Reveal>
-            <CodeRobotGame onRegister={goRegister} />
-          </Reveal>
-        </section>
-      )}
-
-      {/* 4. ROBOT LAB: animated arm soldering a board */}
-      {show('lab') && (
-        <>
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Reveal>
-          <div className="relative overflow-hidden rounded-[2rem] bg-[#141414] text-white p-8 sm:p-12">
-            <CircuitBackground className="absolute inset-0 w-full h-full opacity-60" />
-            <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-              <div className="space-y-6">
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-400">{t('labEyebrow')}</span>
-                <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
-                  {t('labTitleBefore')} <span className="text-sky-500">{t('labTitleHighlight')}</span>
-                </h2>
-                <p className="text-sm text-white/75 font-medium leading-relaxed">
-                  {t('labText')}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {['Arduino', 'ESP32', t('techServo'), t('techUltrasonic'), t('techInfrared'), t('tech3d'), 'C++', 'Python', t('techVision')].map((tech, i) => (
-                    <motion.span
-                      key={tech}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      whileInView={{ opacity: 1, scale: 1 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.05 }}
-                      className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-black font-mono text-white/80 hover:border-sky-500 hover:text-white transition-colors"
-                    >
-                      {tech}
-                    </motion.span>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <Bot className="w-5 h-5 text-sky-400 mb-2" />
-                    <h4 className="text-sm font-black">{t('handsOnTitle')}</h4>
-                    <p className="text-xs text-white/70 font-medium">{t('handsOnText')}</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <HeartHandshake className="w-5 h-5 text-sky-400 mb-2" />
-                    <h4 className="text-sm font-black">{t('parentsLoopTitle')}</h4>
-                    <p className="text-xs text-white/70 font-medium">{t('parentsLoopText')}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-10 rounded-full bg-sky-600/20 blur-3xl" />
-                <RobotArm className="relative w-full max-w-md mx-auto" />
-              </div>
-            </div>
-          </div>
-        </Reveal>
-      </section>
-        </>
-      )}
-
-      {/* 5. NEXT CHALLENGE COUNTDOWN */}
-      {show('countdown') && (
-        <>
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Reveal>
-          <div className="duo-card p-6 sm:p-8 bg-white grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-            <div className="lg:col-span-4">
-              <Oscilloscope className="w-full h-auto rounded-xl" />
-            </div>
-            <div className="lg:col-span-4 space-y-1.5">
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('nextEyebrow')}</span>
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight">{t('nextTitle')}</h3>
-              <p className="text-sm text-slate-600 font-medium">{t('nextText')}</p>
-            </div>
-            <div className="lg:col-span-4 flex items-center justify-center lg:justify-end gap-2 font-mono">
-              {[
-                { v: timeLeft.days, l: t('days') },
-                { v: timeLeft.hours, l: t('hours') },
-                { v: timeLeft.minutes, l: t('mins') },
-                { v: timeLeft.seconds, l: t('secs') }
-              ].map((unit, i) => (
-                <React.Fragment key={unit.l}>
-                  {i > 0 && <span className="text-xl font-black text-sky-600 led-blink">:</span>}
-                  <div className="relative w-16 py-3 rounded-2xl bg-[#191919] text-center shadow-lg overflow-hidden">
-                    <AnimatePresence mode="popLayout" initial={false}>
-                      <motion.span
-                        key={unit.v}
-                        initial={{ y: -12, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 12, opacity: 0 }}
-                        className="block text-2xl font-black text-white"
-                      >
-                        {String(unit.v).padStart(2, '0')}
-                      </motion.span>
-                    </AnimatePresence>
-                    <span className="text-[10px] font-bold text-white/70 uppercase font-sans">{unit.l}</span>
-                  </div>
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-      </section>
-        </>
-      )}
-
-      {/* 6. HALL OF FAME TIMELINE */}
-      {show('fame') && (
-        <>
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-          <Reveal className="lg:col-span-5 space-y-5 lg:sticky lg:top-28">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('fameEyebrow')}</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
-              {t('fameTitle')}
-            </h2>
-            <p className="text-sm text-slate-600 font-medium leading-relaxed">
-              {t('fameText')}
-            </p>
-            <div className="relative rounded-3xl overflow-hidden shadow-xl">
-              <img
-                src={CLUB_PHOTOS.eurobotSpainChampions}
-                srcSet={photoSrcSet(CLUB_PHOTOS.eurobotSpainChampions)}
-                sizes="(min-width: 1024px) 480px, 100vw"
-                alt={t('fameImgAlt')}
-                loading="lazy"
-                decoding="async"
-                width={600}
-                height={224}
-                className="w-full h-56 object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#191919]/85 to-transparent" />
-              <div className="absolute bottom-4 start-4 text-white">
-                <div className="text-xs font-black text-amber-300 uppercase">Eurobot Spain Junior</div>
-                <div className="text-lg font-black">{t('fameFirstPlace')}</div>
-              </div>
-            </div>
-          </Reveal>
-
-          <div className="lg:col-span-7 relative ps-8">
-            <div className="absolute start-3 top-2 bottom-2 w-0.5 bg-slate-200" />
-            <motion.div
-              className="absolute start-3 top-2 w-0.5 bg-sky-600 origin-top"
-              initial={{ scaleY: 0 }}
-              whileInView={{ scaleY: 1 }}
-              viewport={{ once: true, margin: '-100px' }}
-              transition={{ duration: 1.6, ease: 'easeInOut' }}
-              style={{ bottom: '0.5rem' }}
-            />
-            <div className="space-y-5">
-              {achievements.map((item, idx) => (
-                <Reveal key={idx} delay={Math.min(idx, 4) * 0.08} y={24}>
-                  <div className="relative">
-                    <span className="absolute -start-[26px] top-5 w-4 h-4 rounded-full bg-white border-4 border-sky-600 shadow" />
-                    <motion.div whileHover={{ x: dir === 'rtl' ? -6 : 6 }} className="duo-card p-4 bg-white flex items-center gap-4">
-                      {item.photo && (
-                        <img
-                          src={item.photo}
-                          srcSet={photoSrcSet(item.photo)}
-                          sizes="96px"
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          width={96}
-                          height={72}
-                          className="w-24 h-18 shrink-0 rounded-xl object-cover"
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          {item.year && <span className="px-2.5 py-1 rounded-lg bg-[#191919] text-white text-xs font-mono font-black">{item.year}</span>}
-                          <h3 className="text-sm font-black text-slate-900">{item.title[lang]}</h3>
-                        </div>
-                        <p className="text-sm text-slate-600 font-medium">{item.text[lang]}</p>
-                      </div>
-                    </motion.div>
+            <div className={`mt-12 grid grid-cols-2 gap-3 sm:gap-4 ${stats.length >= 4 ? 'md:grid-cols-4' : stats.length === 3 ? 'md:grid-cols-3' : ''}`}>
+              {stats.map((s, i) => (
+                <Reveal key={s.label} delay={0.5 + i * 0.08} y={20}>
+                  <div className="rounded-3xl bg-white/90 soft-shadow px-5 py-4 text-center">
+                    <div className="font-display text-4xl font-semibold text-brand">
+                      <CountUp to={s.value} suffix={s.suffix} delay={0.5} />
+                    </div>
+                    <div className="text-xs font-semibold text-muted mt-1">{s.label}</div>
                   </div>
                 </Reveal>
               ))}
             </div>
-          </div>
+          )}
         </div>
       </section>
-        </>
+
+      {/* the ribbon of what kids do here */}
+      {ribbonWords.length > 0 && (
+        <div className="-mt-20">
+          <Ribbon words={ribbonWords} />
+        </div>
       )}
 
-      {/* 7. CLASSES WITH DAY FILTER (the section keeps its "programs" anchor for the menu links) */}
-      {show('programs') && (
-        <>
-      <section id="programs" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <Reveal className="text-center max-w-2xl mx-auto space-y-3">
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('programsEyebrow', { count: groups.length })}</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('programsTitle')}</h2>
-          <p className="text-sm text-slate-600 font-medium">{t('programsText')}</p>
-
-          {classDays.length > 1 && (
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-              {(['all', ...classDays] as const).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDayFilter(d)}
-                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    dayFilter === d ? 'btn-duo-green' : 'btn-duo-secondary'
-                  }`}
-                >
-                  {d === 'all' ? t('allDays') : weekdayName(d, locale)}
-                </button>
-              ))}
-            </div>
-          )}
-        </Reveal>
-
-        {shownClasses.length === 0 ? (
-          <p className="py-12 text-center text-sm font-medium text-slate-500 rounded-3xl border-2 border-dashed border-slate-200">{t('noClasses')}</p>
-        ) : (
-          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence mode="popLayout">
-              {shownClasses.map((g, i) => (
-                <motion.article
-                  layout
-                  key={g.id}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: i * 0.06 }}
-                  whileHover={{ y: -8 }}
-                  className="duo-card group relative overflow-hidden bg-white flex flex-col"
-                >
-                  <div className="relative aspect-[2/1] bg-slate-900 overflow-hidden">
-                    <img
-                      src={g.imageUrl || CLASS_DEFAULT_IMAGE}
-                      alt=""
-                      loading="lazy"
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 p-3 flex flex-wrap gap-1.5 bg-gradient-to-t from-black/70 to-transparent text-white text-[11px] font-black">
-                      {ageLabel(g.ageMin, g.ageMax) && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400 text-slate-900">
-                          <Users className="w-3 h-3" />
-                          {ageLabel(g.ageMin, g.ageMax)}
-                        </span>
-                      )}
-                      {g.level && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">{levelLabel[g.level]}</span>}
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
-                        {weekdayName(g.dayOfWeek, locale)}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm" dir="ltr">
-                        <Clock className="w-3 h-3" />
-                        {g.timeSlot}
-                      </span>
-                    </div>
+      {/* 2. HOW IT WORKS: build, wire, code, compete */}
+      {show('how') && (
+        <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14 scroll-mt-24">
+          <Reveal>
+            <SectionTitle kicker={t('howEyebrow')} title={t('howTitle')} text={t('howText')} />
+          </Reveal>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+            {steps.map((step, i) => (
+              <Reveal key={step.n} delay={i * 0.1}>
+                <div className={`group relative h-full rounded-[28px] ${step.bg} px-6 pt-12 pb-8 text-center transition-transform duration-300 hover:-translate-y-1.5`}>
+                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 grid place-items-center w-14 h-14 rounded-full bg-white text-brand soft-shadow transition-transform duration-300 group-hover:rotate-[-8deg]">
+                    <step.icon className="w-6 h-6" />
+                  </span>
+                  {/* the step drawn on a little blueprint */}
+                  <div className="relative h-32 mb-4 rounded-2xl bg-white/70 border-2 border-dashed border-brand/15 p-2 overflow-hidden">
+                    <div className="absolute inset-0 paper-dots opacity-50" aria-hidden="true" />
+                    <span className="absolute top-1.5 end-2.5 z-10 font-mono text-[10px] font-semibold text-brand/70" dir="ltr">STEP {step.n}</span>
+                    <div className="relative h-full">{step.art}</div>
                   </div>
-                  <div className="p-6 flex flex-col gap-5 flex-1">
-                    <div className="space-y-2 flex-1">
-                      <h3 className="text-lg font-black text-slate-900 leading-snug">{g.name}</h3>
-                      {g.description && <p className="text-xs text-slate-600 font-medium leading-relaxed">{g.description}</p>}
+                  <h3 className="font-display text-2xl font-semibold text-heading">{step.title}</h3>
+                  <p className="mt-2 text-sm text-muted leading-relaxed">{step.text}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 3. CLASSES WITH DAY FILTER (the section keeps its "programs" anchor for the menu links) */}
+      {show('programs') && (
+        <section id="programs" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-24">
+          <Reveal className="space-y-6">
+            <SectionTitle kicker={t('programsEyebrow', { count: groups.length })} title={t('programsTitle')} text={t('programsText')} />
+            {classDays.length > 1 && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {(['all', ...classDays] as const).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDayFilter(d)}
+                    aria-pressed={dayFilter === d}
+                    className={`px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+                      dayFilter === d ? 'bg-brand text-white shadow-[0_8px_20px_-10px_rgba(193,30,61,0.8)]' : 'bg-white text-heading/75 border border-line hover:border-brand/40 hover:text-brand'
+                    }`}
+                  >
+                    {d === 'all' ? t('allDays') : weekdayName(d, locale)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Reveal>
+
+          {shownClasses.length === 0 ? (
+            <p className="py-12 text-center text-sm text-muted rounded-[28px] border-2 border-dashed border-line bg-white/60">{t('noClasses')}</p>
+          ) : (
+            <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+              <AnimatePresence mode="popLayout">
+                {shownClasses.map((g, i) => (
+                  <motion.article
+                    layout
+                    key={g.id}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.92 }}
+                    transition={{ delay: i * 0.06 }}
+                    className={`group relative ${cardSoft} p-2.5 flex flex-col transition-transform duration-300 hover:-translate-y-1.5`}
+                  >
+                    <div className="relative aspect-[16/10] rounded-[22px] overflow-hidden bg-wash">
+                      <img
+                        src={g.imageUrl || CLASS_DEFAULT_IMAGE}
+                        alt=""
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                      <div className="absolute top-3 start-3 end-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                        {ageLabel(g.ageMin, g.ageMax) && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white text-heading shadow-sm">
+                            <Users className="w-3 h-3 text-brand" />
+                            {ageLabel(g.ageMin, g.ageMax)}
+                          </span>
+                        )}
+                        {g.level && <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#fff1d2] text-[#7a4b00] shadow-sm">{levelLabel[g.level]}</span>}
+                      </div>
+                    </div>
+                    <div className="px-3.5 pt-4 pb-3 flex flex-col gap-3 flex-1">
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold text-muted">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-paper border border-line">{weekdayName(g.dayOfWeek, locale)}</span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-paper border border-line font-mono text-[11px]" dir="ltr">
+                          <Clock className="w-3 h-3" />
+                          {g.timeSlot}
+                        </span>
+                      </div>
+                      <h3 className="font-display text-[1.45rem] font-semibold text-heading leading-snug">{g.name}</h3>
+                      {g.description && <p className="text-sm text-muted leading-relaxed">{g.description}</p>}
                       {g.room && (
-                        <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                          <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+                          <MapPin className="w-3.5 h-3.5 text-brand" />
                           {g.room}
                         </p>
                       )}
-                    </div>
-                    <div className="pt-4 border-t-2 border-slate-100 space-y-4">
-                      <div className="flex items-baseline justify-between">
-                        <div className="text-2xl font-black text-slate-900 font-mono">
-                          {g.pricePerMonth} <span className="text-xs font-bold text-slate-600">{t('perMonth')}</span>
+                      <div className="mt-auto pt-4 border-t border-dashed border-line flex items-end justify-between gap-3">
+                        <div>
+                          <span className="font-display text-3xl font-semibold text-brand">{g.pricePerMonth}</span>{' '}
+                          <span className="text-xs font-semibold text-muted">{t('perMonth')}</span>
                         </div>
-                        <span className="text-xs font-bold text-sky-700">{t('kitIncluded')}</span>
+                        <span className="inline-flex items-center gap-1.5 font-hand text-xl text-heading/70">
+                          <Cpu className="w-4 h-4 text-brand/70" />
+                          {t('kitIncluded')}
+                        </span>
                       </div>
-                      <button
-                        onClick={goRegister}
-                        className="w-full py-3 btn-duo-green text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <span>{t('registerChild')}</span>
-                        <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
+                      <button onClick={goRegister} className="pill-primary w-full justify-center py-3 text-sm">
+                        {t('registerChild')}
+                        <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                       </button>
                       {canBookTrial && show('contact') && (
                         <button
@@ -726,45 +430,41 @@ export const VisitorPortal: React.FC = () => {
                             setTrial((f) => ({ ...f, cls: g.name }));
                             goTrial();
                           }}
-                          className="w-full py-2.5 btn-duo-secondary text-xs font-black cursor-pointer"
+                          className="pill-outline w-full justify-center py-2.5 text-sm"
                         >
                           {t('tryFree')}
                         </button>
                       )}
                     </div>
-                  </div>
-                </motion.article>
-              ))}
-            </AnimatePresence>
-          </motion.div>
-        )}
-      </section>
-        </>
+                  </motion.article>
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </section>
       )}
 
-      {/* 8. COACHES */}
+      {/* 4. COACHES */}
       {show('coaches') && coaches.length > 0 && (
-        <section id="coaches" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <Reveal className="text-center max-w-2xl mx-auto space-y-3">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('coachesEyebrow')}</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('coachesTitle')}</h2>
-            <p className="text-sm text-slate-600 font-medium">{t('coachesText')}</p>
+        <section id="coaches" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 scroll-mt-24">
+          <Reveal>
+            <SectionTitle kicker={t('coachesEyebrow')} title={t('coachesTitle')} text={t('coachesText')} />
           </Reveal>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+          <div className="flex flex-wrap justify-center gap-6">
             {coaches.map((c, i) => (
-              <Reveal key={c.name + i} delay={Math.min(i, 6) * 0.06} y={20}>
-                <div className="duo-card bg-white p-5 text-center space-y-3 h-full">
-                  {c.photo ? (
-                    <img src={c.photo} alt="" loading="lazy" decoding="async" width={96} height={96} className="w-24 h-24 mx-auto rounded-full object-cover border-4 border-slate-100" />
-                  ) : (
-                    <div className="w-24 h-24 mx-auto rounded-full bg-[#191919] text-white grid place-items-center text-2xl font-black" aria-hidden="true">
-                      {c.name.trim().charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="text-sm font-black text-slate-900">{c.name}</h3>
-                    {c.role && <p className="text-xs font-semibold text-slate-600">{c.role}</p>}
+              <Reveal key={c.name + i} delay={Math.min(i, 6) * 0.06} y={20} className="w-[calc(50%-0.75rem)] sm:w-60">
+                <div className={`h-full rounded-[28px] ${COACH_BG[i % COACH_BG.length]} p-6 text-center`}>
+                  <div className="mx-auto w-fit rounded-full border-2 border-dashed border-brand/40 p-1.5">
+                    {c.photo ? (
+                      <img src={c.photo} alt="" loading="lazy" decoding="async" width={112} height={112} className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-white" />
+                    ) : (
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white text-brand grid place-items-center font-display text-3xl font-semibold" aria-hidden="true">
+                        {c.name.trim().charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
+                  <h3 className="mt-4 font-display text-xl font-semibold text-heading leading-tight">{c.name}</h3>
+                  {c.role && <p className="mt-1 text-sm text-muted">{c.role}</p>}
                 </div>
               </Reveal>
             ))}
@@ -772,22 +472,83 @@ export const VisitorPortal: React.FC = () => {
         </section>
       )}
 
-      {/* 9. TESTIMONIALS */}
-      {show('testimonials') && testimonials.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <Reveal className="text-center max-w-2xl mx-auto space-y-3">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('testimonialsEyebrow')}</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('testimonialsTitle')}</h2>
+      {/* 5. MINI GAME: program the robot with blocks */}
+      {show('game') && (
+        <section id="game" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <Reveal>
+            <SectionTitle kicker={t('gameEyebrow')} title={t('gameTitle')} text={t('gameText')} />
           </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <Reveal>
+            <CodeRobotGame onRegister={goRegister} />
+          </Reveal>
+        </section>
+      )}
+
+      {/* 6. NEXT CHALLENGE COUNTDOWN */}
+      {show('countdown') && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className={`relative overflow-hidden ${cardSoft} p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center`}>
+              <div className="absolute inset-0 paper-dots opacity-40" aria-hidden="true" />
+              <PanelScrews />
+              <div className="relative lg:col-span-7 space-y-2">
+                <p className="font-hand text-2xl text-brand leading-none">{t('nextEyebrow')}</p>
+                <h3 className="font-display text-3xl font-semibold text-heading tracking-tight">{t('nextTitle')}</h3>
+                <p className="text-sm text-muted">{t('nextText')}</p>
+              </div>
+              <div className="relative lg:col-span-5 flex items-center justify-center lg:justify-end gap-1.5 sm:gap-2 rounded-2xl bg-[#1d1316] px-3 sm:px-4 py-3 ring-4 ring-[#f1e4e7] shadow-[inset_0_2px_10px_rgba(0,0,0,0.6)]" dir="ltr">
+                {[
+                  { v: timeLeft.days, l: t('days') },
+                  { v: timeLeft.hours, l: t('hours') },
+                  { v: timeLeft.minutes, l: t('mins') },
+                  { v: timeLeft.seconds, l: t('secs') }
+                ].map((unit, i) => (
+                  <React.Fragment key={unit.l}>
+                    {i > 0 && <span className="font-mono text-2xl text-[#ff6b81] led-blink">:</span>}
+                    <div className="relative w-[3.9rem] sm:w-[4.4rem] py-2.5 rounded-xl bg-[#2a1b1f] text-center overflow-hidden">
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span
+                          key={unit.v}
+                          initial={{ y: -12, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          exit={{ y: 12, opacity: 0 }}
+                          className="block font-mono text-3xl font-semibold text-[#ff6b81] [text-shadow:0_0_12px_rgba(255,107,129,0.75)]"
+                        >
+                          {String(unit.v).padStart(2, '0')}
+                        </motion.span>
+                      </AnimatePresence>
+                      <span className="font-mono text-[9px] font-semibold text-white/50 uppercase">{unit.l}</span>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+        </section>
+      )}
+
+      {/* 7. PHOTO TIMELINE: the albums of public/photos/timeline, year by year */}
+      {show('timeline') && (
+        <Suspense fallback={<div className="min-h-[760px] bg-cream" aria-hidden="true" />}>
+          <TimelineSection t={t} onEnterMuseum={show('museum') ? goMuseum : undefined} />
+        </Suspense>
+      )}
+
+      {/* 8. TESTIMONIALS */}
+      {show('testimonials') && testimonials.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <Reveal>
+            <SectionTitle kicker={t('testimonialsEyebrow')} title={t('testimonialsTitle')} />
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {testimonials.map((q, i) => (
               <Reveal key={i} delay={Math.min(i, 5) * 0.08} y={20}>
-                <figure className="duo-card bg-white p-6 space-y-4 h-full">
-                  <Quote className="w-7 h-7 text-sky-600 rtl:-scale-x-100" aria-hidden="true" />
-                  <blockquote className="text-sm text-slate-700 font-medium leading-relaxed">{q.quote[lang]}</blockquote>
-                  <figcaption className="text-xs">
-                    <span className="font-black text-slate-900">{q.author}</span>
-                    {q.role[lang] && <span className="text-slate-600"> · {q.role[lang]}</span>}
+                <figure className={`${cardSoft} p-7 space-y-4 h-full`}>
+                  <Quote className="w-8 h-8 text-brand/40 rtl:-scale-x-100" aria-hidden="true" />
+                  <blockquote className="font-display text-lg text-heading leading-relaxed">{pick(q.quote, lang)}</blockquote>
+                  <figcaption className="text-sm">
+                    <span className="font-hand text-xl text-brand">{q.author}</span>
+                    {pick(q.role, lang) && <span className="text-muted"> · {pick(q.role, lang)}</span>}
                   </figcaption>
                 </figure>
               </Reveal>
@@ -796,116 +557,58 @@ export const VisitorPortal: React.FC = () => {
         </section>
       )}
 
-      {/* 10. CLUB SHOP (only when the admin has products on sale) */}
-      {show('shop') && (
-        <>
-      {productsOnSale.length > 0 && (
-      <Reveal>
-      <section id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="duo-card duo-card-glow-blue p-8 sm:p-10 bg-white border-2 border-slate-200 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-black uppercase">
-                <span>{t('shopBadge')}</span>
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
-                {t('shopTitle')}
-              </h2>
-            </div>
-            <button
-              onClick={() => navigateTo('parent')}
-              className="px-6 py-3.5 btn-duo-yellow text-xs font-black flex items-center gap-2 cursor-pointer shadow-md self-start sm:self-auto"
-            >
-              <span>{t('orderInPortal')}</span>
-              <ArrowRight className="w-4 h-4 rtl:rotate-180" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {productsOnSale.map((product) => (
-              <div key={product.id} className="rounded-3xl overflow-hidden border-4 border-slate-100 shadow-md group bg-white">
-                <div className="relative h-56 bg-slate-100">
-                  <img
-                    src={product.imageUrl || CLUB_PHOTOS.teamInClubColors}
-                    alt={product.name}
-                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <span className="absolute top-3 end-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-black">
-                    {t('priceDt', { price: product.price })}
-                  </span>
-                </div>
-                <div className="p-4 space-y-1">
-                  <h3 className="text-sm font-black text-slate-900">
-                    {CATEGORY_EMOJI[product.category]} {product.name}
-                  </h3>
-                  {product.description && <p className="text-xs text-slate-600 font-medium">{product.description}</p>}
-                  {product.sizes.length > 0 && (
-                    <p className="text-[11px] font-bold text-slate-500">{product.sizes.join(' · ')}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      </Reveal>
-      )}
-        </>
-      )}
-
-      {/* 11. FAQ */}
+      {/* 9. FAQ */}
       {show('faq') && faq.length > 0 && (
-        <section id="faq" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <Reveal className="text-center space-y-3">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('faqEyebrow')}</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{t('faqTitle')}</h2>
+        <section id="faq" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-24">
+          <Reveal>
+            <SectionTitle kicker={t('faqEyebrow')} title={t('faqTitle')} />
           </Reveal>
           <div className="space-y-3">
             {faq.map((f, i) => (
-              <details key={i} className="group duo-card hover:transform-none! bg-white px-5 py-4">
-                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none font-black text-slate-900 text-sm [&::-webkit-details-marker]:hidden">
-                  {f.q[lang]}
-                  <ChevronDown className="w-4 h-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+              <details key={i} className="group rounded-3xl bg-white soft-shadow px-6 py-4">
+                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none font-display text-lg font-semibold text-heading [&::-webkit-details-marker]:hidden">
+                  {pick(f.q, lang)}
+                  <ChevronDown className="w-5 h-5 shrink-0 text-brand transition-transform group-open:rotate-180" aria-hidden="true" />
                 </summary>
-                <p className="pt-3 text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">{f.a[lang]}</p>
+                <p className="pt-3 text-sm text-muted leading-relaxed whitespace-pre-line">{pick(f.a, lang)}</p>
               </details>
             ))}
           </div>
         </section>
       )}
 
-      {/* 12. CONTACT: free trial request, WhatsApp / phone / email, map */}
+      {/* 10. CONTACT: free trial request, WhatsApp / phone / email, map */}
       {show('contact') && hasContact && (
         <section id="contact" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
             {canBookTrial ? (
               <Reveal>
-                <form onSubmit={sendTrial} className="duo-card hover:transform-none! bg-white p-6 sm:p-8 space-y-5 h-full">
+                <form onSubmit={sendTrial} className={`${cardSoft} p-6 sm:p-8 space-y-5 h-full`}>
                   <div className="space-y-2">
-                    <span className="text-xs font-black uppercase tracking-[0.2em] text-sky-600">{t('contactEyebrow')}</span>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('contactTitle')}</h2>
-                    <p className="text-sm text-slate-600 font-medium">{t('contactText')}</p>
+                    <p className="font-hand text-2xl text-brand leading-none">{t('contactEyebrow')}</p>
+                    <h2 className="font-display text-3xl font-semibold text-heading tracking-tight">{t('contactTitle')}</h2>
+                    <p className="text-sm text-muted">{t('contactText')}</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                    <label className="block text-xs font-bold text-heading/80 space-y-1">
                       <span>{t('trialParent')}</span>
                       <input required autoComplete="name" value={trial.parent} onChange={(e) => setTrial({ ...trial, parent: e.target.value })} className={inputClass} />
                     </label>
-                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                    <label className="block text-xs font-bold text-heading/80 space-y-1">
                       <span>{t('trialPhone')}</span>
                       <input required type="tel" dir="ltr" autoComplete="tel" value={trial.phone} onChange={(e) => setTrial({ ...trial, phone: e.target.value })} className={inputClass} />
                     </label>
-                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                    <label className="block text-xs font-bold text-heading/80 space-y-1">
                       <span>{t('trialChild')}</span>
                       <input required value={trial.child} onChange={(e) => setTrial({ ...trial, child: e.target.value })} className={inputClass} />
                     </label>
-                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                    <label className="block text-xs font-bold text-heading/80 space-y-1">
                       <span>{t('trialAge')}</span>
                       <input required type="number" min={3} max={22} inputMode="numeric" value={trial.age} onChange={(e) => setTrial({ ...trial, age: e.target.value })} className={inputClass} />
                     </label>
                   </div>
                   {groups.length > 0 && (
-                    <label className="block text-xs font-black text-slate-700 space-y-1">
+                    <label className="block text-xs font-bold text-heading/80 space-y-1">
                       <span>{t('trialClass')}</span>
                       <select value={trial.cls} onChange={(e) => setTrial({ ...trial, cls: e.target.value })} className={inputClass}>
                         <option value="">{t('trialAnyClass')}</option>
@@ -917,7 +620,7 @@ export const VisitorPortal: React.FC = () => {
                       </select>
                     </label>
                   )}
-                  <button type="submit" className="w-full py-3.5 btn-duo-green text-sm font-black flex items-center justify-center gap-2 cursor-pointer">
+                  <button type="submit" className="pill-primary w-full justify-center py-3.5 text-sm">
                     {contact.whatsapp ? <WhatsAppIcon className="w-5 h-5" /> : <Mail className="w-4 h-4" />}
                     {contact.whatsapp ? t('trialSend') : t('trialSendEmail')}
                   </button>
@@ -926,47 +629,45 @@ export const VisitorPortal: React.FC = () => {
             ) : null}
 
             <Reveal className={canBookTrial ? '' : 'lg:col-span-2'}>
-              <div className="duo-card hover:transform-none! bg-white overflow-hidden h-full flex flex-col">
+              <div className={`${cardSoft} overflow-hidden h-full flex flex-col`}>
                 <div className="p-6 sm:p-8 space-y-4">
-                  {!canBookTrial && (
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('contactEyebrow')}</h2>
-                  )}
+                  {!canBookTrial && <h2 className="font-display text-3xl font-semibold text-heading tracking-tight">{t('contactEyebrow')}</h2>}
                   <div className="flex flex-wrap gap-2">
                     {waHref && (
-                      <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#25d366] text-white text-xs font-black hover:brightness-95">
+                      <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#25d366] text-white text-sm font-bold hover:brightness-95">
                         <WhatsAppIcon className="w-4 h-4" />
                         {t('whatsappUs')}
                       </a>
                     )}
                     {contact.phone && (
-                      <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-duo-secondary text-xs font-black">
+                      <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="pill-outline px-4 py-2 text-sm">
                         <Phone className="w-4 h-4" />
                         <span>{t('callUs')}</span>
-                        <span dir="ltr" className="font-mono">{contact.phone}</span>
+                        <span dir="ltr">{contact.phone}</span>
                       </a>
                     )}
                     {contact.email && (
-                      <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-duo-secondary text-xs font-black">
+                      <a href={`mailto:${contact.email}`} className="pill-outline px-4 py-2 text-sm">
                         <Mail className="w-4 h-4" />
                         {t('emailUs')}
                       </a>
                     )}
                   </div>
-                  <a href={mapsLink()} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 text-sm font-semibold text-slate-700 hover:text-sky-700">
-                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
+                  <a href={mapsLink(site)} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 text-sm font-semibold text-heading/80 hover:text-brand">
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
                     <span>
-                      {[address.street[lang], address.city[lang]].filter(Boolean).join(', ')}
-                      <span className="block text-xs text-sky-700 font-bold">{t('openInMaps')}</span>
+                      {[pick(address.street, lang), pick(address.city, lang)].filter(Boolean).join(', ')}
+                      <span className="block text-xs text-brand font-bold">{t('openInMaps')}</span>
                     </span>
                   </a>
-                  {SITE_CONTENT.openingHours[lang] && (
-                    <p className="flex items-start gap-2 text-sm font-semibold text-slate-700">
-                      <Clock className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
-                      {SITE_CONTENT.openingHours[lang]}
+                  {pick(site.openingHours, lang) && (
+                    <p className="flex items-start gap-2 text-sm font-semibold text-heading/80">
+                      <Clock className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
+                      {pick(site.openingHours, lang)}
                     </p>
                   )}
                 </div>
-                {hasMap() && (
+                {hasMap(site) && (
                   <iframe
                     title={t('mapTitle')}
                     src={`https://maps.google.com/maps?q=${address.lat},${address.lng}&z=16&hl=${lang}&output=embed`}
@@ -981,36 +682,29 @@ export const VisitorPortal: React.FC = () => {
         </section>
       )}
 
-      {/* 13. FINAL CALL TO ACTION */}
+      {/* 11. FINAL CALL TO ACTION */}
       {show('cta') && (
-        <>
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Reveal>
-          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-sky-600 via-sky-800 to-sky-950 text-white px-8 py-14 sm:px-14 text-center">
-            <Gear teeth={24} duration={40} color="rgba(255,255,255,0.08)" windows={6} className="absolute -left-20 -bottom-24 w-72 h-72" />
-            <Gear teeth={12} duration={20} reverse color="rgba(255,255,255,0.1)" windows={4} className="absolute -right-10 -top-12 w-48 h-48" />
-            <div className="relative max-w-2xl mx-auto space-y-5">
-              <h2 className="text-3xl sm:text-5xl font-black tracking-tight">{t('ctaTitle')}</h2>
-              <p className="text-white/75 font-medium">
-                {t('ctaText')}
-              </p>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={goRegister}
-                className="inline-flex items-center gap-2.5 px-9 py-4 rounded-2xl bg-white text-sky-700 font-black text-sm shadow-xl cursor-pointer"
-              >
-                <UserPlus className="w-4 h-4" />
-                {t('registerChild')}
-                <ArrowRight className="w-4 h-4 rtl:rotate-180" />
-              </motion.button>
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className="relative overflow-hidden rounded-[36px] bg-gradient-to-br from-[#d42a4b] via-brand to-[#8f1630] text-white px-8 py-16 sm:px-14 text-center soft-shadow-lg">
+              <div className="absolute inset-0 paper-dots-light" aria-hidden="true" />
+              <CircuitTraces light />
+              <FloatingDoodles light />
+              <RobotMascot className="hidden md:block absolute -bottom-10 end-10 w-36 lg:w-44 drop-shadow-[0_18px_24px_rgba(0,0,0,0.25)]" />
+              <div className="relative max-w-2xl mx-auto space-y-5">
+                <SparkDoodle className="mx-auto w-6 h-6 text-[#ffd27a] anim-twinkle" />
+                <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight">{t('ctaTitle')}</h2>
+                <p className="text-white/85 text-lg">{t('ctaText')}</p>
+                <button onClick={goRegister} className="pill-white px-9 py-4 text-sm">
+                  <UserPlus className="w-4 h-4" />
+                  {t('registerChild')}
+                  <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+                </button>
+              </div>
             </div>
-          </div>
-        </Reveal>
-      </section>
-        </>
+          </Reveal>
+        </section>
       )}
-
     </div>
   );
 };

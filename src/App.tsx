@@ -14,6 +14,7 @@ import { Footer } from './components/common/Footer';
 import { ViewAsBanner } from './components/common/ViewAsBanner';
 import { ToastContainer } from './components/common/ToastContainer';
 import { IntroReveal } from './components/common/IntroReveal';
+import { useLandingT } from './components/common/siteHooks';
 import { VisitorPortal } from './components/visitor/VisitorPortal';
 import { WhatsAppButton } from './components/visitor/WhatsAppButton';
 import { visitorMessages } from './i18n/messages/visitor';
@@ -28,6 +29,8 @@ const ParentPortal = lazy(() => import('./components/parent/ParentPortal').then(
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const ParentRegisterPage = lazy(() => import('./pages/ParentRegisterPage').then((m) => ({ default: m.ParentRegisterPage })));
 const LegalPage = lazy(() => import('./pages/LegalPage'));
+// The 3D museum (three.js) only downloads when someone opens it
+const LegacyMuseum = lazy(() => import('./components/museum/LegacyMuseum'));
 
 const PUBLIC_PAGES = ['home', 'visitor', 'privacy', 'terms'];
 
@@ -44,7 +47,8 @@ const PageSpinner: React.FC = () => {
 /** Tab title and description in the visitor's language (search engines that run scripts pick them up too) */
 function usePageMeta() {
   const { lang } = useLanguage();
-  const tv = useT(visitorMessages);
+  const { landing } = useApp();
+  const tv = useLandingT(); // with the title and description written in Admin → Landing page
   useEffect(() => {
     const prefix = document.title.match(/^\(\d+\)\s*/)?.[0] || ''; // unread count kept by NotificationBell
     document.title = prefix + tv('metaTitle');
@@ -53,7 +57,7 @@ function usePageMeta() {
     set('meta[property="og:title"]', tv('metaTitle'));
     set('meta[property="og:description"]', tv('metaDescription'));
     set('meta[property="og:locale"]', { en: 'en_GB', fr: 'fr_FR', ar: 'ar_TN' }[lang]);
-  }, [lang]);
+  }, [lang, landing.text]);
 }
 
 const AppContent: React.FC = () => {
@@ -71,6 +75,9 @@ const AppContent: React.FC = () => {
       case 'privacy':
       case 'terms':
         return <LegalPage key={`page-${currentPage}`} kind={currentPage} />;
+
+      case 'museum':
+        return <LegacyMuseum key="page-museum" />;
 
       case 'login':
         return <LoginPage key="page-login" />;

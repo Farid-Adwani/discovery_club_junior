@@ -13,6 +13,24 @@
   --color-brand-dark: #6a0d1f;
   --color-ink: #191919;
 
+  /* Public site (warm, light): paper background, warm ink, pastel cards, gold for trophies */
+  --color-paper: #fffaf4;
+  --color-cream: #fbf2e8;
+  --color-wash: #fdeef1;
+  --color-heading: #2b1a20;
+  --color-muted: #6b5c61;
+  --color-line: #f0dfe3;
+  --color-gold: #e2a52c;
+  --color-pastel-rose: #ffe9ee;
+  --color-pastel-sun: #fff1d2;
+  --color-pastel-mint: #e1f5e9;
+  --color-pastel-sky: #e3efff;
+  --color-pastel-lilac: #efe9fd;
+
+  /* Elegant serif titles and a handwritten "notebook" accent (Latin fonts first, Arabic ones take Arabic text) */
+  --font-display: 'Fraunces', 'El Messiri', Georgia, serif;
+  --font-hand: 'Caveat', 'Aref Ruqaa', cursive;
+
   --color-sky-50: #fdf2f4;
   --color-sky-100: #fbe3e7;
   --color-sky-200: #f6c4cd;
@@ -439,44 +457,10 @@
   25%, 100% { opacity: 0.2; filter: none; }
 }
 
-/* robot arm joints: each group rotates around its own pivot (SVG user units) */
-.arm-shoulder, .arm-elbow, .arm-wrist { transform-box: view-box; animation-duration: 4s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
-.arm-shoulder { transform-origin: 200px 230px; animation-name: arm-shoulder; }
-.arm-elbow { transform-origin: 200px 123px; animation-name: arm-elbow; }
-.arm-wrist { transform-origin: 294px 123px; animation-name: arm-wrist; }
-@keyframes arm-shoulder {
-  0%, 100% { transform: rotate(-14deg); }
-  45%, 60% { transform: rotate(6deg); }
-}
-@keyframes arm-elbow {
-  0%, 100% { transform: rotate(-10deg); }
-  45%, 60% { transform: rotate(14deg); }
-}
-@keyframes arm-wrist {
-  0%, 100% { transform: rotate(24deg); }
-  45%, 60% { transform: rotate(-20deg); }
-}
-/* sparks only while the soldering tip is down */
-.solder-spark { opacity: 0; animation: solder-spark 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes solder-spark {
-  0%, 44% { opacity: 0; transform: scale(0.4); }
-  48% { opacity: 1; transform: scale(1.1); }
-  52% { opacity: 0.4; transform: scale(0.8); }
-  55% { opacity: 1; transform: scale(1.2); }
-  60%, 100% { opacity: 0; transform: scale(0.4); }
-}
-
 /* oscilloscope: slide the waveform by exactly one period */
 .osc-wave { animation: osc-scroll 1.6s linear infinite; }
 @keyframes osc-scroll {
   to { transform: translateX(-100px); }
-}
-
-/* endless photo conveyor belt */
-.marquee-track { animation: marquee 60s linear infinite; }
-.marquee-track:hover { animation-play-state: paused; }
-@keyframes marquee {
-  to { transform: translateX(-50%); }
 }
 
 .animate-ping-slow { animation: ping-slow 2.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
@@ -500,8 +484,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pcb-signal, .led-blink, .led-glow, .led-chase, .arm-shoulder, .arm-elbow, .arm-wrist,
-  .solder-spark, .osc-wave, .marquee-track, .animate-ping-slow, .shine::after, .animate-float, .animate-pulse-glow {
+  .pcb-signal, .led-blink, .led-glow, .led-chase,
+  .osc-wave, .animate-ping-slow, .shine::after, .animate-float, .animate-pulse-glow {
     animation: none !important;
   }
 }
@@ -602,4 +586,86 @@ input[type='email'] {
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-\[bellRing_1s_ease-in-out_2\] { animation: none !important; }
+}
+
+/* ---------- public site: shared decoration ----------
+   Engineering-notebook dots, soft crimson shadows, pill buttons, and a few gentle movements. */
+.paper-dots {
+  background-image: radial-gradient(rgb(193 30 61 / 0.14) 1.3px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+.paper-dots-light {
+  background-image: radial-gradient(rgb(255 255 255 / 0.22) 1.3px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+.soft-shadow {
+  box-shadow: 0 24px 50px -30px rgb(193 30 61 / 0.38), 0 2px 8px -3px rgb(43 26 32 / 0.08);
+}
+.soft-shadow-lg {
+  box-shadow: 0 40px 80px -40px rgb(193 30 61 / 0.5), 0 4px 14px -6px rgb(43 26 32 / 0.12);
+}
+
+.pill-primary,
+.pill-outline,
+.pill-white {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+.pill-primary {
+  background: linear-gradient(180deg, #d42a4b, #c11e3d);
+  color: #fff;
+  box-shadow: 0 4px 0 #8f1630, 0 14px 30px -12px rgb(193 30 61 / 0.7);
+}
+.pill-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #8f1630, 0 18px 34px -12px rgb(193 30 61 / 0.75); }
+.pill-primary:active { transform: translateY(2px); box-shadow: 0 1px 0 #8f1630, 0 8px 20px -12px rgb(193 30 61 / 0.6); }
+.pill-outline {
+  background: #fff;
+  color: #c11e3d;
+  border: 2px solid rgb(193 30 61 / 0.35);
+}
+.pill-outline:hover { border-color: #c11e3d; background: #fdeef1; transform: translateY(-2px); }
+.pill-white {
+  background: #fff;
+  color: #a1172f;
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.15), 0 14px 30px -12px rgb(0 0 0 / 0.4);
+}
+.pill-white:hover { transform: translateY(-2px); }
+
+@keyframes doodle-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-12px) rotate(6deg); } }
+@keyframes doodle-twinkle { 0%, 100% { opacity: 0.25; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes doodle-spin { to { transform: rotate(360deg); } }
+@keyframes blob-morph {
+  0%, 100% { border-radius: 58% 42% 63% 37% / 45% 55% 45% 55%; }
+  50% { border-radius: 40% 60% 38% 62% / 60% 40% 60% 40%; }
+}
+@keyframes ribbon-scroll { to { transform: translateX(-50%); } }
+.anim-float { animation: doodle-float 7s ease-in-out infinite; }
+.anim-twinkle { animation: doodle-twinkle 2.8s ease-in-out infinite; }
+.anim-spin-slow { animation: doodle-spin 24s linear infinite; }
+.anim-blob { animation: blob-morph 14s ease-in-out infinite; }
+.anim-ribbon { animation: ribbon-scroll 40s linear infinite; }
+[dir='rtl'] .anim-ribbon { animation-direction: reverse; }
+@media (prefers-reduced-motion: reduce) {
+  .anim-float, .anim-twinkle, .anim-spin-slow, .anim-blob, .anim-ribbon { animation: none !important; }
+}
+
+/* the club robot (LabArt RobotMascot): waves its arm now and then, blinks */
+.robot-wave { transform-box: fill-box; transform-origin: 50% 90%; animation: robot-wave 4s ease-in-out infinite; }
+@keyframes robot-wave {
+  0%, 55%, 100% { transform: rotate(0); }
+  62%, 76% { transform: rotate(-28deg); }
+  69%, 83% { transform: rotate(8deg); }
+}
+.robot-blink { transform-box: fill-box; transform-origin: center; animation: robot-blink 4.5s infinite; }
+@keyframes robot-blink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .robot-wave, .robot-blink { animation: none !important; }
 }

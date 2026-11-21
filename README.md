@@ -32,24 +32,26 @@ Roles are decided on the server and never taken from the browser. Admins are the
 ## Tech stack
 
 - **Frontend**: React 19, Vite, Tailwind CSS 4, Motion and lucide icons. A single-page app with hash routes (`#/admin/payments`); the portals load only when opened.
-- **Backend**: Express API in `server/`, deployed as a Vercel serverless function (`api/index.ts`).
-- **Data**: Cloud Firestore through the Firebase Admin SDK. The browser never talks to Firestore directly: `firestore.rules` deny all client access and the API checks every permission.
-- **Images**: Firebase Storage. The browser resizes a picture and sends it; the server uploads it and stores only its URL. Only images in the club's bucket are accepted.
-- **Auth**: the club's own accounts. Passwords are hashed with scrypt, sessions are random tokens (only their hash is stored), and wrong passwords and sign-ups are rate limited in Firestore.
+- **Backend**: Express in `server/`, one Node process that serves the API, the built site and the uploaded images. Hosted on a VPS behind nginx (see [DEPLOY.md](DEPLOY.md)).
+- **Data**: a single SQLite file, `data/club.db` (Node's built-in `node:sqlite`). Documents are stored as JSON through `server/db.ts`, which keeps the Firestore-style API the routes use (collections, queries, batches, transactions), so the data has the same shape it had in Firestore. The browser never reads the database: the API checks every permission.
+- **Images**: files in `data/uploads/`, served at `/uploads/…`. The browser resizes a picture and sends it; the server saves it and stores only its URL. Only the club's own uploads are accepted.
+- **Auth**: the club's own accounts. Passwords are hashed with scrypt, sessions are random tokens (only their hash is stored), and wrong passwords and sign-ups are rate limited.
 
 ## Project structure
 
 ```
-api/index.ts          Vercel function: loads the Express app
 server/
-  app.ts              Express app (JSON, errors)
+  index.ts            starts the server (and serves dist/ in production)
+  app.ts              Express app (JSON, /uploads, errors)
+  db.ts               the SQLite database (Firestore-style documents)
   routes.ts           every API route, per role
   auth.ts             accounts, passwords, sessions, roles
   notify.ts           notifications and Web Push
-  storage.ts          image uploads to Firebase Storage
+  storage.ts          image uploads to data/uploads
   money.ts            millimes <-> dinars
-  rateLimit.ts        attempt counters in Firestore
-  seed*.ts, migrate*.ts, setPassword.ts   scripts (see below)
+  rateLimit.ts        attempt counters
+  seed*.ts, setPassword.ts, backup.ts, importFirebase.ts   scripts (see below)
+data/                 database and uploads (created on first start, not in git)
 src/
   App.tsx             pages and lazy-loaded portals
   context/AppContext.tsx   data loading, actions, routing
@@ -63,13 +65,14 @@ public/               photos (and WebP versions), robots.txt, sitemap.xml, servi
 
 ## Getting started
 
-Requirements: Node.js 22 and a Firebase project with Firestore and Storage.
+Requirements: Node.js 22.13 or newer. Nothing else: the database is created in `data/` on first start.
 
 ```bash
 npm install
 cp .env.example .env      # then fill it in (see below)
 npm run dev:server        # API on http://localhost:8080
-npm run dev               # website on http://localhost:3000 (proxies /api to the API)
+npm run dev               # website on http://localhost:3000 (proxies /api and /uploads to the API)
+npm run seed              # optional: classes, coaches and shop items to start with
 ```
 
 Create the first admin account (its email must be in `ADMIN_EMAILS`):
@@ -82,16 +85,15 @@ npm run set-password -- you@example.com "a-strong-password"
 
 | Variable | Purpose |
 | --- | --- |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | Local development: path to the service-account key file. Keep it outside the repository. |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Hosting (Vercel): the content of the key file. |
-| `FIREBASE_STORAGE_BUCKET` | Optional. Defaults to `<project-id>.firebasestorage.app`. |
 | `ADMIN_EMAILS` | Comma-separated owner emails; they are always admins. |
-| `PORT` | API port for local development (default 8080). |
+| `PORT` | Server port (default 8080). |
+| `DATA_DIR` | Where the database and uploads are kept (default `./data`). |
+| `HOST` | Listening address (default `127.0.0.1` in production, `0.0.0.0` in development). |
+| `TRUST_PROXY` | `loopback` behind nginx, so rate limits see each visitor's real address. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push keys (`npx web-push generate-vapid-keys`). |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` / `_JSON`, `FIREBASE_STORAGE_BUCKET` | Only for the one-time `npm run import:firebase`. |
 
-Never commit `.env` or the key file; both are ignored by git.
-
-> Local development uses the same Firebase project as the live site unless you point it at another one, so changes made locally are real.
+Never commit `.env`, `data/` or a Firebase key; all are ignored by git.
 
 ## Scripts
 
@@ -99,27 +101,21 @@ Never commit `.env` or the key file; both are ignored by git.
 | --- | --- |
 | `npm run dev` / `npm run dev:server` | Website and API in development |
 | `npm run build` | Production build into `dist/` |
-| `npm run start` | Serves the API and the built site from one Node process (hosts other than Vercel) |
+| `npm run start` | Serves the API, the built site and the uploads from one Node process (production) |
 | `npm run lint` | Type check (`tsc --noEmit`) |
 | `npm run seed` | Fills empty collections with the club's public content (`--demo` adds sample data, `--overwrite` replaces) |
 | `npm run seed:parent1` | Demo parent `parent1@example.com` / `Parent1234` (`--remove` deletes it) |
 | `npm run set-password -- <email> <password>` | Creates an account or changes its password |
-| `npm run migrate:images` | Moves every image that isn't in Storage yet into Storage |
-| `npm run migrate:money` | Converts money from dinars to millimes |
-
-The migration scripts only show what they would change. Add `-- --apply` to write, for example `npm run migrate:money -- --apply`. They are safe to run again.
+| `npm run backup` | Consistent copy of the database into `data/backups/` (safe while the site runs) |
+| `npm run import:firebase` | One time: copies all Firestore data and Storage images into `data/` (`-- --replace` to start over) |
 
 ## Money
 
-Amounts are stored as **whole millimes** (1 DT = 1000 millimes), so sums and comparisons are exact. The API still sends and receives dinars. Each converted document carries `moneyUnit: 'millimes'`; documents without it are read as dinars, so older data keeps working until `migrate:money` converts it.
+Amounts are stored as **whole millimes** (1 DT = 1000 millimes), so sums and comparisons are exact. The API still sends and receives dinars. Each converted document carries `moneyUnit: 'millimes'`; older documents without it are read as dinars.
 
-Run `migrate:money -- --apply` only once the new server code is deployed, and don't roll back to older code afterwards: it would read millimes as dinars.
+## Deployment
 
-## Deployment (Vercel)
-
-1. Import the repository in Vercel. `vercel.json` builds the site into `dist/` and sends `/api/*` to `api/index.ts`.
-2. Add the environment variables above, with `FIREBASE_SERVICE_ACCOUNT_JSON` instead of the key path.
-3. Optional: in the Firestore console, add a TTL policy on the `expireAt` field of the `rate_limits` collection so old counters are deleted automatically.
+On a VPS with nginx and HTTPS: step by step in **[DEPLOY.md](DEPLOY.md)** (install, moving the data from Firebase, systemd, nginx, updates and backups).
 
 ## Content to fill in
 

@@ -1,8 +1,10 @@
+// Only used by `npm run import:firebase` (importFirebase.ts), to copy the old Firebase data to the server.
+// The site itself no longer talks to Firebase.
 import 'dotenv/config';
 import fs from 'fs';
-import { initializeApp, cert, applicationDefault, getApps, type ServiceAccount } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { initializeApp, cert, applicationDefault, getApp, getApps, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 /**
  * Reads a service-account key and forgives the usual copy-paste accidents:
@@ -58,6 +60,12 @@ if (!getApps().length) {
   initializeApp({ credential: loadCredential() });
 }
 
-export const adminAuth = getAuth();
-export const db = getFirestore();
-db.settings({ ignoreUndefinedProperties: true });
+export const firestore = getFirestore();
+
+/** The Storage bucket of the old uploads (FIREBASE_STORAGE_BUCKET, or the project's default bucket) */
+export function storageBucket() {
+  const projectId = getApp().options.projectId || (getApp().options.credential as { projectId?: string } | undefined)?.projectId;
+  const name = process.env.FIREBASE_STORAGE_BUCKET?.trim() || (projectId ? `${projectId}.firebasestorage.app` : '');
+  if (!name) throw new Error('FIREBASE_STORAGE_BUCKET is not set and the project id is unknown.');
+  return getStorage().bucket(name);
+}

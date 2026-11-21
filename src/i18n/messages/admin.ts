@@ -9,7 +9,7 @@ export const adminMessages = defineMessages({
     badge: 'Administrative Command Space',
     title: 'Discovery Junior Operations & Management',
     subtitle: 'Manage student rosters, approve waitlists, assign groups, and run the club shop.',
-    dbConnected: 'Firestore Connected',
+    dbConnected: 'Database connected',
     dbConnecting: 'Connecting to DB...',
     scheduleMatrix: 'Schedule Matrix',
 
@@ -165,7 +165,7 @@ export const adminMessages = defineMessages({
     badge: 'Espace de pilotage administratif',
     title: 'Opérations & gestion Discovery Junior',
     subtitle: 'Gérez les listes d’élèves, validez la liste d’attente, affectez les groupes et gérez la boutique du club.',
-    dbConnected: 'Firestore connecté',
+    dbConnected: 'Base de données connectée',
     dbConnecting: 'Connexion à la base...',
     scheduleMatrix: 'Matrice des horaires',
 
@@ -303,7 +303,7 @@ export const adminMessages = defineMessages({
     badge: 'فضاء الإدارة',
     title: 'تسيير وإدارة ديسكفري جونيور',
     subtitle: 'إدارة قوائم التلاميذ، والموافقة على قائمة الانتظار، وتوزيع المجموعات، وإدارة متجر النادي.',
-    dbConnected: 'Firestore متصل',
+    dbConnected: 'قاعدة البيانات متصلة',
     dbConnecting: 'جارٍ الاتصال بقاعدة البيانات...',
     scheduleMatrix: 'مصفوفة الجدول',
 

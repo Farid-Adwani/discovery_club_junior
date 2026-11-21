@@ -704,7 +704,7 @@ const PasswordInput: React.FC<{ value: string; onChange: (v: string) => void }> 
         <input
           type={show ? 'text' : 'password'}
           required
-          minLength={6}
+          minLength={8}
           maxLength={128}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -1009,7 +1009,7 @@ const PasswordModal: React.FC<{ account: AccountSummary; onClose: () => void; on
           <button type="button" onClick={onClose} className="px-3.5 py-2 btn-duo-secondary text-xs font-bold cursor-pointer">
             {t('cancel')}
           </button>
-          <button type="submit" disabled={pw.length < 6} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-50">
+          <button type="submit" disabled={pw.length < 8} className="px-4 py-2 btn-duo-green text-xs font-black cursor-pointer disabled:opacity-50">
             {t('save')}
           </button>
         </div>

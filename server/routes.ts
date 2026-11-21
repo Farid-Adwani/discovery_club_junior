@@ -1,6 +1,5 @@
 import { Router, type Response, type NextFunction } from 'express';
-import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import { db } from './firebaseAdmin.js';
+import { FieldPath, FieldValue, db, type DocumentReference, type DocumentSnapshot, type QuerySnapshot, type WriteBatch } from './db.js';
 import {
   attachUser,
   requireUser,
@@ -9,7 +8,8 @@ import {
   forgetProfile,
   forgetAllProfiles,
   hashPassword,
-  checkPassword,
+  verifyLogin,
+  madeByClub,
   findAccountByEmail,
   isStaffEmail,
   createSession,
@@ -51,12 +51,23 @@ import type {
 } from '../src/types/index.js';
 import { WEEK_DAYS, GROUP_LEVELS } from '../src/types/index.js';
 import { UNAVAILABLE_STATES, unitBreakdown, unitsField } from '../src/utils/stock.js';
-import { LANDING_LANGS, LANDING_SECTIONS, LANDING_STAT_KEYS, LANDING_TEXT_KEYS, type LandingContent } from '../src/data/landing.js';
+import {
+  LANDING_LANGS,
+  LANDING_LIMITS,
+  LANDING_SECTIONS,
+  LANDING_STAT_KEYS,
+  LANDING_TEXT_KEYS,
+  type LandingContent,
+  type LandingMedia,
+  type LText,
+  type SiteInfo
+} from '../src/data/landing.js';
+import { TIMELINE_KINDS, TIMELINE_LIMITS, type AlbumEdit, type NewAlbum, type TimelineEdits } from '../src/data/timelineEdits.js';
 
-import { imageField, replacedImage } from './storage.js';
+import { deleteImage, imageField, isStoredImage, replacedImage, uploadDataUrl } from './storage.js';
 import { readMoney, writeMoney, sendMoney, upgradeMoney, toMillimes, toDinars, type MoneyCollection } from './money.js';
-import { allowAttempt, recordAttempt, clearAttempts, clientIp } from './rateLimit.js';
-import { notify, adminUserIds, trainerUserIds, parentsOf, shortDate, sendPush, subscriptionId, vapidPublicKey, type StoredNotification } from './notify.js';
+import { allowAttempt, recordAttempt, clearAttempts, clientIp, takeAttempt } from './rateLimit.js';
+import { notify, adminUserIds, trainerUserIds, parentsOf, shortDate, sendPush, subscriptionId, isPushEndpoint, vapidPublicKey, type StoredNotification } from './notify.js';
 import { notificationMessages } from '../src/i18n/messages/notifications.js';
 
 export const router = Router();
@@ -97,12 +108,12 @@ function normalizeStudent(raw: Record<string, unknown>): Student {
 // ---------- soft delete ----------
 // Documents are never erased: a delete stamps `deletedAt`, and every read below skips stamped documents.
 
-type Snap = FirebaseFirestore.DocumentSnapshot;
+type Snap = DocumentSnapshot;
 const isLive = (d: Snap) => d.exists && !d.get('deletedAt');
 /** The document's data, or undefined when it doesn't exist or was deleted */
 const liveData = <T>(d: Snap): T | undefined => (isLive(d) ? (d.data() as T) : undefined);
 
-async function softDelete(ref: FirebaseFirestore.DocumentReference, req: AuthedRequest, extra: Record<string, unknown> = {}) {
+async function softDelete(ref: DocumentReference, req: AuthedRequest, extra: Record<string, unknown> = {}) {
   const snap = await ref.get();
   if (!isLive(snap)) throw new HttpError(404, 'Already deleted or not found.');
   await ref.update({ deletedAt: new Date().toISOString(), deletedBy: req.user?.uid || '', ...extra });
@@ -176,7 +187,7 @@ async function listMoney<T>(name: MoneyCollection): Promise<T[]> {
   return (await listAll<T>(name)).map((d) => readMoney(name, d));
 }
 
-/** Firestore `in` queries accept at most 30 values, so split larger lists. */
+/** `in` queries are kept to 30 values at a time (a limit inherited from Firestore, harmless). */
 async function whereIn<T>(name: string, field: string, values: string[]): Promise<T[]> {
   const out: T[] = [];
   for (let i = 0; i < values.length; i += 30) {
@@ -186,8 +197,8 @@ async function whereIn<T>(name: string, field: string, values: string[]): Promis
   return out;
 }
 
-/** Runs many writes in batches of at most 450 (Firestore allows 500 per batch). */
-async function commitInChunks(writes: ((batch: FirebaseFirestore.WriteBatch) => void)[]) {
+/** Runs many writes in batches of at most 450 (each batch is one database transaction). */
+async function commitInChunks(writes: ((batch: WriteBatch) => void)[]) {
   for (let i = 0; i < writes.length; i += 450) {
     const batch = db.batch();
     writes.slice(i, i + 450).forEach((w) => w(batch));
@@ -299,7 +310,7 @@ router.get('/health', (_req, res) => res.json({ ok: true }));
 
 router.get('/me', requireUser, (req: AuthedRequest, res) => res.json(req.user));
 
-/** Any signed-in user edits their own name, photo (small JPEG data URL, uploaded to Storage; null removes it) and date of birth (null removes it). */
+/** Any signed-in user edits their own name, photo (small JPEG data URL, saved in data/uploads; null removes it) and date of birth (null removes it). */
 router.put(
   '/me/profile',
   requireUser,
@@ -355,6 +366,14 @@ router.post(
 
 router.get('/push/key', (_req, res) => res.json({ publicKey: vapidPublicKey() }));
 
+/** Push devices kept per person (phone, tablet, a few computers) */
+const MAX_PUSH_DEVICES = 10;
+
+/** 429 when `key` was used `max` times in the window (counts this use) */
+async function throttle(key: string, max: number, windowMs: number) {
+  if (!(await takeAttempt(key, max, windowMs))) throw new HttpError(429, 'Too many requests. Please wait a little and try again.');
+}
+
 /** Remember this browser for push (one document per device), in the person's language */
 router.post(
   '/push/subscribe',
@@ -363,7 +382,9 @@ router.post(
     // An admin viewing a parent's account must not receive that family's notifications
     if (req.user!.viewedBy) return res.json({ ok: true });
     const sub = req.body?.subscription;
-    if (!sub || typeof sub.endpoint !== 'string' || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) {
+    const pushKey = (v: unknown) => typeof v === 'string' && v.length <= 200 && /^[A-Za-z0-9_-]+=*$/.test(v);
+    // Only a real browser push service: the server sends to this address (see isPushEndpoint)
+    if (!sub || !isPushEndpoint(sub.endpoint) || !pushKey(sub.keys?.p256dh) || !pushKey(sub.keys?.auth)) {
       throw new HttpError(400, 'Subscription is invalid.');
     }
     const lang = oneOf(req.body?.lang ?? 'fr', ['en', 'fr', 'ar'] as const, 'Language');
@@ -371,10 +392,15 @@ router.post(
     await col('push_subscriptions').doc(id).set({
       id,
       userId: req.user!.uid,
-      subscription: { endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) } },
+      subscription: { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
       lang,
       createdAt: new Date().toISOString()
     });
+    // A person keeps their newest few devices; older ones are forgotten
+    const mine = (await col('push_subscriptions').where('userId', '==', req.user!.uid).get()).docs.sort((a, b) =>
+      String(b.get('createdAt')).localeCompare(String(a.get('createdAt')))
+    );
+    await Promise.all(mine.slice(MAX_PUSH_DEVICES).map((d) => d.ref.delete()));
     res.json({ ok: true });
   })
 );
@@ -399,6 +425,7 @@ router.post(
     if (!vapidPublicKey()) throw new HttpError(503, 'Push notifications are not configured on the server (VAPID keys).');
     const subs = (await col('push_subscriptions').where('userId', '==', req.user!.uid).get()).docs.map((d) => d.data());
     if (!subs.length) throw new HttpError(404, 'No device is registered for push yet.');
+    await throttle(`push-test:${req.user!.uid}`, 5, 10 * 60_000);
     await sendPush(subs as Parameters<typeof sendPush>[0], (lang) => {
       const m = notificationMessages[lang] || notificationMessages.en;
       return { title: m.testTitle, body: m.testBody, url: '/', tag: 'test' };
@@ -435,11 +462,12 @@ router.get(
     // Awaited below; this only stops Node treating an early failure as unhandled (which would crash the server)
     parentData?.catch(() => {});
 
-    const [trainers, groups, allProducts, landingSnap] = await Promise.all([
+    const [trainers, groups, allProducts, landingSnap, timelineSnap] = await Promise.all([
       listAll<Trainer>('trainers'),
       listAll<Record<string, unknown>>('groups').then((list) => list.map(normalizeGroup)),
       listMoney<Product>('products'),
-      col('site_content').doc('landing').get()
+      col('site_content').doc('landing').get(),
+      col('site_content').doc('timeline').get()
     ]);
 
     let students: Student[] = [];
@@ -481,9 +509,9 @@ router.get(
       deletedStudents = (await col('students').where('deletedAt', '>', '').get()).docs.map((d) => normalizeStudent(d.data()));
     } else if (user?.role === 'trainer' && user.trainerId) {
       const myGroupIds = groups.filter((g) => g.trainerIds.includes(user.trainerId!)).map((g) => g.id);
-      let mats: FirebaseFirestore.QuerySnapshot;
+      let mats: QuerySnapshot;
       let classItems: ScheduleItem[];
-      let mine: FirebaseFirestore.QuerySnapshot;
+      let mine: QuerySnapshot;
       [students, sessions, mats, classItems, mine] = await Promise.all([
         studentsInClasses(myGroupIds).then((list) => list.map(forTrainer)),
         whereIn<SessionRecord>('sessions', 'groupId', myGroupIds),
@@ -539,6 +567,7 @@ router.get(
       adminProfiles: admins,
       groups: groups.map((g) => sendMoney('groups', g)),
       landing: (landingSnap.data() as LandingContent | undefined) || {},
+      timelineEdits: (timelineSnap.data() as TimelineEdits | undefined) || {},
       // Only the admin sees products that are not on sale
       products: (admin ? allProducts : allProducts.filter((p) => p.isActive))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
@@ -566,7 +595,7 @@ router.get(
  */
 /** New children on the waitlist, linked to a parent account (registration, parent space, admin) */
 function addChildren(
-  batch: FirebaseFirestore.WriteBatch,
+  batch: WriteBatch,
   uid: string,
   parent: { parentName: string; parentPhone: string; parentEmail: string; photoConsent: boolean },
   children: unknown,
@@ -602,7 +631,7 @@ function addChildren(
 }
 
 function addParentRegistration(
-  batch: FirebaseFirestore.WriteBatch,
+  batch: WriteBatch,
   uid: string,
   accountEmail: string,
   b: Record<string, any>,
@@ -640,6 +669,8 @@ router.post(
     const batch = db.batch();
     const stored = (await col('users').doc(user.uid).get()).data() || {};
     const ids = addParentRegistration(batch, user.uid, user.email, req.body || {}, { photoConsent: stored.photoConsent });
+    // Each registration notifies every admin: a family adds a few children, not dozens
+    if (!isAdmin(user)) await throttle(`add-children:${user.uid}`, 5, 60 * 60_000);
     await batch.commit();
     forgetProfile(user.uid);
     await notifyRegistration(req.body || {});
@@ -649,22 +680,28 @@ router.post(
 
 // ---------- sign-in (accounts are stored in our own database) ----------
 
+/** A new password (sign-in still accepts older, shorter ones) */
 function password(value: unknown): string {
-  if (typeof value !== 'string' || value.length < 6) throw new HttpError(400, 'The password must have at least 6 characters.');
+  if (typeof value !== 'string' || value.length < 8) throw new HttpError(400, 'The password must have at least 8 characters.');
   if (value.length > 128) throw new HttpError(400, 'The password is too long.');
   return value;
 }
 
-// Slows down password guessing: after 8 wrong passwords for an email (or 30 from one address), wait 15 minutes.
-// The counters are in Firestore (server/rateLimit.ts) because serverless instances share no memory.
+// Slows down password guessing, counted over 15 minutes (in the database, so a restart doesn't reset them):
+//  - 8 wrong passwords for an email from one address: that address waits (the owner elsewhere can still sign in)
+//  - 30 wrong passwords from one address, whatever the emails
+//  - 50 wrong passwords for an email from anywhere: guessing spread over many addresses
 const FAIL_WINDOW_MS = 15 * 60_000;
 const loginLimits = (accountEmail: string, ip: string) => [
-  { key: `login:email:${accountEmail}`, max: 8 },
-  { key: `login:ip:${ip}`, max: 30 }
+  { key: `login:email-ip:${accountEmail}:${ip}`, max: 8 },
+  { key: `login:ip:${ip}`, max: 30 },
+  { key: `login:email:${accountEmail}`, max: 50 }
 ];
 // Sign-ups: 5 per hour from one address (each one notifies every admin)
 const REGISTER_WINDOW_MS = 60 * 60_000;
 const REGISTER_MAX = 5;
+// Sign-up tries, including refused ones (they tell whether an email has an account): 20 per hour from one address
+const REGISTER_TRY_MAX = 20;
 
 /** New parent account + their children, in one step. Returns a session token. */
 router.post(
@@ -673,19 +710,26 @@ router.post(
     const b = req.body || {};
     const accountEmail = email(b.email);
     const pw = password(b.password);
-    const ipKey = `register:ip:${clientIp(req)}`;
-    if (!(await allowAttempt([{ key: ipKey, max: REGISTER_MAX }]))) {
+    const ip = clientIp(req);
+    const ipKey = `register:ip:${ip}`;
+    if (!(await allowAttempt([{ key: ipKey, max: REGISTER_MAX }])) || !(await takeAttempt(`register-try:ip:${ip}`, REGISTER_TRY_MAX, REGISTER_WINDOW_MS))) {
       throw new HttpError(429, 'Too many sign-ups from this connection. Please try again in an hour.');
     }
-    if (await isStaffEmail(accountEmail)) {
-      throw new HttpError(403, 'This email belongs to club staff. Please ask the club administrator for your password.');
+    // Staff emails get the same answer as any email in use, so sign-up doesn't tell who works at the club
+    if ((await isStaffEmail(accountEmail)) || (await findAccountByEmail(accountEmail))) {
+      throw new HttpError(409, 'An account already exists with this email. Please sign in.');
     }
-    if (await findAccountByEmail(accountEmail)) throw new HttpError(409, 'An account already exists with this email. Please sign in.');
 
     const uid = col('accounts').doc().id;
     const batch = db.batch();
     addParentRegistration(batch, uid, accountEmail, b); // validates the form before anything is written
-    const account: Account = { id: uid, email: accountEmail, passwordHash: await hashPassword(pw), createdAt: new Date().toISOString() };
+    const account: Account = {
+      id: uid,
+      email: accountEmail,
+      passwordHash: await hashPassword(pw),
+      createdAt: new Date().toISOString(),
+      source: 'signup'
+    };
     batch.create(accountEmailRef(accountEmail), { accountId: uid }); // fails if the email was taken meanwhile
     batch.set(col('accounts').doc(uid), account);
     try {
@@ -716,8 +760,8 @@ router.post(
     const limits = loginLimits(accountEmail, clientIp(req));
     if (!(await allowAttempt(limits))) throw new HttpError(429, 'Too many wrong passwords. Please wait 15 minutes and try again.');
 
-    const account = await findAccountByEmail(accountEmail);
-    if (!account || !(await checkPassword(pw, account.passwordHash))) {
+    const account = await verifyLogin(accountEmail, pw);
+    if (!account) {
       await recordAttempt(limits.map((l) => l.key), FAIL_WINDOW_MS);
       throw new HttpError(401, 'Wrong email or password.');
     }
@@ -755,6 +799,8 @@ router.post(
     const product = stored ? readMoney('products', stored) : undefined;
     if (!product || !product.isActive) throw new HttpError(404, 'This product is not on sale.');
     const size = product.sizes.length ? oneOf(b.size, product.sizes, 'Size') : ONE_SIZE;
+    // Each order notifies every admin
+    if (!isAdmin(req.user)) await throttle(`orders:${req.user!.uid}`, 20, 60 * 60_000);
     const order: ProductOrder = {
         id: newId('ord'),
         productId,
@@ -1584,7 +1630,7 @@ adminRouter.get(
 
 /** Gives children to a parent account (students.parentUid); returns their ids. */
 async function linkChildren(
-  batch: FirebaseFirestore.WriteBatch,
+  batch: WriteBatch,
   uid: string,
   studentIds: unknown,
   known?: { parentName: string; parentPhone: string; parentEmail: string }
@@ -1821,7 +1867,7 @@ async function enrolledCount(groupId: string): Promise<number> {
 const optionalNum = (value: unknown, field: string, range: { min: number; max: number }) =>
   value === undefined || value === null || value === '' ? undefined : num(value, field, range);
 
-/** A class from the form (money in millimes). A new image (data URL) is uploaded to Storage. */
+/** A class from the form (money in millimes). A new image (data URL) is saved in data/uploads. */
 async function parseGroup(b: Record<string, unknown>, id: string): Promise<Group> {
   const ageMin = optionalNum(b.ageMin, 'Minimum age', { min: 3, max: 22 });
   const ageMax = optionalNum(b.ageMax, 'Maximum age', { min: 3, max: 22 });
@@ -1962,6 +2008,17 @@ adminRouter.put(
     };
     // Keep the date of birth (set separately) unless a new one is given
     const previous = liveData<Trainer>(await col('trainers').doc(trainer.id).get());
+    // Whoever signs in with this email becomes this coach. Emails are not verified at sign-up, so an account
+    // someone made there must not get a coach's email: they may have signed up with it before the coach did.
+    if (trainer.email !== previous?.email) {
+      const account = await findAccountByEmail(trainer.email);
+      if (account && !madeByClub(account)) {
+        throw new HttpError(
+          409,
+          'An account made on the sign-up page already uses this email, so it may not be the coach’s. Delete that account on the Team page, then create the coach’s account there.'
+        );
+      }
+    }
     const dob = b.birthDate ? dateOfBirth(b.birthDate, 16, 100) : previous?.birthDate;
     if (dob) trainer.birthDate = dob;
     await col('trainers').doc(trainer.id).set(trainer);
@@ -2118,7 +2175,7 @@ adminRouter.post(
     const item: StockItem = { id: newId('stk'), ...(await parseStockItem(req.body || {})), createdAt: at };
     const mv: StockMovement = { id: newId('mv'), itemId: item.id, delta: item.quantity, reason: 'created', at, by: req.user!.displayName };
     const batch = db.batch();
-    // JSON round trip: Firestore rejects undefined fields
+    // JSON round trip: no undefined fields in the stored document
     batch.set(col('stock_items').doc(item.id), JSON.parse(JSON.stringify(item)));
     if (item.quantity) batch.set(col('stock_movements').doc(mv.id), mv);
     await batch.commit();
@@ -2233,7 +2290,7 @@ adminRouter.post(
         createdAt: new Date().toISOString()
       };
     }
-    // Firestore rejects undefined fields
+    // no undefined fields in the stored document
     await col('schedule_items').doc(item.id).set(JSON.parse(JSON.stringify(item)));
     await notifySchedule(item, req.user!.uid);
     res.status(201).json(item);
@@ -2406,6 +2463,185 @@ adminRouter.delete(
   })
 );
 
+// ---------- landing page content ----------
+
+/** A text in the three languages (each may be empty) */
+function ltext(value: unknown, field: string, max = 300): LText {
+  const o = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return { en: str(o.en, field, { max, optional: true }), fr: str(o.fr, field, { max, optional: true }), ar: str(o.ar, field, { max, optional: true }) };
+}
+
+/** A photo of the site: one of our uploads, or a photo that ships with the site (public/photos) */
+const SITE_PHOTO = /^\/photos\/(?:[\w-][\w.%-]*\/)*[\w-][\w.%-]*\.(?:jpe?g|png|webp|svg)$/i;
+function siteImage(value: unknown, field: string): string {
+  const s = str(value, field, { max: 600 });
+  if (isStoredImage(s) || (SITE_PHOTO.test(s) && !s.includes('..'))) return s;
+  throw new HttpError(400, `${field} must be an uploaded image.`);
+}
+
+function list<T>(value: unknown, field: string, max: number, item: (v: Record<string, unknown>, i: number) => T): T[] {
+  if (!Array.isArray(value)) throw new HttpError(400, `${field} is invalid.`);
+  if (value.length > max) throw new HttpError(400, `Too many items in ${field}.`);
+  return value.map((v, i) => item((v && typeof v === 'object' ? v : {}) as Record<string, unknown>, i));
+}
+
+const webUrl = (value: unknown, field: string) => {
+  const s = str(value, field, { max: 300, optional: true });
+  if (s && !/^https:\/\/[^\s]+$/i.test(s)) throw new HttpError(400, `${field} must start with https://`);
+  return s;
+};
+
+function landingMedia(b: unknown): LandingMedia | undefined {
+  if (!b || typeof b !== 'object') return undefined;
+  const m = b as Record<string, unknown>;
+  const out: LandingMedia = {};
+  if (m.heroPhotos !== undefined) {
+    out.heroPhotos = list(m.heroPhotos, 'Hero photos', LANDING_LIMITS.heroPhotos, (p) => ({
+      img: siteImage(p.img, 'Photo'),
+      tag: ltext(p.tag, 'Photo label', 120),
+      title: ltext(p.title, 'Photo title', 160)
+    }));
+  }
+  if (m.polaroid) out.polaroid = siteImage(m.polaroid, 'Polaroid');
+  if (m.highlight) out.highlight = siteImage(m.highlight, 'Highlight picture');
+  return Object.keys(out).length ? out : undefined;
+}
+
+function siteInfo(b: unknown): SiteInfo | undefined {
+  if (!b || typeof b !== 'object') return undefined;
+  const s = b as Record<string, any>;
+  const out: SiteInfo = {};
+  if (s.contact) {
+    const c = s.contact;
+    const mail = str(c.email, 'Email', { max: 200, optional: true }).toLowerCase();
+    if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail)) throw new HttpError(400, 'Please enter a valid email address.');
+    const tel = str(c.phone, 'Phone', { max: 40, optional: true });
+    if (tel && !/^\+?[0-9 ()-]+$/.test(tel)) throw new HttpError(400, 'Please enter a valid phone number.');
+    const wa = str(c.whatsapp, 'WhatsApp', { max: 30, optional: true }).replace(/\D/g, '');
+    out.contact = { phone: tel, whatsapp: wa, email: mail, facebook: webUrl(c.facebook, 'Facebook'), instagram: webUrl(c.instagram, 'Instagram') };
+  }
+  if (s.address) {
+    const a = s.address;
+    out.address = {
+      street: ltext(a.street, 'Street', 200),
+      city: ltext(a.city, 'City', 120),
+      lat: a.lat === '' || a.lat === undefined || a.lat === null ? 0 : num(a.lat, 'Latitude', { min: -90, max: 90 }),
+      lng: a.lng === '' || a.lng === undefined || a.lng === null ? 0 : num(a.lng, 'Longitude', { min: -180, max: 180 })
+    };
+  }
+  if (s.openingHours) out.openingHours = ltext(s.openingHours, 'Opening hours', 200);
+  if (s.faq !== undefined) out.faq = list(s.faq, 'FAQ', LANDING_LIMITS.faq, (f) => ({ q: ltext(f.q, 'Question', 300), a: ltext(f.a, 'Answer', 3000) }));
+  if (s.testimonials !== undefined) {
+    out.testimonials = list(s.testimonials, 'Testimonials', LANDING_LIMITS.testimonials, (q) => ({
+      quote: ltext(q.quote, 'Quote', 1000),
+      author: str(q.author, 'Author', { max: 100, optional: true }),
+      role: ltext(q.role, 'Role', 160)
+    }));
+  }
+  if (s.legal) {
+    const l = s.legal;
+    const updated = str(l.lastUpdated, 'Date', { max: 10, optional: true });
+    if (updated && !DATE_RE.test(updated)) throw new HttpError(400, 'Date is invalid.');
+    out.legal = {
+      legalName: str(l.legalName, 'Legal name', { max: 200, optional: true }),
+      controller: str(l.controller, 'Data controller', { max: 300, optional: true }),
+      registration: str(l.registration, 'Registration number', { max: 100, optional: true }),
+      privacyEmail: str(l.privacyEmail, 'Privacy email', { max: 200, optional: true }).toLowerCase(),
+      retention: ltext(l.retention, 'Retention', 100),
+      courts: ltext(l.courts, 'Courts', 100),
+      lastUpdated: updated
+    };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Our uploads referenced by a stored value (to delete the ones that are no longer used) */
+function uploadsIn(value: unknown, found = new Set<string>()): Set<string> {
+  if (typeof value === 'string') {
+    if (isStoredImage(value)) found.add(value);
+  } else if (Array.isArray(value)) value.forEach((v) => uploadsIn(v, found));
+  else if (value && typeof value === 'object') Object.values(value).forEach((v) => uploadsIn(v, found));
+  return found;
+}
+async function dropUnused(before: unknown, after: unknown) {
+  const keep = uploadsIn(after);
+  // Only the site's own uploads (POST /admin/uploads): never a photo that belongs to a child, a coach or a class
+  const siteUpload = (u: string) => u.startsWith('/uploads/site/');
+  await Promise.all([...uploadsIn(before)].filter((u) => siteUpload(u) && !keep.has(u)).map(deleteImage));
+}
+
+/** An image for the public site (landing photos, album photos), saved as soon as it is chosen; returns its URL */
+adminRouter.post(
+  '/uploads',
+  ah(async (req, res) => {
+    const folder = oneOf(req.body?.folder, ['landing', 'timeline'] as const, 'Folder');
+    const image = str(req.body?.image, 'Image', { max: 3_000_000 });
+    res.status(201).json({ url: await uploadDataUrl(image, `site/${folder}`, 1_800_000) });
+  })
+);
+
+/** Our journey: the admins' changes to the photo albums */
+adminRouter.put(
+  '/site-content/timeline',
+  ah(async (req, res) => {
+    const b = (req.body || {}) as Record<string, any>;
+    const photo = (p: Record<string, unknown>) => ({
+      src: siteImage(p.src, 'Photo'),
+      thumb: siteImage(p.thumb || p.src, 'Photo'),
+      w: Math.round(num(p.w, 'Photo width', { min: 1, max: 20000 })),
+      h: Math.round(num(p.h, 'Photo height', { min: 1, max: 20000 }))
+    });
+    const out: TimelineEdits = {};
+    if (b.years && typeof b.years === 'object') {
+      out.years = {};
+      for (const [year, y] of Object.entries(b.years as Record<string, any>)) {
+        if (!/^\d{4}$/.test(year)) throw new HttpError(400, 'Year is invalid.');
+        const entry: { tagline?: LText; order?: string[] } = {};
+        if (y?.tagline) entry.tagline = ltext(y.tagline, 'Tagline', 200);
+        if (y?.order) entry.order = list(y.order, 'Order', 200, (_v, i) => str((y.order as unknown[])[i], 'Album', { max: 200 }));
+        if (Object.keys(entry).length) out.years[year] = entry;
+      }
+    }
+    if (b.albums && typeof b.albums === 'object') {
+      out.albums = {};
+      for (const [id, e] of Object.entries(b.albums as Record<string, any>)) {
+        if (id.length > 200) throw new HttpError(400, 'Album is invalid.');
+        const edit: AlbumEdit = {};
+        if (e?.title) edit.title = ltext(e.title, 'Album title', 160);
+        if (e?.result === null) edit.result = null;
+        else if (e?.result) edit.result = ltext(e.result, 'Result', 160);
+        if (e?.place !== undefined) edit.place = str(e.place, 'Place', { max: 80, optional: true });
+        if (e?.kind) edit.kind = oneOf(e.kind, TIMELINE_KINDS, 'Kind');
+        if (e?.cover) edit.cover = siteImage(e.cover, 'Cover');
+        if (e?.hidden) edit.hidden = true;
+        if (e?.removed) edit.removed = list(e.removed, 'Photos', 500, (_v, i) => siteImage((e.removed as unknown[])[i], 'Photo'));
+        if (e?.added) edit.added = list(e.added, 'Photos', TIMELINE_LIMITS.photosPerAlbum, photo);
+        if (Object.keys(edit).length) out.albums[id] = edit;
+      }
+    }
+    if (b.newAlbums !== undefined) {
+      out.newAlbums = list(b.newAlbums, 'Albums', TIMELINE_LIMITS.newAlbums, (a): NewAlbum => ({
+        id: str(a.id, 'Album', { max: 60 }),
+        year: Math.round(num(a.year, 'Year', { min: 1990, max: 2100 })),
+        title: ltext(a.title, 'Album title', 160),
+        ...(a.result ? { result: ltext(a.result, 'Result', 160) } : {}),
+        place: str(a.place, 'Place', { max: 80, optional: true }),
+        kind: oneOf(a.kind, TIMELINE_KINDS, 'Kind'),
+        ...(a.cover ? { cover: siteImage(a.cover, 'Cover') } : {}),
+        ...(a.hidden ? { hidden: true } : {}),
+        photos: list(a.photos, 'Photos', TIMELINE_LIMITS.photosPerAlbum, photo)
+      }));
+    }
+    out.updatedAt = new Date().toISOString();
+    out.updatedBy = req.user!.displayName;
+    const ref = col('site_content').doc('timeline');
+    const before = (await ref.get()).data();
+    await ref.set(out);
+    await dropUnused(before, out);
+    res.json(out);
+  })
+);
+
 /** Landing page: texts per language, hidden sections, counters and the next challenge date */
 adminRouter.put(
   '/site-content/landing',
@@ -2432,15 +2668,22 @@ adminRouter.put(
       }
       if (Object.keys(out).length) text[lang] = out;
     }
+    const media = landingMedia(b.media);
+    const site = siteInfo(b.site);
     const content: LandingContent = {
       hidden,
       stats,
       ...(countdownDate ? { countdownDate } : {}),
       text,
+      ...(media ? { media } : {}),
+      ...(site ? { site } : {}),
       updatedAt: new Date().toISOString(),
       updatedBy: req.user!.displayName
     };
-    await col('site_content').doc('landing').set(content);
+    const ref = col('site_content').doc('landing');
+    const before = (await ref.get()).data();
+    await ref.set(content);
+    await dropUnused(before, content);
     res.json(content);
   })
 );

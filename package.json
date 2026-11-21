@@ -5,18 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/index.ts",
     "build": "vite build",
-    "start": "NODE_ENV=production tsx server/index.ts",
-    "seed": "tsx server/seed.ts",
+    "start": "NODE_ENV=production NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx server/index.ts",
+    "seed": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx server/seed.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "seed:parent1": "tsx server/seedDemoParent.ts",
-    "migrate:programs": "tsx server/migratePrograms.ts",
-    "set-password": "tsx server/setPassword.ts",
-    "migrate:images": "tsx server/migrateImages.ts",
-    "migrate:money": "tsx server/migrateMoney.ts"
+    "seed:parent1": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx server/seedDemoParent.ts",
+    "set-password": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx server/setPassword.ts",
+    "timeline": "tsx server/buildTimeline.ts",
+    "import:firebase": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx server/importFirebase.ts",
+    "backup": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx server/backup.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -24,11 +24,11 @@
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "firebase-admin": "^13.4.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "three": "^0.186.1",
     "tsx": "^4.21.0",
     "vite": "^8.3.0",
     "web-push": "^3.6.7"
@@ -38,10 +38,15 @@
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.27.0",
+    "esbuild": "^0.28.2",
+    "firebase-admin": "^13.4.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

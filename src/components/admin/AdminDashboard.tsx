@@ -295,7 +295,7 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {adminTab === 'team' && <TeamManager />}
-      {adminTab === 'site' && <LandingEditor />}
+      {adminTab === 'site' && <LandingEditor onOpenSection={setAdminTab} />}
 
       {/* 2. STUDENTS / WAITLIST TAB */}
       {adminTab === 'students' && (

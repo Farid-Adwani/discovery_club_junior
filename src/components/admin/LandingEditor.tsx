@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarClock, Eye, EyeOff, ExternalLink, Globe, RotateCcw, Save } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useConfirm } from '../common/ConfirmProvider';
 import { useLanguage, useT } from '../../i18n';
 import { landingMessages } from '../../i18n/messages/landing';
 import { visitorMessages } from '../../i18n/messages/visitor';
 import { CLUB_STATS } from '../../data/initialData';
+import { ClubDetailsEditor, FaqEditor, FromDatabase, HeroPhotosEditor, LegalEditor, TestimonialsEditor } from './landing/ContentEditors';
+import { TimelineEditor } from './landing/TimelineEditor';
+import type { TimelineEdits } from '../../data/timelineEdits';
 import {
   LANDING_LANGS,
   LANDING_LONG_KEYS,
@@ -32,20 +36,31 @@ const inputCls =
 
 const isSection = (id: string): id is LandingSection => (LANDING_SECTIONS as readonly string[]).includes(id);
 
-/** Admin → Landing page: texts per language, sections shown or hidden, counters and the next challenge date */
-export const LandingEditor: React.FC = () => {
-  const { landing, saveLanding, navigateTo } = useApp();
+/**
+ * Admin → Landing page: everything of the public page. Texts per language, photos, club details, FAQ,
+ * testimonials, legal details, the photo albums, sections shown or hidden, counters and the challenge date.
+ * Classes and coaches are not edited here: the page follows Admin → Classes and Admin → Team (`onOpenSection` opens them).
+ */
+export const LandingEditor: React.FC<{ onOpenSection?: (section: 'groups' | 'team') => void }> = ({ onOpenSection }) => {
+  const { landing, saveLanding, timelineEdits, saveTimeline, navigateTo } = useApp();
+  const confirm = useConfirm();
   const t = useT(landingMessages);
   const { lang: uiLang, locale } = useLanguage();
   const [lang, setLang] = useState<LandingLang>(uiLang);
   const [draft, setDraft] = useState<LandingContent>(landing);
+  const [albums, setAlbums] = useState<TimelineEdits>(timelineEdits);
   const [saving, setSaving] = useState(false);
 
-  const dirty = JSON.stringify(normalize(draft)) !== JSON.stringify(normalize(landing));
+  const textsDirty = JSON.stringify(normalize(draft)) !== JSON.stringify(normalize(landing));
+  const albumsDirty = JSON.stringify(stripMeta(albums)) !== JSON.stringify(stripMeta(timelineEdits));
+  const dirty = textsDirty || albumsDirty;
   // Take in what the server has, unless the admin is in the middle of changes
   useEffect(() => {
-    if (!dirty) setDraft(landing);
+    if (!textsDirty) setDraft(landing);
   }, [landing]);
+  useEffect(() => {
+    if (!albumsDirty) setAlbums(timelineEdits);
+  }, [timelineEdits]);
 
   const texts = draft.text?.[lang] || {};
   const setText = (key: string, value: string) =>
@@ -57,8 +72,25 @@ export const LandingEditor: React.FC = () => {
 
   const save = async () => {
     setSaving(true);
-    await saveLanding(normalize(draft));
+    if (textsDirty) await saveLanding(normalize(draft));
+    if (albumsDirty) await saveTimeline(stripMeta(albums), textsDirty);
     setSaving(false);
+  };
+  const editorProps = { draft, setDraft, lang };
+  // Opens Admin → Classes / Team (after asking, when there are unsaved changes here)
+  const openSection = onOpenSection
+    ? (section: 'groups' | 'team') => async () => {
+        if (dirty && !(await confirm({ title: t('leaveTitle'), message: t('leaveText'), confirmLabel: t('leave') }))) return;
+        onOpenSection(section);
+      }
+    : undefined;
+
+  /** The field's name; a text without its own label shows its default wording */
+  const fieldLabel = (key: string) => {
+    const own = `f_${key}`;
+    if (own in landingMessages[uiLang]) return t(own as keyof (typeof landingMessages)['en']);
+    const wording = visitorMessages[uiLang][key as keyof (typeof visitorMessages)['fr']] || key;
+    return `“${wording.length > 60 ? `${wording.slice(0, 57)}…` : wording}”`;
   };
 
   const countdownFuture = !!draft.countdownDate && new Date(`${draft.countdownDate}T09:00`).getTime() > Date.now();
@@ -76,7 +108,7 @@ export const LandingEditor: React.FC = () => {
     return (
       <label key={key} className={`block space-y-1 ${LANDING_LONG_KEYS.has(key) ? 'sm:col-span-2' : ''}`}>
         <span className="flex items-center gap-2 text-xs font-bold text-slate-600">
-          {t(`f_${key}` as keyof (typeof landingMessages)['en'])}
+          <span className="min-w-0 truncate">{fieldLabel(key)}</span>
           {changed && <span className="px-1.5 py-0.5 rounded-md bg-[#fdf2f4] text-[#c11e3d] text-[9px] font-black uppercase">{t('changed')}</span>}
           {changed && (
             <button type="button" onClick={() => setText(key, '')} title={t('reset')} aria-label={t('reset')} className="ms-auto text-slate-400 hover:text-[#c11e3d] cursor-pointer">
@@ -86,6 +118,7 @@ export const LandingEditor: React.FC = () => {
         </span>
         {LANDING_LONG_KEYS.has(key) ? <textarea rows={3} maxLength={1000} {...common} className={inputCls} /> : <input maxLength={1000} {...common} className={inputCls} />}
         {key === 'heroWords' && <span className="block text-[11px] font-medium text-slate-400">{t('wordsHint')}</span>}
+        {fallback.includes('{') && <span className="block text-[11px] font-medium text-slate-400">{t('placeholdersHint')}</span>}
       </label>
     );
   };
@@ -98,7 +131,8 @@ export const LandingEditor: React.FC = () => {
           <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
             <Globe className="w-5 h-5 text-[#c11e3d]" /> {t('title')}
           </h3>
-          <p className="text-sm font-medium text-slate-500 max-w-2xl">{t('subtitle')}</p>
+          <p className="text-sm font-medium text-slate-500 max-w-2xl">{t('subtitle2')}</p>
+          <p className="text-[11px] font-medium text-slate-400">{t('otherPhotos')}</p>
           {landing.updatedAt && (
             <p className="text-[11px] font-semibold text-slate-400">
               {t('lastSaved', {
@@ -216,7 +250,20 @@ export const LandingEditor: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{g.keys.map(field)}</div>
+                    {g.id === 'hero' && <HeroPhotosEditor {...editorProps} />}
+                    {g.id === 'contact' && <ClubDetailsEditor {...editorProps} />}
+                    {g.id === 'faq' && <FaqEditor {...editorProps} />}
+                    {g.id === 'testimonials' && <TestimonialsEditor {...editorProps} />}
+                    {g.id === 'programs' && <FromDatabase kind="classes" onOpen={openSection?.('groups')} />}
+                    {g.id === 'coaches' && <FromDatabase kind="coaches" onOpen={openSection?.('team')} />}
+                    {g.id === 'legal' && <LegalEditor {...editorProps} />}
+                    {g.keys.length > 0 && (
+                      <div className="space-y-2">
+                        {g.id !== 'stats' && g.id !== 'seo' && <h5 className="text-sm font-black text-slate-800">{t('textsOf')}</h5>}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{g.keys.map(field)}</div>
+                      </div>
+                    )}
+                    {g.id === 'timeline' && <TimelineEditor edits={albums} setEdits={setAlbums} lang={lang} />}
                   </>
                 )}
               </section>
@@ -230,7 +277,14 @@ export const LandingEditor: React.FC = () => {
         <div className="fixed bottom-4 inset-x-4 z-40 flex justify-center pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-3 ps-5 pe-2 py-2 rounded-2xl bg-[#191919] text-white shadow-2xl">
             <span className="text-sm font-black">{t('unsaved')}</span>
-            <button type="button" onClick={() => setDraft(landing)} className="px-3 py-2 rounded-xl text-xs font-black text-white/70 hover:text-white cursor-pointer">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(landing);
+                setAlbums(timelineEdits);
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-black text-white/70 hover:text-white cursor-pointer"
+            >
               {t('discard')}
             </button>
             <button type="button" onClick={save} disabled={saving} className="px-4 py-2 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
@@ -251,10 +305,19 @@ function normalize(c: LandingContent): LandingContent {
     if (Object.keys(kept).length) text[l] = kept;
   }
   const stats = Object.fromEntries(Object.entries(c.stats || {}).filter(([, v]) => v !== undefined && v !== null)) as LandingContent['stats'];
+  const media = Object.fromEntries(Object.entries(c.media || {}).filter(([, v]) => v !== undefined)) as LandingContent['media'];
+  const site = Object.fromEntries(Object.entries(c.site || {}).filter(([, v]) => v !== undefined)) as LandingContent['site'];
   return {
     hidden: LANDING_SECTIONS.filter((s) => c.hidden?.includes(s)),
     stats,
     ...(c.countdownDate ? { countdownDate: c.countdownDate } : {}),
-    text
+    text,
+    ...(media && Object.keys(media).length ? { media } : {}),
+    ...(site && Object.keys(site).length ? { site } : {})
   };
+}
+
+/** Album edits without who saved them and when */
+function stripMeta({ updatedAt: _a, updatedBy: _b, ...rest }: TimelineEdits): TimelineEdits {
+  return rest;
 }

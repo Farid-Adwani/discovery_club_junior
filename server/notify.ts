@@ -2,8 +2,7 @@
 // notify() never throws: a failed notification must not break the action that triggered it.
 import crypto from 'crypto';
 import webpush from 'web-push';
-import { FieldPath } from 'firebase-admin/firestore';
-import { db } from './firebaseAdmin.js';
+import { FieldPath, db } from './db.js';
 import { adminProfiles, findAccountByEmail } from './auth.js';
 import { renderNotification, type NotificationLang, type NotificationType } from '../src/i18n/messages/notifications.js';
 
@@ -35,6 +34,22 @@ interface PushSubscriptionDoc {
 
 export const subscriptionId = (endpoint: string) => crypto.createHash('sha256').update(endpoint).digest('hex').slice(0, 40);
 
+/**
+ * The browsers' push services (Chrome/Android/Opera/Samsung: Google, Firefox: Mozilla, Safari/iPhone: Apple, Edge: Microsoft).
+ * The server only ever sends to these, so a made-up "device" can't make it call another address.
+ */
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^([a-z0-9-]+\.)*push\.services\.mozilla\.com$/, /^([a-z0-9-]+\.)*push\.apple\.com$/, /^([a-z0-9-]+\.)*notify\.windows\.com$/];
+
+export function isPushEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== 'string' || endpoint.length > 2000) return false;
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === 'https:' && !url.port && !url.username && !url.password && PUSH_HOSTS.some((h) => h.test(url.hostname));
+  } catch {
+    return false;
+  }
+}
+
 async function subscriptionsOf(userIds: string[]): Promise<PushSubscriptionDoc[]> {
   const out: PushSubscriptionDoc[] = [];
   for (let i = 0; i < userIds.length; i += 30) {
@@ -49,6 +64,10 @@ export async function sendPush(subs: PushSubscriptionDoc[], message: (lang: Noti
   if (!pushEnabled || !subs.length) return;
   await Promise.allSettled(
     subs.map(async (s) => {
+      if (!isPushEndpoint(s.subscription?.endpoint)) {
+        await col('push_subscriptions').doc(s.id).delete().catch(() => {});
+        return;
+      }
       try {
         await webpush.sendNotification(s.subscription, JSON.stringify({ ...message(s.lang), icon: '/favicon.png' }), { TTL: 60 * 60 * 24, timeout: 8000 });
       } catch (err) {

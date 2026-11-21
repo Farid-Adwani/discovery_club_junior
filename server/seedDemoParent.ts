@@ -5,8 +5,7 @@
 //
 // Login: parent1@example.com / Parent1234
 // Every document written here has `demo: true`, so it is easy to find and remove.
-import { FieldValue } from 'firebase-admin/firestore';
-import { db } from './firebaseAdmin';
+import { FieldValue, db } from './db.js';
 import { deleteAccount, findAccountByEmail, upsertAccount } from './auth';
 import type { Group, SessionRecord, StudentAttendanceRecord, Student, Trainer } from '../src/types';
 

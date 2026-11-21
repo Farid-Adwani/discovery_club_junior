@@ -16,7 +16,7 @@ export const trainerMessages = defineMessages({
     // Trainer portal
     workspaceBadge: 'Trainer Workspace',
     portalTitle: 'Session Check-In & Student Evaluation',
-    portalSubtitle: 'Mark attendance, validate syllabus modules, and share remarks with parents in Firestore.',
+    portalSubtitle: 'Mark attendance, validate syllabus modules, and share remarks with parents.',
     trainerOption: 'Trainer: {name}',
     defaultTopic: 'Autonomous Sensor Feedback Loops',
     classFallback: 'Class',
@@ -126,7 +126,7 @@ export const trainerMessages = defineMessages({
 
     workspaceBadge: 'Espace formateur',
     portalTitle: 'Pointage de séance et évaluation des élèves',
-    portalSubtitle: 'Marquez les présences, validez les modules du programme et partagez vos remarques avec les parents dans Firestore.',
+    portalSubtitle: 'Marquez les présences, validez les modules du programme et partagez vos remarques avec les parents.',
     trainerOption: 'Formateur : {name}',
     defaultTopic: 'Boucles de rétroaction des capteurs autonomes',
     classFallback: 'Classe',
@@ -235,7 +235,7 @@ export const trainerMessages = defineMessages({
 
     workspaceBadge: 'فضاء المدرّب',
     portalTitle: 'تسجيل حضور الحصة وتقييم التلاميذ',
-    portalSubtitle: 'سجّل الحضور، وصادق على وحدات البرنامج، وشارك ملاحظاتك مع الأولياء عبر Firestore.',
+    portalSubtitle: 'سجّل الحضور، وصادق على وحدات البرنامج، وشارك ملاحظاتك مع الأولياء.',
     trainerOption: 'المدرّب: {name}',
     defaultTopic: 'حلقات التغذية الراجعة للمستشعرات الذاتية',
     classFallback: 'القسم',

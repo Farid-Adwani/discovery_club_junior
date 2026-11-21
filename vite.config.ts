@@ -12,9 +12,10 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // In development, API calls go to the Express server (npm run dev:server)
+      // In development, API calls and uploaded images go to the Express server (npm run dev:server)
       proxy: {
         '/api': 'http://localhost:8080',
+        '/uploads': 'http://localhost:8080',
       },
       // Allow access through Cloudflare quick tunnels (testing on phone)
       allowedHosts: ['.trycloudflare.com'],

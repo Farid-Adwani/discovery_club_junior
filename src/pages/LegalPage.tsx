@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import { ltr, useLanguage, useT } from '../i18n';
 import { siteMessages } from '../i18n/messages/site';
 import { PRIVACY, TERMS } from '../i18n/messages/legal';
-import { SITE_CONTENT } from '../data/siteContent';
+import { pick } from '../data/siteContent';
+import { useSite } from '../components/common/siteHooks';
 
 /** Privacy policy or terms of use, with the club's details from siteContent filled in. */
 export const LegalPage: React.FC<{ kind: 'privacy' | 'terms' }> = ({ kind }) => {
@@ -12,20 +13,20 @@ export const LegalPage: React.FC<{ kind: 'privacy' | 'terms' }> = ({ kind }) => 
   const { lang, locale } = useLanguage();
   const t = useT(siteMessages);
   const doc = (kind === 'privacy' ? PRIVACY : TERMS)[lang];
-  const { contact, address, legal, legalName } = SITE_CONTENT;
+  const { contact, address, legal, legalName } = useSite();
 
   useEffect(() => window.scrollTo({ top: 0 }), [kind]);
 
-  const fullAddress = [address.street[lang], address.city[lang]].filter(Boolean).join(', ');
+  const fullAddress = [pick(address.street, lang), pick(address.city, lang)].filter(Boolean).join(', ');
   const values: Record<string, string> = {
     club: legalName,
     controller: legal.controller,
     registration: legal.registration,
-    address: address.street[lang] ? fullAddress : '',
+    address: pick(address.street, lang) ? fullAddress : '',
     email: legal.privacyEmail || contact.email,
     phone: contact.phone ? ltr(contact.phone) : '',
-    retention: legal.retention[lang],
-    courts: legal.courts[lang]
+    retention: pick(legal.retention, lang),
+    courts: pick(legal.courts, lang)
   };
 
   // Splits "{name}" placeholders; a missing value is shown as a highlighted "to be completed"

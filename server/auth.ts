@@ -1,13 +1,15 @@
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { promisify } from 'util';
-import { db } from './firebaseAdmin.js';
+import { db } from './db.js';
 import type { AppUser, UserRole } from '../src/types/index.js';
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'faridadwani2000@gmail.com')
+// No fallback: an empty ADMIN_EMAILS means no owner (server/index.ts warns), never someone's address by default
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',')
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
+export const ownerCount = () => ADMIN_EMAILS.length;
 
 /** A sign-in stays valid this long (a new sign-in is needed after) */
 const SESSION_DAYS = 30;
@@ -22,10 +24,23 @@ export interface Account {
   /** Admin given by another admin from the Team page (ADMIN_EMAILS are always admins) */
   role?: 'admin';
   createdBy?: string; // uid of the admin who created the account from the Team page
+  /**
+   * 'signup': made by someone on the sign-up page (the email was never verified, so it may not be theirs);
+   * 'cli': made or taken over with `npm run set-password`. Older accounts have neither.
+   */
+  source?: 'signup' | 'cli';
 }
 
 /** The club owners (ADMIN_EMAILS): always admins, can't be removed from the website */
 export const isOwnerEmail = (email: string) => ADMIN_EMAILS.includes(email.trim().toLowerCase());
+
+/**
+ * True when the club made this account (an admin on the Team page, or the owner with set-password).
+ * Anyone can sign up with any email, so only such accounts may get a coach's email: otherwise a stranger who
+ * signed up with a coach's address first would become that coach.
+ */
+export const madeByClub = (account: Account) =>
+  account.source === 'cli' || !!account.createdBy || account.role === 'admin' || (isOwnerEmail(account.email) && account.source !== 'signup');
 
 export interface AuthedRequest extends Request {
   user?: AppUser;
@@ -52,8 +67,19 @@ export async function checkPassword(password: string, stored: string): Promise<b
   const [algo, salt, hex] = stored.split('$');
   if (algo !== 'scrypt' || !salt || !hex) return false;
   const expected = Buffer.from(hex, 'hex');
+  if (!expected.length) return false;
   const actual = await scrypt(password, salt, expected.length);
   return crypto.timingSafeEqual(actual, expected);
+}
+
+/** Checked against when the email has no account, so a wrong email takes as long as a wrong password */
+const NO_ACCOUNT_HASH = `scrypt$${crypto.randomBytes(16).toString('hex')}$${'0'.repeat(128)}`;
+
+/** The account when the password is right. Always does the same work, so the answer time doesn't tell if an email exists. */
+export async function verifyLogin(email: string, password: string): Promise<Account | undefined> {
+  const account = await findAccountByEmail(email);
+  const ok = await checkPassword(password, account?.passwordHash || NO_ACCOUNT_HASH);
+  return account && ok ? account : undefined;
 }
 
 // ---------- accounts & sessions ----------
@@ -98,12 +124,13 @@ export async function upsertAccount(email: string, password: string, preferredId
   const passwordHash = await hashPassword(password);
   const existing = await findAccountByEmail(e);
   if (existing) {
-    await db.collection('accounts').doc(existing.id).update({ passwordHash });
+    // The owner sets this password: whoever signed up with the email before is signed out and loses it
+    await db.collection('accounts').doc(existing.id).update({ passwordHash, source: 'cli' });
     await deleteSessionsOf(existing.id);
-    return { account: { ...existing, passwordHash }, created: false };
+    return { account: { ...existing, passwordHash, source: 'cli' }, created: false };
   }
   const id = preferredId || db.collection('accounts').doc().id;
-  const account: Account = { id, email: e, passwordHash, createdAt: new Date().toISOString() };
+  const account: Account = { id, email: e, passwordHash, createdAt: new Date().toISOString(), source: 'cli' };
   const batch = db.batch();
   batch.create(accountEmailRef(e), { accountId: id });
   batch.set(db.collection('accounts').doc(id), account);
@@ -155,13 +182,16 @@ export async function deleteSessionsOf(accountId: string) {
  *  - trainer: email matching a document in `trainers`
  *  - parent:  everyone else (children are linked through students.parentUid)
  */
-export async function resolveProfile(account: Pick<Account, 'id' | 'email' | 'role'>): Promise<AppUser> {
+export async function resolveProfile(account: Pick<Account, 'id' | 'email' | 'role' | 'source'>): Promise<AppUser> {
   const email = account.email;
-  const isAdminEmail = ADMIN_EMAILS.includes(email) || account.role === 'admin';
+  // An account someone made on the sign-up page never gets a staff role from its email alone (the email
+  // was not verified): the owner takes it over with set-password, or an admin creates the account.
+  const signedUp = account.source === 'signup';
+  const isAdminEmail = (ADMIN_EMAILS.includes(email) && !signedUp) || account.role === 'admin';
   // Read the user document and look for a trainer with this email at the same time
   const [userSnap, trainerSnap] = await Promise.all([
     db.collection('users').doc(account.id).get(),
-    !isAdminEmail ? db.collection('trainers').where('email', '==', email).limit(1).get() : Promise.resolve(null)
+    !isAdminEmail && !signedUp ? db.collection('trainers').where('email', '==', email).limit(1).get() : Promise.resolve(null)
   ]);
   const stored = userSnap.exists ? userSnap.data() || {} : {};
 
@@ -194,7 +224,7 @@ export async function resolveProfile(account: Pick<Account, 'id' | 'email' | 'ro
 }
 
 // Who a user is barely changes, and the browser sends /me and /data together right after sign-in,
-// so the session and profile are kept for a short time instead of reading Firestore on every request.
+// so the session and profile are kept for a short time instead of reading the database on every request.
 const CACHE_TTL_MS = 30_000;
 const sessionCache = new Map<string, { expires: number; accountId: string; user: Promise<AppUser | null> }>();
 
