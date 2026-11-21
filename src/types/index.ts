@@ -10,7 +10,10 @@ export type AppPage =
   | 'parent'
   | 'privacy'
   | 'terms'
-  | 'museum';
+  | 'museum'
+  | 'courses'
+  | 'events'
+  | 'contact';
 
 export interface AppUser {
   uid: string;

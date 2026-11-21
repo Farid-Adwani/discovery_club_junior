@@ -21,6 +21,7 @@ import { visitorMessages } from './i18n/messages/visitor';
 import { siteMessages } from './i18n/messages/site';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogIn, ArrowLeft, UserPlus, Lock } from 'lucide-react';
+import { PAGE_META, PAGE_PATHS, SITE_URL, isPublicPage } from './utils/routes';
 
 // Portals and sign-in pages load on demand, so visitors of the home page don't download them
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
@@ -29,10 +30,11 @@ const ParentPortal = lazy(() => import('./components/parent/ParentPortal').then(
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const ParentRegisterPage = lazy(() => import('./pages/ParentRegisterPage').then((m) => ({ default: m.ParentRegisterPage })));
 const LegalPage = lazy(() => import('./pages/LegalPage'));
+const EventsPage = lazy(() => import('./pages/EventsPage'));
 // The 3D museum (three.js) only downloads when someone opens it
 const LegacyMuseum = lazy(() => import('./components/museum/LegacyMuseum'));
 
-const PUBLIC_PAGES = ['home', 'visitor', 'privacy', 'terms'];
+const PUBLIC_PAGES = ['home', 'visitor', 'privacy', 'terms', 'courses', 'events', 'contact'];
 
 const PageSpinner: React.FC = () => {
   const t = useT(siteMessages);
@@ -44,20 +46,29 @@ const PageSpinner: React.FC = () => {
   );
 };
 
-/** Tab title and description in the visitor's language (search engines that run scripts pick them up too) */
+/**
+ * Tab title, description and address of the page in the visitor's language (search engines that run
+ * scripts pick them up too). Home: the ones written in Admin → Landing page; other public pages: utils/routes.ts.
+ */
 function usePageMeta() {
   const { lang } = useLanguage();
-  const { landing } = useApp();
-  const tv = useLandingT(); // with the title and description written in Admin → Landing page
+  const { landing, currentPage } = useApp();
+  const tv = useLandingT();
   useEffect(() => {
+    const own = isPublicPage(currentPage) && currentPage !== 'home' ? PAGE_META[currentPage][lang] : null;
+    const title = own?.title ?? tv('metaTitle');
+    const description = own?.description ?? tv('metaDescription');
+    const url = `${SITE_URL}${isPublicPage(currentPage) ? PAGE_PATHS[currentPage] : '/'}`;
     const prefix = document.title.match(/^\(\d+\)\s*/)?.[0] || ''; // unread count kept by NotificationBell
-    document.title = prefix + tv('metaTitle');
+    document.title = prefix + title;
     const set = (selector: string, value: string) => document.querySelector(selector)?.setAttribute('content', value);
-    set('meta[name="description"]', tv('metaDescription'));
-    set('meta[property="og:title"]', tv('metaTitle'));
-    set('meta[property="og:description"]', tv('metaDescription'));
+    set('meta[name="description"]', description);
+    set('meta[property="og:title"]', title);
+    set('meta[property="og:description"]', description);
+    set('meta[property="og:url"]', url);
     set('meta[property="og:locale"]', { en: 'en_GB', fr: 'fr_FR', ar: 'ar_TN' }[lang]);
-  }, [lang, landing.text]);
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', url);
+  }, [lang, landing.text, currentPage]);
 }
 
 const AppContent: React.FC = () => {
@@ -78,6 +89,15 @@ const AppContent: React.FC = () => {
 
       case 'museum':
         return <LegacyMuseum key="page-museum" />;
+
+      case 'courses':
+        return <VisitorPortal key="page-courses" focus="courses" />;
+
+      case 'contact':
+        return <VisitorPortal key="page-contact" focus="contact" />;
+
+      case 'events':
+        return <EventsPage key="page-events" />;
 
       case 'login':
         return <LoginPage key="page-login" />;

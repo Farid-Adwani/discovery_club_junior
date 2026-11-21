@@ -15,6 +15,7 @@ import {
   Menu,
   MessageCircle,
   ShieldCheck,
+  Ticket,
   Trophy,
   UserPlus,
   Users,
@@ -26,8 +27,17 @@ import { NotificationBell } from './NotificationBell';
 import { useT } from '../../i18n';
 import { commonMessages } from '../../i18n/messages/common';
 import { siteMessages } from '../../i18n/messages/site';
-import { NavSectionId, useNavSections } from '../visitor/sections';
+import { NAV_PAGE, NavSectionId, useNavSections } from '../visitor/sections';
 import { rememberReturn } from '../museum/returnTo';
+import { pagesMessages } from '../../i18n/messages/pages';
+import { PAGE_PATHS } from '../../utils/routes';
+import { PageLink, isPlainClick } from './PageLink';
+
+/** Where a header link points: its own page (/cours…), or its section of the home page */
+const navHref = (id: NavSectionId) => {
+  const page = NAV_PAGE[id];
+  return page ? PAGE_PATHS[page] : `/#${id}`;
+};
 
 type Space = 'admin' | 'trainer' | 'parent';
 const SPACE_ICON: Record<Space, React.ElementType> = { admin: ShieldCheck, trainer: GraduationCap, parent: HeartHandshake };
@@ -40,6 +50,7 @@ const TRACK_EXTRA = 10; // padding (p-1) and border of the bar around the sectio
 const SECTION_LOOK: Record<NavSectionId, { icon: React.ElementType; soft: string; ink: string }> = {
   about: { icon: Lightbulb, soft: '#fff1d2', ink: '#c98a12' },
   programs: { icon: CalendarDays, soft: '#ffe9ee', ink: '#c11e3d' },
+  events: { icon: Ticket, soft: '#fff1d2', ink: '#b4690e' },
   coaches: { icon: Users, soft: '#e1f5e9', ink: '#2f8a57' },
   journey: { icon: Trophy, soft: '#efe9fd', ink: '#7050c8' },
   faq: { icon: CircleHelp, soft: '#e3efff', ink: '#2f6fbf' },
@@ -84,6 +95,7 @@ export const Header: React.FC = () => {
   const { currentPage, navigateTo, currentUser, logout } = useApp();
   const t = useT(commonMessages);
   const ts = useT(siteMessages);
+  const tp = useT(pagesMessages);
   const sectionIds = useNavSections();
   const sectionsKey = sectionIds.join(',');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -150,6 +162,7 @@ export const Header: React.FC = () => {
   const sectionLabel: Record<NavSectionId, string> = {
     about: t('navMethod'),
     programs: t('navClasses'),
+    events: tp('navEvents'),
     journey: t('navJourney'),
     coaches: t('navCoaches'),
     faq: t('navFaq'),
@@ -159,13 +172,25 @@ export const Header: React.FC = () => {
   const goToSection = (id: NavSectionId) => {
     setIsMoreOpen(false);
     setIsMobileMenuOpen(false);
-    if (currentPage === 'home') document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const page = NAV_PAGE[id];
+    if (page) navigateTo(page);
+    else if (currentPage === 'home') document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else {
       // The home page scrolls there once it has loaded (its lower sections load lazily)
       rememberReturn(id);
       navigateTo('home');
     }
   };
+
+  // Lit while its section is on screen, or while its own page is open
+  const isOn = (id: NavSectionId) => activeSection === id || (!!NAV_PAGE[id] && currentPage === NAV_PAGE[id]);
+  // The links are real links (search engines follow them, Ctrl+click opens a new tab); a plain click stays in the app
+  const onNavClick = (id: NavSectionId) => (e: React.MouseEvent) => {
+    if (!isPlainClick(e)) return;
+    e.preventDefault();
+    goToSection(id);
+  };
+  const currentFor = (id: NavSectionId) => (isOn(id) ? (NAV_PAGE[id] ? 'page' : 'location') : undefined);
 
   const showSectionNav = !currentUser || !inSpace;
   const shownSections = sectionIds.slice(0, fitCount);
@@ -249,12 +274,12 @@ export const Header: React.FC = () => {
       )}
       <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center gap-3 lg:gap-6">
         {/* Brand */}
-        <button onClick={() => navigateTo('home')} className="flex items-center gap-2.5 shrink-0 cursor-pointer group" aria-label={t('navHome')}>
+        <PageLink page="home" className="flex items-center gap-2.5 shrink-0 cursor-pointer group" aria-label={t('navHome')}>
           <img src={CLUB_PHOTOS.clubAvatar} alt={t('logoAlt')} className="w-10 h-10 rounded-full object-cover border-2 border-dashed border-brand/30 bg-white p-0.5" />
           <span className="font-display text-[19px] font-semibold tracking-tight text-heading group-hover:text-brand transition-colors whitespace-nowrap">
             Discovery Junior
           </span>
-        </button>
+        </PageLink>
 
         {/* Space switcher (signed in) */}
         {currentUser && spaces.length > 0 && (
@@ -294,15 +319,15 @@ export const Header: React.FC = () => {
           {showSectionNav && sectionIds.length > 0 && (
             <nav aria-label={t('navSections')} className="hidden lg:flex items-center gap-0.5 p-1 rounded-full bg-cream/80 border border-line">
               {shownSections.map((id) => {
-                const on = activeSection === id;
+                const on = isOn(id);
                 return (
-                  <button key={id} onClick={() => goToSection(id)} aria-current={on ? 'location' : undefined} className={linkClass(on)}>
+                  <a key={id} href={navHref(id)} onClick={onNavClick(id)} aria-current={currentFor(id)} className={linkClass(on)}>
                     {on && activePill()}
                     <span className="hidden xl:contents">
                       <SectionIcon id={id} on={on} className="relative w-6 h-6" />
                     </span>
                     <span className="relative">{sectionLabel[id]}</span>
-                  </button>
+                  </a>
                 );
               })}
               {moreSections.length > 0 && (
@@ -311,9 +336,9 @@ export const Header: React.FC = () => {
                     onClick={() => setIsMoreOpen((o) => !o)}
                     aria-expanded={isMoreOpen}
                     aria-haspopup="menu"
-                    className={linkClass(isMoreOpen || moreSections.some((id) => id === activeSection), false)}
+                    className={linkClass(isMoreOpen || moreSections.some(isOn), false)}
                   >
-                    {moreSections.some((id) => id === activeSection) && activePill()}
+                    {moreSections.some(isOn) && activePill()}
                     <span className="relative">{t('navMore')}</span>
                     <ChevronDown className={`relative w-3.5 h-3.5 transition-transform ${isMoreOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -328,20 +353,21 @@ export const Header: React.FC = () => {
                         className="absolute start-0 mt-2.5 min-w-52 rounded-2xl bg-white border border-line soft-shadow p-1.5 z-50"
                       >
                         {moreSections.map((id) => {
-                          const on = activeSection === id;
+                          const on = isOn(id);
                           return (
-                            <button
+                            <a
                               key={id}
                               role="menuitem"
-                              onClick={() => goToSection(id)}
-                              aria-current={on ? 'location' : undefined}
+                              href={navHref(id)}
+                              onClick={onNavClick(id)}
+                              aria-current={currentFor(id)}
                               className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-start text-[13px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
                                 on ? 'bg-wash text-heading' : 'text-heading/70 hover:bg-paper hover:text-heading'
                               }`}
                             >
                               <SectionIcon id={id} on={on} className="w-7 h-7" />
                               {sectionLabel[id]}
-                            </button>
+                            </a>
                           );
                         })}
                       </motion.div>
@@ -449,19 +475,19 @@ export const Header: React.FC = () => {
             </div>
           ) : (
             <>
-              <button
-                onClick={() => navigateTo('login')}
+              <PageLink
+                page="login"
                 className={`h-10 px-4 rounded-xl text-[13px] font-black flex items-center gap-1.5 cursor-pointer transition-colors ${
                   currentPage === 'login' ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <LogIn className="w-4 h-4" />
                 {t('signIn')}
-              </button>
-              <button onClick={() => navigateTo('register-parent')} className="pill-primary h-10 px-5 text-[13px]">
+              </PageLink>
+              <PageLink page="register-parent" className="pill-primary h-10 px-5 text-[13px]">
                 <UserPlus className="w-4 h-4" />
                 {t('parentRegister')}
-              </button>
+              </PageLink>
             </>
           )}
         </div>
@@ -543,10 +569,10 @@ export const Header: React.FC = () => {
                   {t('navHome')}
                 </button>
                 {sectionIds.map((id) => (
-                  <button key={id} onClick={() => goToSection(id)} aria-current={activeSection === id ? 'location' : undefined} className={mobileLink(activeSection === id)}>
-                    <SectionIcon id={id} on={activeSection === id} className="w-8 h-8" />
+                  <a key={id} href={navHref(id)} onClick={onNavClick(id)} aria-current={currentFor(id)} className={mobileLink(isOn(id))}>
+                    <SectionIcon id={id} on={isOn(id)} className="w-8 h-8" />
                     <span className="truncate">{sectionLabel[id]}</span>
-                  </button>
+                  </a>
                 ))}
               </nav>
 
@@ -557,14 +583,14 @@ export const Header: React.FC = () => {
                 </button>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => navigateTo('login')} className="py-3 btn-duo-secondary text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer">
+                  <PageLink page="login" className="py-3 btn-duo-secondary text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer">
                     <LogIn className="w-4 h-4" />
                     {t('signIn')}
-                  </button>
-                  <button onClick={() => navigateTo('register-parent')} className="py-3 btn-duo-green text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer">
+                  </PageLink>
+                  <PageLink page="register-parent" className="py-3 btn-duo-green text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer">
                     <UserPlus className="w-4 h-4" />
                     {t('join')}
-                  </button>
+                  </PageLink>
                 </div>
               )}
 

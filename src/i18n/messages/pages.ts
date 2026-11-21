@@ -1,0 +1,68 @@
+import { defineMessages } from '../index';
+
+/** The public pages with an address of their own: Courses, Events, Contact (and the header link to Events). */
+export const pagesMessages = defineMessages({
+  en: {
+    navEvents: 'Events',
+    coursesKicker: 'Weekly classes',
+    coursesTitle: 'Robotics, electronics and coding classes for kids',
+    coursesIntro: 'Small groups for ages 6 to 17 in Manouba, on real hardware: kids build, wire and program their own robots, then take them to competitions.',
+    contactKicker: 'Let’s talk',
+    contactTitle: 'Contact the club',
+    contactIntro: 'A question, or a free trial class for your child? Write to us and we will answer quickly.',
+    contactFacebook: 'Message us on Facebook',
+    eventsKicker: 'Club life',
+    eventsTitle: 'Events, camps and competitions',
+    eventsIntro: 'Workshops, holiday camps and competitions for our young makers. Parents register their children from their parent space.',
+    eventsUpcoming: 'Coming up',
+    eventsPast: 'Past events',
+    eventsNone: 'No event is planned right now. Follow us on Facebook to hear about the next ones first.',
+    eventsFollow: 'Follow us on Facebook',
+    eventsRegister: 'Register my child',
+    eventsOpenSpace: 'Open my parent space',
+    eventsSignUpHint: 'Signing up takes a minute and lets you follow the confirmation and the fee.',
+    eventsLoading: 'Loading the events…'
+  },
+  fr: {
+    navEvents: 'Événements',
+    coursesKicker: 'Cours chaque semaine',
+    coursesTitle: 'Cours de robotique, d’électronique et de code pour enfants',
+    coursesIntro: 'Des petits groupes pour les 6–17 ans à Manouba, sur du vrai matériel : les enfants construisent, câblent et programment leurs propres robots, puis les emmènent en compétition.',
+    contactKicker: 'Parlons-en',
+    contactTitle: 'Contacter le club',
+    contactIntro: 'Une question, ou une séance d’essai gratuite pour votre enfant ? Écrivez-nous, nous répondons vite.',
+    contactFacebook: 'Nous écrire sur Facebook',
+    eventsKicker: 'La vie du club',
+    eventsTitle: 'Événements, stages et compétitions',
+    eventsIntro: 'Ateliers, stages de vacances et compétitions pour nos jeunes makers. Les parents inscrivent leurs enfants depuis leur espace parent.',
+    eventsUpcoming: 'À venir',
+    eventsPast: 'Événements passés',
+    eventsNone: 'Aucun événement n’est prévu pour le moment. Suivez-nous sur Facebook pour connaître les prochains en premier.',
+    eventsFollow: 'Nous suivre sur Facebook',
+    eventsRegister: 'Inscrire mon enfant',
+    eventsOpenSpace: 'Ouvrir mon espace parent',
+    eventsSignUpHint: 'L’inscription prend une minute et vous permet de suivre la confirmation et le paiement.',
+    eventsLoading: 'Chargement des événements…'
+  },
+  ar: {
+    navEvents: 'الفعاليات',
+    coursesKicker: 'حصص كل أسبوع',
+    coursesTitle: 'حصص الروبوتيك والإلكترونيك والبرمجة للأطفال',
+    coursesIntro: 'مجموعات صغيرة للأطفال من 6 إلى 17 سنة في منوبة، على معدات حقيقية: يبني الأطفال روبوتاتهم ويوصلونها ويبرمجونها، ثم يشاركون بها في المسابقات.',
+    contactKicker: 'لنتحدث',
+    contactTitle: 'اتصل بالنادي',
+    contactIntro: 'سؤال، أو حصة تجريبية مجانية لطفلك؟ راسلنا وسنجيبك بسرعة.',
+    contactFacebook: 'راسلنا على فيسبوك',
+    eventsKicker: 'حياة النادي',
+    eventsTitle: 'الفعاليات والتربصات والمسابقات',
+    eventsIntro: 'ورشات وتربصات العطل ومسابقات لصغارنا المبدعين. يسجّل الأولياء أطفالهم من فضاء الأولياء.',
+    eventsUpcoming: 'قريبًا',
+    eventsPast: 'فعاليات سابقة',
+    eventsNone: 'لا توجد فعاليات مبرمجة حاليًا. تابعنا على فيسبوك لتعرف الفعاليات القادمة أولًا.',
+    eventsFollow: 'تابعنا على فيسبوك',
+    eventsRegister: 'سجّل طفلي',
+    eventsOpenSpace: 'افتح فضاء الأولياء',
+    eventsSignUpHint: 'التسجيل يستغرق دقيقة ويمكّنك من متابعة التأكيد والدفع.',
+    eventsLoading: 'جارٍ تحميل الفعاليات…'
+  }
+});

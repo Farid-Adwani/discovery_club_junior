@@ -351,11 +351,11 @@ export const ParentRegisterPage: React.FC = () => {
                 />
                 <span>
                   {ts('consentTermsBefore')}{' '}
-                  <a href="#/terms" target="_blank" rel="noopener" className="font-black text-sky-700 underline">
+                  <a href="/conditions" target="_blank" rel="noopener" className="font-black text-sky-700 underline">
                     {ts('terms')}
                   </a>{' '}
                   {ts('consentAnd')}{' '}
-                  <a href="#/privacy" target="_blank" rel="noopener" className="font-black text-sky-700 underline">
+                  <a href="/confidentialite" target="_blank" rel="noopener" className="font-black text-sky-700 underline">
                     {ts('privacyPolicy')}
                   </a>
                   . *

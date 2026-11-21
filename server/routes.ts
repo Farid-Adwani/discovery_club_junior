@@ -544,8 +544,8 @@ router.get(
     }
 
     // Events: the admin gets all of them (deleted ones too, for the cash book) and every registration;
-    // a parent gets the visible ones and their own children's registrations
-    const eventData = admin ? await adminEventData() : user?.role === 'parent' ? await parentEventData(students) : null;
+    // a parent gets the visible ones and their own children's registrations; everyone else the visible ones (Events page)
+    const eventData = admin ? await adminEventData() : user?.role === 'parent' ? await parentEventData(students) : await publicEventData();
 
     // The standard fee always follows the classes' current prices (a stored value can be outdated,
     // e.g. after class prices were re-synced), so it is recomputed on every load
@@ -2582,6 +2582,19 @@ async function parentEventData(children: Student[]) {
   return {
     events: events.map(({ notifiedAt: _n, ...e }) => sendMoney('events', { ...e, acceptedCount: counts.get(e.id) || 0 })),
     eventRegistrations: regs.filter((r) => byId.has(r.eventId)).map((r) => sendRegistration(r, byId.get(r.eventId), true))
+  };
+}
+
+/** Everyone else (visitors, coaches): the visible events and the number of places taken, nobody's registrations */
+async function publicEventData() {
+  const [eventSnap, counts] = await Promise.all([col('events').get(), acceptedCounts()]);
+  const events = eventSnap.docs
+    .filter(isLive)
+    .map((d) => readEvent(d.data()))
+    .filter((e) => e.visible);
+  return {
+    events: events.map(({ notifiedAt: _n, ...e }) => sendMoney('events', { ...e, acceptedCount: counts.get(e.id) || 0 })),
+    eventRegistrations: []
   };
 }
 

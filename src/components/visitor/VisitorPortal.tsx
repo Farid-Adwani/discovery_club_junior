@@ -15,7 +15,8 @@ import {
   Mail,
   Quote,
   ChevronDown,
-  Send
+  Send,
+  Facebook
 } from 'lucide-react';
 import { CLUB_PHOTOS } from '../../data/initialData';
 import { hasContactInfo, landingCoaches } from './sections';
@@ -33,14 +34,28 @@ import { FloatingDoodles, GearDoodle, Ribbon, SectionTitle, SparkDoodle, Sticker
 import { CircuitTraces, CodeArt, CompeteArt, ElectronicsArt, MechanicsArt, PanelScrews, RobotMascot } from './LabArt';
 import { CodeRobotGame } from './CodeRobotGame';
 import { HeroCollage } from './HeroCollage';
-import { useLanguage } from '../../i18n';
+import { useLanguage, useT } from '../../i18n';
+import { pagesMessages } from '../../i18n/messages/pages';
 import type { LandingSection } from '../../data/landing';
 import { takeReturn } from '../museum/returnTo';
 
 // The photo timeline (300+ photos listed) loads in its own chunk, after the top of the page
 const TimelineSection = lazy(() => import('./TimelineSection').then((m) => ({ default: m.TimelineSection })));
 
-export const VisitorPortal: React.FC = () => {
+/**
+ * The Courses (/cours) and Contact (/contact) pages are this same page with only some sections:
+ * the page's own section always shows, the others only if they are not hidden in Admin → Landing page.
+ */
+export type VisitorFocus = 'courses' | 'contact';
+const FOCUS: Record<VisitorFocus, { main: LandingSection; also: LandingSection[] }> = {
+  courses: { main: 'programs', also: ['how', 'cta'] },
+  contact: { main: 'contact', also: ['faq'] }
+};
+
+// "Free trial" on the Courses page opens the Contact page with that class already chosen
+let pendingTrialClass = '';
+
+export const VisitorPortal: React.FC<{ focus?: VisitorFocus }> = ({ focus }) => {
   // The hero waits for the start-up intro (if it is playing) and animates in as soon as it opens or is skipped
   const introOpened = useIntroOpened();
   const reduceMotion = useReducedMotion();
@@ -56,7 +71,12 @@ export const VisitorPortal: React.FC = () => {
   const { locale, lang } = useLanguage();
 
   const [dayFilter, setDayFilter] = useState<'all' | WeekDay>('all');
-  const [trial, setTrial] = useState({ parent: '', child: '', age: '', cls: '', phone: '' });
+  const [trial, setTrial] = useState(() => {
+    const cls = pendingTrialClass;
+    pendingTrialClass = '';
+    return { parent: '', child: '', age: '', cls, phone: '' };
+  });
+  const tp = useT(pagesMessages);
 
   // Countdown to the next challenge (date set in Admin → Landing page, 9:00 that day)
   const countdownTarget = (() => {
@@ -71,7 +91,11 @@ export const VisitorPortal: React.FC = () => {
   }, [countdownTarget]);
   const secondsLeft = Math.max(0, Math.floor((countdownTarget - now) / 1000));
   // Hidden by the admin; the countdown also hides without a date to come
-  const show = (section: LandingSection) => !landing.hidden?.includes(section) && (section !== 'countdown' || countdownTarget > now);
+  const show = (section: LandingSection) => {
+    if (focus && section === FOCUS[focus].main) return true;
+    if (focus && !FOCUS[focus].also.includes(section)) return false;
+    return !landing.hidden?.includes(section) && (section !== 'countdown' || countdownTarget > now);
+  };
   const timeLeft = {
     days: Math.floor(secondsLeft / 86400),
     hours: Math.floor(secondsLeft / 3600) % 24,
@@ -141,7 +165,18 @@ export const VisitorPortal: React.FC = () => {
   const waHref = whatsappLink(site, t('whatsappHello'));
   const canBookTrial = !!(contact.whatsapp || contact.email);
   const hasContact = hasContactInfo(site);
-  const goTrial = () => scrollToSection('contact');
+  // The trial form: further down this page, or on the Contact page
+  const trialHere = show('contact') && hasContact;
+  const trialReachable = trialHere || (focus === 'courses' && !landing.hidden?.includes('contact') && hasContact);
+  const goTrial = (cls = '') => {
+    if (trialHere) {
+      if (cls) setTrial((f) => ({ ...f, cls }));
+      scrollToSection('contact');
+    } else {
+      pendingTrialClass = cls;
+      navigateTo('contact');
+    }
+  };
 
   // The trial request goes out as a prefilled WhatsApp message (or an email): nothing is stored on the site
   const sendTrial = (e: React.FormEvent) => {
@@ -177,7 +212,22 @@ export const VisitorPortal: React.FC = () => {
   const cardSoft = 'rounded-[28px] bg-white soft-shadow';
 
   return (
-    <div className="space-y-24 pb-24 relative overflow-x-hidden bg-paper">
+    <div className={`${focus ? 'space-y-16' : 'space-y-24'} pb-24 relative overflow-x-hidden bg-paper`}>
+      {focus ? (
+        // Courses / Contact page: a short title instead of the hero
+        <section className="relative overflow-hidden bg-gradient-to-b from-[#fff3f5] via-paper to-paper">
+          <div className="absolute inset-0 paper-dots opacity-60" aria-hidden="true" />
+          <CircuitTraces sides="end" className="opacity-60" />
+          <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-2 md:pt-20 text-center space-y-4">
+            <p className="font-hand text-2xl text-brand leading-none">{tp(focus === 'courses' ? 'coursesKicker' : 'contactKicker')}</p>
+            <h1 className="font-display text-[2.4rem] sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.06] text-heading">
+              {tp(focus === 'courses' ? 'coursesTitle' : 'contactTitle')}
+            </h1>
+            <p className="text-base sm:text-lg text-muted leading-relaxed max-w-2xl mx-auto">{tp(focus === 'courses' ? 'coursesIntro' : 'contactIntro')}</p>
+          </div>
+        </section>
+      ) : (
+      <>
       {/* 1. HERO: light paper, serif headline with a handwritten word, the arch of photos */}
       <section className="relative overflow-hidden bg-gradient-to-b from-[#fff3f5] via-paper to-paper">
         <div className="absolute inset-0 paper-dots opacity-60" aria-hidden="true" />
@@ -254,8 +304,8 @@ export const VisitorPortal: React.FC = () => {
                   {t('registerChild')}
                   <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                 </button>
-                {canBookTrial && show('contact') && (
-                  <button onClick={goTrial} className="pill-outline px-6 py-3.5 text-sm">
+                {canBookTrial && trialHere && (
+                  <button onClick={() => goTrial()} className="pill-outline px-6 py-3.5 text-sm">
                     <Send className="w-4 h-4 rtl:-scale-x-100" />
                     {t('tryFree')}
                   </button>
@@ -309,6 +359,8 @@ export const VisitorPortal: React.FC = () => {
         <div className="-mt-20">
           <Ribbon words={ribbonWords} />
         </div>
+      )}
+      </>
       )}
 
       {/* 2. HOW IT WORKS: build, wire, code, compete */}
@@ -424,12 +476,9 @@ export const VisitorPortal: React.FC = () => {
                         {t('registerChild')}
                         <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                       </button>
-                      {canBookTrial && show('contact') && (
+                      {canBookTrial && trialReachable && (
                         <button
-                          onClick={() => {
-                            setTrial((f) => ({ ...f, cls: g.name }));
-                            goTrial();
-                          }}
+                          onClick={() => goTrial(g.name)}
                           className="pill-outline w-full justify-center py-2.5 text-sm"
                         >
                           {t('tryFree')}
@@ -678,6 +727,32 @@ export const VisitorPortal: React.FC = () => {
                 )}
               </div>
             </Reveal>
+          </div>
+        </section>
+      )}
+
+      {/* Contact page while no phone, WhatsApp, email or map is filled in: the Facebook page, the town and the hours */}
+      {focus === 'contact' && !hasContact && (
+        <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className={`${cardSoft} p-6 sm:p-8 space-y-4 text-center`}>
+            {contact.facebook && (
+              <a href={contact.facebook} target="_blank" rel="noopener noreferrer" className="pill-primary px-6 py-3 text-sm">
+                <Facebook className="w-4 h-4" />
+                {tp('contactFacebook')}
+              </a>
+            )}
+            {pick(address.city, lang) && (
+              <p className="flex items-center justify-center gap-2 text-sm font-semibold text-heading/80">
+                <MapPin className="w-4 h-4 text-brand" />
+                {[pick(address.street, lang), pick(address.city, lang)].filter(Boolean).join(', ')}
+              </p>
+            )}
+            {pick(site.openingHours, lang) && (
+              <p className="flex items-center justify-center gap-2 text-sm font-semibold text-heading/80">
+                <Clock className="w-4 h-4 text-brand" />
+                {pick(site.openingHours, lang)}
+              </p>
+            )}
           </div>
         </section>
       )}

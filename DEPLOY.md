@@ -154,7 +154,7 @@ sudo certbot --nginx -d example.tn -d www.example.tn     # HTTPS, renewed automa
 
 HTTPS is required for push notifications and for installing the site on a phone.
 
-Then update the domain in `index.html` (canonical URL, link preview), `public/robots.txt` and `public/sitemap.xml`, and rebuild.
+Then update the domain in `index.html` (canonical URL, link preview), `SITE_URL` in `src/utils/routes.ts`, `public/robots.txt` and `public/sitemap.xml`, and rebuild.
 
 ## 6. Updating the site
 

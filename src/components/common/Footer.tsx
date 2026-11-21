@@ -1,10 +1,13 @@
 import React from 'react';
 import { CLUB_PHOTOS } from '../../data/initialData';
 import { useApp } from '../../context/AppContext';
-import { AppPage } from '../../types';
 import { useLanguage, useT } from '../../i18n';
 import { commonMessages } from '../../i18n/messages/common';
 import { siteMessages } from '../../i18n/messages/site';
+import { pagesMessages } from '../../i18n/messages/pages';
+import { museumMessages } from '../../i18n/messages/museum';
+import type { PublicPage } from '../../utils/routes';
+import { PageLink } from './PageLink';
 import { mapsLink, pick, whatsappLink } from '../../data/siteContent';
 import { useLandingT, useSite } from './siteHooks';
 import { WhatsAppIcon } from '../visitor/WhatsAppButton';
@@ -19,17 +22,24 @@ const TRACKS = [
 
 /** Site footer: brand, quick links, programs and contact on a charcoal band with a crimson accent. */
 export const Footer: React.FC = () => {
-  const { navigateTo } = useApp();
+  const { landing } = useApp();
   const t = useT(commonMessages);
   const ts = useT(siteMessages);
+  const tp = useT(pagesMessages);
+  const tm = useT(museumMessages);
   const tv = useLandingT();
   const site = useSite();
   const { lang } = useLanguage();
   const { contact, address, openingHours } = site;
   const wa = whatsappLink(site, tv('whatsappHello'));
 
-  const links: { page: AppPage; label: string }[] = [
+  // Real links to every public page, on every page: search engines find them all from here
+  const links: { page: PublicPage; label: string }[] = [
     { page: 'home', label: t('portalPublic') },
+    { page: 'courses', label: t('navClasses') },
+    { page: 'events', label: tp('navEvents') },
+    ...(landing.hidden?.includes('museum') ? [] : [{ page: 'museum' as const, label: tm('name') }]),
+    { page: 'contact', label: ts('contactUs') },
     { page: 'register-parent', label: t('portalRegister') },
     { page: 'login', label: t('portalSignIn') }
   ];
@@ -85,12 +95,9 @@ export const Footer: React.FC = () => {
             <ul className="space-y-3 font-semibold">
               {links.map((l) => (
                 <li key={l.page}>
-                  <button
-                    onClick={() => navigateTo(l.page)}
-                    className="text-start text-white/70 hover:text-white transition-colors cursor-pointer"
-                  >
+                  <PageLink page={l.page} className="text-start text-white/70 hover:text-white transition-colors cursor-pointer">
                     {l.label}
-                  </button>
+                  </PageLink>
                 </li>
               ))}
             </ul>
@@ -166,12 +173,12 @@ export const Footer: React.FC = () => {
         <div className="mt-14 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/70">
           <p className="text-center sm:text-start">{t('copyright', { year: new Date().getFullYear() })}</p>
           <nav aria-label={ts('legal')} className="flex items-center gap-4 font-bold">
-            <button onClick={() => navigateTo('privacy')} className="hover:text-white transition-colors cursor-pointer">
+            <PageLink page="privacy" className="hover:text-white transition-colors cursor-pointer">
               {ts('privacyPolicy')}
-            </button>
-            <button onClick={() => navigateTo('terms')} className="hover:text-white transition-colors cursor-pointer">
+            </PageLink>
+            <PageLink page="terms" className="hover:text-white transition-colors cursor-pointer">
               {ts('terms')}
-            </button>
+            </PageLink>
           </nav>
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}

@@ -27,6 +27,7 @@ import {
 } from '../types';
 import type { LandingContent } from '../data/landing';
 import type { TimelineEdits } from '../data/timelineEdits';
+import { PAGE_PATHS, isPublicPage, pageForPath } from '../utils/routes';
 import {
   INITIAL_TRAINERS,
   INITIAL_GROUPS,
@@ -297,17 +298,31 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// The current page lives in the address bar (#/admin, #/login…) so a refresh reopens the same page
-const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent', 'privacy', 'terms', 'museum'];
+// The current page lives in the address bar so a refresh reopens the same page: public pages have
+// real addresses (/cours, /connexion… see utils/routes.ts), the private spaces "/#/admin…"
+const PAGES: AppPage[] = ['home', 'login', 'register-parent', 'admin', 'trainer', 'parent', 'privacy', 'terms', 'museum', 'courses', 'events', 'contact'];
 const PORTALS: AppPage[] = ['admin', 'trainer', 'parent'];
 
-function pageFromHash(): AppPage {
-  // "#/admin/students" -> "admin" (the admin dashboard keeps its open section in the rest)
+/** "#/admin/students" -> "admin" (the admin dashboard keeps its open section in the rest); also old "#/login" links */
+function pageInHash(): AppPage | null {
   const name = window.location.hash.replace(/^#\/?/, '').split('/')[0];
-  return (PAGES as string[]).includes(name) ? (name as AppPage) : 'home';
+  return (PAGES as string[]).includes(name) ? (name as AppPage) : null;
 }
 
-const hashFor = (page: AppPage) => (page === 'home' ? '' : `#/${page}`);
+function pageFromLocation(): AppPage {
+  return pageInHash() ?? pageForPath(window.location.pathname) ?? 'home';
+}
+
+const urlFor = (page: AppPage) => (isPublicPage(page) ? PAGE_PATHS[page] : `/#/${page}`);
+
+// Old "#/login" links and unknown addresses get the page's real address (without a new history entry)
+if (typeof window !== 'undefined') {
+  const page = pageFromLocation();
+  const inHash = pageInHash();
+  if ((inHash && isPublicPage(inHash)) || (!inHash && !pageForPath(window.location.pathname))) {
+    window.history.replaceState(null, '', urlFor(page) + window.location.search);
+  }
+}
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -324,7 +339,7 @@ function authErrorMessage(err: unknown): string {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Current user state (the session token is kept in the browser; the profile comes from /api/me)
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [currentPage, setCurrentPageState] = useState<AppPage>(pageFromHash);
+  const [currentPage, setCurrentPageState] = useState<AppPage>(pageFromLocation);
   const [role, setRoleState] = useState<UserRole>(() =>
     PORTALS.includes(currentPage) ? (currentPage as UserRole) : 'visitor'
   );
@@ -337,14 +352,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pageFromHistory.current = false;
       return;
     }
-    if (pageFromHash() !== currentPage || (currentPage === 'home' && window.location.hash)) {
-      window.history.pushState(null, '', hashFor(currentPage) || window.location.pathname + window.location.search);
+    if (pageFromLocation() !== currentPage || (currentPage === 'home' && window.location.hash)) {
+      window.history.pushState(null, '', urlFor(currentPage));
+    } else if (!isPublicPage(currentPage) && window.location.pathname !== '/') {
+      // A private space opened from a public page (e.g. a notification on /cours): "/cours#/parent" -> "/#/parent"
+      window.history.replaceState(null, '', '/' + window.location.hash);
     }
   }, [currentPage]);
   // Browser Back / Forward
   useEffect(() => {
     const onPop = () => {
-      const page = pageFromHash();
+      const page = pageFromLocation();
+      // An old "#/login" link opened in an open tab: show its real address
+      const inHash = pageInHash();
+      if (inHash && isPublicPage(inHash)) window.history.replaceState(null, '', urlFor(inHash) + window.location.search);
+      // A private space opened from a public page (a notification on /cours): "/cours#/parent" -> "/#/parent"
+      else if (inHash && window.location.pathname !== '/') window.history.replaceState(null, '', '/' + window.location.hash);
       if (page === currentPageRef.current) return;
       pageFromHistory.current = true;
       setCurrentPageState(page);
