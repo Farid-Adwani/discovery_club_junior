@@ -20,7 +20,10 @@ import {
   StockCategory,
   StockItem,
   StockLocation,
-  StockMovement
+  StockMovement,
+  ClubEvent,
+  EventRegistration,
+  EventRegistrationStatus
 } from '../types';
 import type { LandingContent } from '../data/landing';
 import type { TimelineEdits } from '../data/timelineEdits';
@@ -31,6 +34,7 @@ import {
 import { api, ApiError } from '../api';
 import { clearSessionToken, getAdminReturnToken, getSessionToken, setAdminReturnToken, setSessionToken } from '../session';
 import { translate } from '../i18n';
+import { askPushPermission } from '../utils/push';
 import { toastMessages } from '../i18n/messages/toasts';
 
 const tt = (key: keyof (typeof toastMessages)['en'], vars?: Record<string, string | number>) =>
@@ -67,7 +71,12 @@ interface ClubData {
   adminProfiles?: AdminProfile[];
   landing?: LandingContent;
   timelineEdits?: TimelineEdits;
+  events?: ClubEvent[];
+  eventRegistrations?: EventRegistration[];
 }
+
+/** What the admin's event form sends (money in DT; imageUrl may be a new data URL) */
+export type EventFormInput = Omit<ClubEvent, 'id' | 'createdAt' | 'updatedAt' | 'publishedAt' | 'notifiedAt' | 'acceptedCount' | 'deletedAt'>;
 
 /** What the admin's student form (add and edit) sends */
 export interface StudentFormInput {
@@ -260,8 +269,30 @@ interface AppContextType {
   addTrainer: (trainer: Trainer) => Promise<void>;
   updateTrainer: (trainer: Trainer) => Promise<void>;
 
-  // Event registration
-
+  // Club events
+  /** Admin: every event (deleted ones have deletedAt). Parent: visible events and the ones a child is registered for. */
+  events: ClubEvent[];
+  /** Admin: every registration. Parent: their own children's. */
+  eventRegistrations: EventRegistration[];
+  /** Admin: create (no id) or edit an event; returns the saved event, or null on error */
+  saveEvent: (data: EventFormInput, id?: string) => Promise<ClubEvent | null>;
+  setEventVisible: (eventId: string, visible: boolean) => Promise<boolean>;
+  /** Admin: tell every family about a visible event (bell + push) */
+  notifyEventFamilies: (eventId: string) => Promise<boolean>;
+  deleteEvent: (eventId: string) => Promise<boolean>;
+  /** Admin: register children directly (accepted by default) */
+  addEventStudents: (eventId: string, studentIds: string[], status?: 'accepted' | 'pending' | 'waitlist') => Promise<boolean>;
+  /** Admin: status, custom amount in DT (null = the event's fee) or the club's note */
+  updateEventRegistration: (registrationId: string, patch: { status?: EventRegistrationStatus; customFee?: number | null; adminNote?: string }) => Promise<boolean>;
+  /** Admin: give several registrations of an event the same status */
+  setEventRegistrationsStatus: (eventId: string, registrationIds: string[], status: EventRegistrationStatus) => Promise<boolean>;
+  saveEventPayment: (registrationId: string, data: { amountPaid: number; method?: PaymentMethod; paidAt?: string }) => Promise<boolean>;
+  markEventPaid: (eventId: string, registrationIds: string[], method?: PaymentMethod) => Promise<boolean>;
+  removeEventRegistration: (registrationId: string) => Promise<boolean>;
+  /** Parent: ask to register children for an event */
+  registerForEvent: (eventId: string, studentIds: string[], note?: string) => Promise<boolean>;
+  /** Parent: cancel a child's registration (before anything is paid) */
+  cancelEventRegistration: (eventId: string, studentId: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -403,6 +434,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Older attendance sheets the admin asked for; the server sends the last few months by default
   const sessionsFromRequest = useRef('');
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
+  const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [eventRegistrations, setEventRegistrations] = useState<EventRegistration[]>([]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     const id = Date.now().toString() + Math.random().toString().slice(2, 6);
@@ -464,6 +497,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStaffMembers(data.staffMembers || []);
       setAdminProfiles(data.adminProfiles || []);
       setMaterialRequests(data.materialRequests);
+      setEvents(data.events || []);
+      setEventRegistrations(data.eventRegistrations || []);
       setIsFirebaseConnected(true);
     } catch (err) {
       if (seq !== refreshSeq.current) return;
@@ -556,6 +591,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loginWithEmailPassword = async (email: string, pass: string): Promise<boolean> => {
     try {
       const { token } = await api<{ token: string }>('/auth/login', { method: 'POST', body: { email: email.trim(), password: pass } });
+      // Right after the click, so the browser shows its notifications prompt (the bell finishes the set-up)
+      void askPushPermission();
       await finishSignIn(token, 'welcomeBack');
       return true;
     } catch (err) {
@@ -607,6 +644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           method: 'POST',
           body: { ...form, email: data.parentEmail.trim(), password: data.password }
         });
+        void askPushPermission();
         await finishSignIn(token, 'accountCreated');
       }
     } catch (err) {
@@ -920,6 +958,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await mutate(() => api(`/admin/trainers/${trainer.id}`, { method: 'PUT', body: trainer }), tt('trainerUpdated', { name: trainer.name }));
   };
 
+  // ---------- events ----------
+
+  const saveEvent: AppContextType['saveEvent'] = async (data, id) => {
+    let saved: ClubEvent | null = null;
+    const ok = await mutate(async () => {
+      saved = await api<ClubEvent>(id ? `/admin/events/${id}` : '/admin/events', { method: id ? 'PUT' : 'POST', body: data });
+    }, id ? tt('eventSaved') : tt('eventCreated', { name: data.title }));
+    return ok ? saved : null;
+  };
+
+  const setEventVisible = (eventId: string, visible: boolean) =>
+    mutate(() => api(`/admin/events/${eventId}/visibility`, { method: 'PATCH', body: { visible } }), tt(visible ? 'eventShown' : 'eventHidden'));
+
+  const notifyEventFamilies = async (eventId: string) => {
+    let families = 0;
+    const ok = await mutate(async () => {
+      ({ families } = await api<{ families: number }>(`/admin/events/${eventId}/notify`, { method: 'POST' }));
+    });
+    if (ok) showToast(tt('eventFamiliesTold', { count: families }));
+    return ok;
+  };
+
+  const deleteEvent = (eventId: string) => mutate(() => api(`/admin/events/${eventId}`, { method: 'DELETE' }), tt('eventDeleted'));
+
+  const addEventStudents: AppContextType['addEventStudents'] = (eventId, studentIds, status = 'accepted') =>
+    mutate(
+      () => api(`/admin/events/${eventId}/registrations`, { method: 'POST', body: { studentIds, status } }),
+      tt('eventStudentsAdded', { count: studentIds.length })
+    );
+
+  const updateEventRegistration: AppContextType['updateEventRegistration'] = (registrationId, patch) =>
+    mutate(() => api(`/admin/event-registrations/${registrationId}`, { method: 'PATCH', body: patch }), tt('eventRegistrationUpdated'));
+
+  const setEventRegistrationsStatus: AppContextType['setEventRegistrationsStatus'] = (eventId, registrationIds, status) =>
+    mutate(() => api(`/admin/events/${eventId}/registrations`, { method: 'PATCH', body: { registrationIds, status } }), tt('eventRegistrationUpdated'));
+
+  const saveEventPayment: AppContextType['saveEventPayment'] = (registrationId, data) =>
+    mutate(() => api(`/admin/event-registrations/${registrationId}/payment`, { method: 'PUT', body: data }), tt('eventPaymentSaved'));
+
+  const markEventPaid: AppContextType['markEventPaid'] = (eventId, registrationIds, method = 'cash') =>
+    mutate(
+      () => api(`/admin/events/${eventId}/mark-paid`, { method: 'POST', body: { registrationIds, method } }),
+      tt('eventMarkedPaid', { count: registrationIds.length })
+    );
+
+  const removeEventRegistration = (registrationId: string) =>
+    mutate(() => api(`/admin/event-registrations/${registrationId}`, { method: 'DELETE' }), tt('eventRegistrationRemoved'));
+
+  const registerForEvent = (eventId: string, studentIds: string[], note?: string) =>
+    mutate(() => api(`/events/${eventId}/registrations`, { method: 'POST', body: { studentIds, note } }), tt('eventRequestSent'));
+
+  const cancelEventRegistration = (eventId: string, studentId: string) =>
+    mutate(() => api(`/events/${eventId}/registrations/${studentId}`, { method: 'DELETE' }), tt('eventRequestCancelled'));
+
   // ---------- landing page ----------
 
   const saveLanding = (content: LandingContent) =>
@@ -1014,6 +1106,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateOrderStatus,
         addTrainer,
         updateTrainer,
+        events,
+        eventRegistrations,
+        saveEvent,
+        setEventVisible,
+        notifyEventFamilies,
+        deleteEvent,
+        addEventStudents,
+        updateEventRegistration,
+        setEventRegistrationsStatus,
+        saveEventPayment,
+        markEventPaid,
+        removeEventRegistration,
+        registerForEvent,
+        cancelEventRegistration
       }}
     >
       {children}

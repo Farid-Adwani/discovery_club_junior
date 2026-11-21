@@ -43,6 +43,7 @@ import { shopMessages } from '../../i18n/messages/shop';
 import { ModalPortal } from '../common/ModalPortal';
 import { AddChildrenModal } from './AddChildrenModal';
 import { ViewAsFamilyPicker } from './ViewAsFamilyPicker';
+import { ParentEvents } from './ParentEvents';
 
 /* ---------- attendance & marks building blocks ---------- */
 
@@ -1158,6 +1159,9 @@ export const ParentPortal: React.FC = () => {
         </div>
         <WeekSchedule students={scheduleAll ? myChildren : [activeStudent]} showStudentNames={scheduleAll} />
       </section>
+
+      {/* Club events: register the children, follow the confirmation and the fee */}
+      <ParentEvents kids={myChildren} activeStudentId={activeStudent.id} readOnly={isAdminViewer} />
 
       {/* Main 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

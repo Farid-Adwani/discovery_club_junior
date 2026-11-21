@@ -11,6 +11,7 @@ import {
   Globe,
   Landmark,
   Package,
+  PartyPopper,
   Pencil,
   ShieldCheck,
   TrendingUp,
@@ -33,6 +34,7 @@ export type AdminSection =
   | 'groups'
   | 'attendance'
   | 'payments'
+  | 'events'
   | 'inventory'
   | 'team'
   | 'cash'
@@ -49,7 +51,8 @@ const TONES: Record<string, Tone> = {
   green: { bg: 'from-emerald-400 to-emerald-700', icon: 'text-white', ring: 'hover:ring-emerald-200' },
   pink: { bg: 'from-pink-400 to-pink-600', icon: 'text-white', ring: 'hover:ring-pink-200' },
   violet: { bg: 'from-violet-400 to-violet-700', icon: 'text-white', ring: 'hover:ring-violet-200' },
-  teal: { bg: 'from-teal-400 to-teal-700', icon: 'text-white', ring: 'hover:ring-teal-200' }
+  teal: { bg: 'from-teal-400 to-teal-700', icon: 'text-white', ring: 'hover:ring-teal-200' },
+  fuchsia: { bg: 'from-fuchsia-400 to-fuchsia-700', icon: 'text-white', ring: 'hover:ring-fuchsia-200' }
 };
 
 const inputCls =
@@ -67,6 +70,8 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
     staffMembers,
     adminProfiles,
     materialRequests,
+    events,
+    eventRegistrations,
     navigateTo,
     updateMyProfile,
     showToast
@@ -120,6 +125,10 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
   const toPrepare = orders.filter((o) => o.status === 'requested').length;
   const enrolled = students.filter((s) => s.status === 'accepted' && s.groupIds.length > 0).length;
   const openRequests = materialRequests.filter((r) => r.status === 'pending').length;
+  const liveEventIds = new Set(events.filter((e) => !e.deletedAt).map((e) => e.id));
+  const eventRequests = eventRegistrations.filter((r) => r.status === 'pending' && liveEventIds.has(r.eventId)).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingEvents = events.filter((e) => !e.deletedAt && (e.endDate || e.date) >= today).length;
 
   const tiles: { id: AdminSection; icon: React.ReactNode; tone: Tone; stat: string; alert?: boolean }[] = [
     { id: 'overview', icon: <TrendingUp className="w-6 h-6" />, tone: TONES.rose, stat: t('s_enrolled', { count: enrolled }) },
@@ -127,6 +136,13 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
     { id: 'groups', icon: <CalendarDays className="w-6 h-6" />, tone: TONES.ink, stat: t('s_classes', { count: groups.length }) },
     { id: 'attendance', icon: <ClipboardList className="w-6 h-6" />, tone: TONES.sky, stat: openRequests ? t('s_requests', { count: openRequests }) : t('s_open') },
     { id: 'payments', icon: <DollarSign className="w-6 h-6" />, tone: TONES.green, stat: unpaid ? t('s_unpaid', { count: unpaid }) : t('s_allPaid'), alert: unpaid > 0 },
+    {
+      id: 'events',
+      icon: <PartyPopper className="w-6 h-6" />,
+      tone: TONES.fuchsia,
+      stat: eventRequests ? t('s_eventRequests', { count: eventRequests }) : t('s_events', { count: upcomingEvents }),
+      alert: eventRequests > 0
+    },
     { id: 'inventory', icon: <Package className="w-6 h-6" />, tone: TONES.wine, stat: toPrepare ? t('s_orders', { count: toPrepare }) : t('s_noOrders'), alert: toPrepare > 0 },
     { id: 'team', icon: <Cake className="w-6 h-6" />, tone: TONES.pink, stat: t('s_team', { count: trainers.length + staffMembers.length + adminProfiles.length }) },
     { id: 'cash', icon: <Landmark className="w-6 h-6" />, tone: TONES.teal, stat: t('s_open') },

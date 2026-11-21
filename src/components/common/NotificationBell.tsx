@@ -12,11 +12,14 @@ import {
   CheckCircle2,
   ClipboardList,
   GraduationCap,
+  Hourglass,
   MessageCircle,
   Package,
   PackageCheck,
+  PartyPopper,
   ShoppingBag,
   Star,
+  Ticket,
   UserCheck,
   UserPlus,
   UserX,
@@ -26,6 +29,8 @@ import { useApp } from '../../context/AppContext';
 import { api } from '../../api';
 import { useLanguage, useT } from '../../i18n';
 import { notificationMessages, renderNotification, type NotificationLang, type NotificationType } from '../../i18n/messages/notifications';
+import { pendingPushPermission, pushCardSnoozed, pushSupported, snoozePushCard } from '../../utils/push';
+import { ModalPortal } from './ModalPortal';
 
 interface Notif {
   id: string;
@@ -52,19 +57,37 @@ const ICON: Record<NotificationType, { icon: React.ElementType; color: string }>
   attendance_mark: { icon: Star, color: '#c9a227' },
   schedule_added: { icon: CalendarPlus, color: '#0d9488' },
   class_cancelled: { icon: CalendarX, color: '#c11e3d' },
-  stock_low: { icon: AlertTriangle, color: '#d97706' }
+  stock_low: { icon: AlertTriangle, color: '#d97706' },
+  event_new: { icon: PartyPopper, color: '#a21caf' },
+  event_registration_new: { icon: Ticket, color: '#a21caf' },
+  event_registration_cancelled: { icon: XCircle, color: '#64748b' },
+  event_accepted: { icon: CheckCircle2, color: '#15803d' },
+  event_waitlist: { icon: Hourglass, color: '#d97706' },
+  event_refused: { icon: XCircle, color: '#c11e3d' },
+  event_payment_received: { icon: Banknote, color: '#15803d' }
 };
 
 type PushState = 'loading' | 'unsupported' | 'ios' | 'blocked' | 'off' | 'on' | 'noserver';
 const POLL_MS = 30_000;
 
-const pushSupported = () => typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIosBrowser = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !(navigator as Navigator & { standalone?: boolean }).standalone;
 
 function keyToBytes(base64: string) {
   const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(padded);
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+/**
+ * Was this browser's subscription made with the server's current key? One made with another key (an older
+ * version of the site, keys changed) is refused by the push service, so nothing would ever arrive.
+ */
+function madeWithKey(sub: PushSubscription, publicKey: string): boolean {
+  const used = sub.options?.applicationServerKey;
+  if (!used) return true; // the browser doesn't say: keep it
+  const a = new Uint8Array(used);
+  const b = keyToBytes(publicKey);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 /** Header bell: history of notifications (unread ones disappear from the count once seen) and push on this device. */
@@ -81,6 +104,8 @@ export const NotificationBell: React.FC<{ compact?: boolean }> = ({ compact }) =
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [push, setPush] = useState<PushState>('loading');
   const [busy, setBusy] = useState(false);
+  // "Turn on notifications?" card, shown by itself to someone who hasn't chosen yet on this browser
+  const [askCard, setAskCard] = useState(false);
   const known = useRef<Set<string> | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -142,18 +167,48 @@ export const NotificationBell: React.FC<{ compact?: boolean }> = ({ compact }) =
   }, [load]);
 
   // Push state of this device
-  const checkPush = useCallback(async () => {
-    if (!pushSupported()) return setPush(isIosBrowser() ? 'ios' : 'unsupported');
-    if (Notification.permission === 'denied') return setPush('blocked');
+  const checkPush = async (): Promise<PushState> => {
+    if (!pushSupported()) {
+      const state = isIosBrowser() ? 'ios' : 'unsupported';
+      setPush(state);
+      return state;
+    }
+    // The prompt opened at sign-in may still be on screen: wait for the answer
+    await pendingPushPermission();
+    if (Notification.permission === 'denied') {
+      setPush('blocked');
+      return 'blocked';
+    }
     const reg = await navigator.serviceWorker.getRegistration('/sw.js');
     const sub = await reg?.pushManager.getSubscription();
-    setPush(sub ? 'on' : 'off');
-    // Keep the server in sync (and in the current language)
-    if (sub && currentUser) api('/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON(), lang } }).catch(() => {});
+    if (sub) {
+      // Made with another key: replace it (permission is already given, so nothing is asked)
+      const { publicKey } = await api<{ publicKey: string | null }>('/push/key').catch(() => ({ publicKey: null }));
+      if (publicKey && !madeWithKey(sub, publicKey) && currentUser && !currentUser.viewedBy) return enablePush(true);
+      setPush('on');
+      // Keep the server in sync (and in the current language)
+      if (currentUser) api('/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON(), lang } }).catch(() => {});
+      return 'on';
+    }
+    // Allowed already on this browser (e.g. before signing out): register the device again without asking
+    if (Notification.permission === 'granted' && currentUser && !currentUser.viewedBy) return enablePush(true);
+    setPush('off');
+    return 'off';
+  };
+  useEffect(() => {
+    if (!currentUser) return;
+    let stale = false;
+    checkPush().then((state) => {
+      // Nobody chose yet on this browser: offer it (never to an admin looking at a parent's account)
+      if (!stale && state === 'off' && !currentUser.viewedBy && Notification.permission === 'default' && !pushCardSnoozed()) setAskCard(true);
+    });
+    return () => {
+      stale = true;
+    };
   }, [currentUser?.uid, lang]);
   useEffect(() => {
-    if (currentUser) checkPush();
-  }, [currentUser?.uid, lang]);
+    if (push !== 'off') setAskCard(false);
+  }, [push]);
 
   // Close on outside click / Escape
   useEffect(() => {
@@ -191,23 +246,38 @@ export const NotificationBell: React.FC<{ compact?: boolean }> = ({ compact }) =
     else window.location.hash = link;
   };
 
-  const enablePush = async () => {
+  /** Asks the browser (if needed) and registers this device. `quiet`: started by the site itself, no error message. */
+  const enablePush = async (quiet = false): Promise<PushState> => {
     setBusy(true);
+    let state: PushState = 'off';
     try {
       const { publicKey } = await api<{ publicKey: string | null }>('/push/key');
-      if (!publicKey) return setPush('noserver');
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return setPush(permission === 'denied' ? 'blocked' : 'off');
-      const reg = await navigator.serviceWorker.register('/sw.js');
-      await navigator.serviceWorker.ready;
-      const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(publicKey) }));
-      await api('/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON(), lang } });
-      setPush('on');
+      if (!publicKey) state = 'noserver';
+      else {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') state = permission === 'denied' ? 'blocked' : 'off';
+        else {
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+          let sub = await reg.pushManager.getSubscription();
+          if (sub && !madeWithKey(sub, publicKey)) {
+            // Left from an older key: the server forgets it, the browser drops it, and a new one is made below
+            await api('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } }).catch(() => {});
+            await sub.unsubscribe().catch(() => {});
+            sub = null;
+          }
+          sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(publicKey) });
+          await api('/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON(), lang } });
+          state = 'on';
+        }
+      }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Push error', 'error');
+      if (!quiet) showToast(err instanceof Error ? err.message : 'Push error', 'error');
     } finally {
       setBusy(false);
     }
+    setPush(state);
+    return state;
   };
 
   const disablePush = async () => {
@@ -358,7 +428,7 @@ export const NotificationBell: React.FC<{ compact?: boolean }> = ({ compact }) =
                   </div>
                 </div>
                 {push === 'off' && (
-                  <button onClick={enablePush} disabled={busy} className="px-3 py-1.5 btn-duo-green text-[11px] font-black cursor-pointer disabled:opacity-60 shrink-0">
+                  <button onClick={() => enablePush()} disabled={busy} className="px-3 py-1.5 btn-duo-green text-[11px] font-black cursor-pointer disabled:opacity-60 shrink-0">
                     {t('pushEnable')}
                   </button>
                 )}
@@ -377,6 +447,56 @@ export const NotificationBell: React.FC<{ compact?: boolean }> = ({ compact }) =
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ModalPortal>
+        <AnimatePresence>
+          {askCard && !open && (
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              role="dialog"
+              aria-labelledby="push-ask-title"
+              className="fixed z-[60] bottom-4 inset-x-4 sm:inset-x-auto sm:end-4 sm:w-[380px] rounded-3xl bg-white border-2 border-slate-200 shadow-2xl p-4"
+            >
+              <div className="flex items-start gap-3">
+                <span className="w-11 h-11 rounded-2xl bg-[#191919] text-white grid place-items-center shrink-0">
+                  <BellRing className="w-5 h-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h4 id="push-ask-title" className="text-sm font-black text-slate-900">
+                    {t('askTitle')}
+                  </h4>
+                  <p className="text-xs font-semibold text-slate-500 leading-snug mt-0.5">
+                    {currentUser.roles.includes('admin') || currentUser.roles.includes('trainer') ? t('askBodyTeam') : t('askBodyFamily')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  onClick={() => {
+                    snoozePushCard();
+                    setAskCard(false);
+                  }}
+                  className="px-3 py-2 btn-duo-secondary text-xs font-bold cursor-pointer"
+                >
+                  {t('askLater')}
+                </button>
+                <button
+                  onClick={async () => {
+                    setAskCard(false);
+                    if ((await enablePush()) === 'off') snoozePushCard();
+                  }}
+                  disabled={busy}
+                  className="px-4 py-2 btn-duo-green text-xs font-black flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                >
+                  <BellRing className="w-4 h-4" /> {t('pushEnable')}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </ModalPortal>
     </div>
   );
 };

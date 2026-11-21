@@ -85,14 +85,72 @@ export interface Trainer {
 
 export type CashType = 'income' | 'expense';
 
-/** A category of the club cash book. `system` ones are filled automatically (fees, shop) and can't be deleted. */
+/** A category of the club cash book. `system` ones are filled automatically (fees, shop, events) and can't be deleted. */
 export interface CashCategory {
   id: string;
   name: string;
   type: CashType;
   color: string; // hex
-  system?: 'tuition' | 'shop';
+  system?: 'tuition' | 'shop' | 'event';
   deletedAt?: string; // archived: kept so old entries still show their category
+}
+
+/**
+ * A club event (competition, trip, workshop, camp…) children can be registered for.
+ * Hidden events are drafts only the admin sees; visible ones are shown to parents.
+ */
+export interface ClubEvent {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl?: string; // our upload; missing = the default event picture
+  date: string; // YYYY-MM-DD, first day
+  endDate?: string; // YYYY-MM-DD, last day of an event over several days
+  startTime?: string; // HH:MM
+  endTime?: string; // HH:MM
+  location?: string;
+  fee: number; // DT per child, 0 = free
+  capacity?: number; // accepted children at most; missing = no limit
+  registrationDeadline?: string; // YYYY-MM-DD, last day parents can register
+  visible: boolean; // shown to parents
+  registrationOpen: boolean; // parents can register (while visible, before the deadline and the event)
+  publishedAt?: string; // first time it was made visible
+  notifiedAt?: string; // admin only: last time every family was told about it
+  createdAt: string;
+  updatedAt?: string;
+  /** Parents only: number of children already accepted (to show the places left) */
+  acceptedCount?: number;
+  /** Admin only: the event was deleted (kept so its payments still show in the cash book) */
+  deletedAt?: string;
+}
+
+/** pending = asked by a parent, waiting for the club; waitlist = no place yet */
+export const EVENT_REGISTRATION_STATUSES = ['pending', 'accepted', 'waitlist', 'refused', 'cancelled'] as const;
+export type EventRegistrationStatus = (typeof EVENT_REGISTRATION_STATUSES)[number];
+export type EventPaymentStatus = 'free' | 'paid' | 'partial' | 'unpaid';
+
+/** One child registered for one event (`event_registrations`, id = `${eventId}_${studentId}`). */
+export interface EventRegistration {
+  id: string;
+  eventId: string;
+  studentId: string;
+  studentName: string;
+  parentName?: string;
+  parentPhone?: string;
+  status: EventRegistrationStatus;
+  /** Who registered the child: the parent (from their space) or the club */
+  source: 'parent' | 'admin';
+  /** DT: the event's fee, or the custom amount (discount, free place) */
+  amountDue: number;
+  customFee?: number; // DT, set by the admin; missing = the event's fee
+  amountPaid: number; // DT
+  method?: PaymentMethod;
+  paidAt?: string; // YYYY-MM-DD
+  parentNote?: string; // written by the parent when registering
+  adminNote?: string; // only the club sees it
+  createdAt: string;
+  updatedAt?: string;
+  statusChangedAt?: string;
 }
 
 /** Money in or out of the club cash book, entered by an admin */

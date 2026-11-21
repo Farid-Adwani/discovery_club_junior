@@ -14,7 +14,10 @@ export const MONEY_FIELDS = {
   payments: ['amountDue', 'amountPaid'],
   cash_entries: ['amount'],
   products: ['price'],
-  hoodie_distributions: ['price']
+  hoodie_distributions: ['price'],
+  events: ['fee'],
+  // amountDue is never stored (it follows the event's fee), only computed before sending
+  event_registrations: ['customFee', 'amountPaid', 'amountDue']
 } as const;
 
 export type MoneyCollection = keyof typeof MONEY_FIELDS;

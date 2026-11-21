@@ -11,9 +11,9 @@ The same app is the club's public website (for parents looking for a club) and t
 | Role | What they get |
 | --- | --- |
 | **Visitor** | Public site: programs and classes with ages, achievements, coaches, FAQ, contact and WhatsApp, free trial booking, map, privacy policy and terms. |
-| **Parent** | Signs up with their children, follows attendance and marks (out of 20), the weekly schedule, notifications, shop orders, and edits contact details and photos. |
+| **Parent** | Signs up with their children, follows attendance and marks (out of 20), the weekly schedule, notifications, shop orders, registers children for club events, and edits contact details and photos. |
 | **Coach** | Their own classes and week, attendance sheets with marks and remarks, material requests to the office. |
-| **Admin** | Everything: students and waitlist, classes and schedule, attendance, monthly payments and arrears, cash book, stock and inventory, shop, team accounts and the editable landing page. |
+| **Admin** | Everything: students and waitlist, classes and schedule, attendance, monthly payments and arrears, events and their registrations, cash book, stock and inventory, shop, team accounts and the editable landing page. |
 
 Roles are decided on the server and never taken from the browser. Admins are the emails in `ADMIN_EMAILS` (the owners) plus accounts promoted on the Team page. Coaches are accounts whose email matches a coach record. Everyone else is a parent.
 
@@ -23,7 +23,8 @@ Roles are decided on the server and never taken from the browser. Admins are the
 - **Classes**: day, time, room, capacity, ages, level, image, several coaches, conflict warnings, one-off courses, events and cancellations.
 - **Attendance**: one sheet per class and date, marks /20, teaching remarks, make-up children and trial guests, printable sheets. Parents are notified of absences and new marks.
 - **Payments**: monthly fees per child, partial payments, scholarships, arrears, a 12-month trend, CSV export, and "mark several as paid" for siblings.
-- **Cash book**: income and expenses by category. Tuition and shop sales are counted automatically.
+- **Events**: competitions, trips, workshops and camps with a fee per child, places, a registration deadline and a picture. The admin shows or hides each event, can tell every family about it, registers children directly or answers the parents' requests (confirm, waiting list, not accepted), gives discounts or free places, and records payments. Confirmed events appear in the children's week schedule.
+- **Cash book**: income and expenses by category. Tuition, shop sales and event fees are counted automatically.
 - **Stock**: equipment with places, states (in use, repair, broken, lost), low-stock alerts and coach requests.
 - **Shop**: club merchandise with sizes and stock. Orders go from requested to ready to picked up.
 - **Notifications**: a bell in the app plus Web Push on phones and computers, in each person's language.

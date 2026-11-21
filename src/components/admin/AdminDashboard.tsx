@@ -15,12 +15,13 @@ import { PriceModal } from './PriceModal';
 import { AttendanceManager } from './AttendanceManager';
 import { AdminNav } from './AdminNav';
 import { CashManager } from './CashManager';
+import { EventsManager } from './EventsManager';
 import { StockManager } from './StockManager';
 import { StudentsManager } from './StudentsManager';
 import { AdminHub, AdminSection } from './AdminHub';
 import { hubMessages } from '../../i18n/messages/hub';
 
-const ADMIN_SECTIONS = ['overview', 'students', 'groups', 'attendance', 'payments', 'cash', 'stock', 'inventory', 'team', 'site'] as const;
+const ADMIN_SECTIONS = ['overview', 'students', 'groups', 'attendance', 'payments', 'events', 'cash', 'stock', 'inventory', 'team', 'site'] as const;
 import { ClassesManager } from './ClassesManager';
 import { TeamManager } from './TeamManager';
 import { LandingEditor } from './LandingEditor';
@@ -316,6 +317,9 @@ export const AdminDashboard: React.FC = () => {
           onEditPrice={setEditingStudentPrice}
         />
       )}
+
+      {/* Club events: registrations and fees */}
+      {adminTab === 'events' && <EventsManager />}
 
       {/* Club cash book */}
       {adminTab === 'cash' && <CashManager />}

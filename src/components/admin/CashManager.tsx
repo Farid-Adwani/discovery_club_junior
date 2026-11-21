@@ -18,6 +18,7 @@ import {
   ShoppingBag,
   Table2,
   Tags,
+  Ticket,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -34,7 +35,8 @@ import { addMonths, currentMonth, monthLabel, monthRange } from '../../utils/pay
 import { fromISODate, toISODate } from '../../utils/schedule';
 import { ModalPortal } from '../common/ModalPortal';
 
-type Source = 'manual' | 'tuition' | 'shop';
+type Source = 'manual' | 'tuition' | 'shop' | 'event';
+const SOURCES: Source[] = ['manual', 'tuition', 'shop', 'event'];
 type Mode = 'month' | 'year';
 /** One line of the cash book: an entry typed by an admin, or money that came in through fees or the shop */
 type Line = {
@@ -87,7 +89,7 @@ function useCountUp(target: number, duration = 600): number {
 
 /** Admin "Caisse" tab: the club's money in and out, by month or year, with categories, filters and a PDF report. */
 export const CashManager: React.FC = () => {
-  const { payments, orders, products, students, deletedStudents, currentUser, showToast } = useApp();
+  const { payments, orders, products, students, deletedStudents, events, eventRegistrations, currentUser, showToast } = useApp();
   const t = useT(cashMessages);
   const { lang, locale } = useLanguage();
   const confirm = useConfirm();
@@ -137,7 +139,7 @@ export const CashManager: React.FC = () => {
   // ---------- filters ----------
   const [typeFilter, setTypeFilter] = useState<'all' | CashType>('all');
   const [catFilter, setCatFilter] = useState<string[]>([]);
-  const [sources, setSources] = useState<Record<Source, boolean>>({ manual: true, tuition: true, shop: true });
+  const [sources, setSources] = useState<Record<Source, boolean>>({ manual: true, tuition: true, shop: true, event: true });
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Partial<CashEntry> | null>(null);
   const [showCats, setShowCats] = useState(false);
@@ -146,7 +148,7 @@ export const CashManager: React.FC = () => {
 
   // ---------- all lines ----------
   const catById = useMemo(() => new Map((categories || []).map((c) => [c.id, c])), [categories]);
-  const systemCat = (s: 'tuition' | 'shop') => (categories || []).find((c) => c.system === s)?.id || `cat-${s}`;
+  const systemCat = (s: 'tuition' | 'shop' | 'event') => (categories || []).find((c) => c.system === s)?.id || `cat-${s}`;
   const studentName = useMemo(() => {
     const m = new Map([...students, ...deletedStudents].map((s) => [s.id, s.studentName]));
     return (id: string) => m.get(id) || '';
@@ -182,8 +184,24 @@ export const CashManager: React.FC = () => {
         source: 'shop'
       });
     }
+    // Event fees: counted on the day they were paid (deleted events too: the money was received)
+    const eventById = new Map(events.map((e) => [e.id, e]));
+    for (const r of eventRegistrations) {
+      if (r.amountPaid <= 0) continue;
+      const ev = eventById.get(r.eventId);
+      out.push({
+        id: `evt-${r.id}`,
+        type: 'income',
+        amount: r.amountPaid,
+        date: r.paidAt || ev?.date || r.createdAt.slice(0, 10),
+        categoryId: systemCat('event'),
+        label: `${studentName(r.studentId) || r.studentName} · ${ev?.title || ''}`,
+        method: r.method,
+        source: 'event'
+      });
+    }
     return out.sort((a, b) => b.date.localeCompare(a.date) || a.label.localeCompare(b.label));
-  }, [entries, payments, orders, products, categories, studentName, locale]);
+  }, [entries, payments, orders, products, events, eventRegistrations, categories, studentName, locale]);
 
   const sum = (list: Line[], type: CashType) => list.filter((l) => l.type === type).reduce((s, l) => s + l.amount, 0);
   const inPeriod = (key: string) => lines.filter((l) => l.date.startsWith(key));
@@ -199,6 +217,7 @@ export const CashManager: React.FC = () => {
   const cashOnHand = sum(upToEnd, 'income') - sum(upToEnd, 'expense');
   const tuitionTotal = periodLines.filter((l) => l.source === 'tuition').reduce((s, l) => s + l.amount, 0);
   const shopTotal = periodLines.filter((l) => l.source === 'shop').reduce((s, l) => s + l.amount, 0);
+  const eventTotal = periodLines.filter((l) => l.source === 'event').reduce((s, l) => s + l.amount, 0);
   const monthsInPeriod = mode === 'year' ? (year === currentMonth().slice(0, 4) ? Number(currentMonth().slice(5)) : 12) : 1;
 
   const breakdown = (list: Line[], type: CashType) => {
@@ -222,7 +241,7 @@ export const CashManager: React.FC = () => {
   }, [periodLines, sources, typeFilter, catFilter, search]);
   const fIncome = sum(filtered, 'income');
   const fExpense = sum(filtered, 'expense');
-  const filtersOn = typeFilter !== 'all' || catFilter.length > 0 || !sources.manual || !sources.tuition || !sources.shop || !!search.trim();
+  const filtersOn = typeFilter !== 'all' || catFilter.length > 0 || SOURCES.some((s) => !sources[s]) || !!search.trim();
 
   // Chart: the 12 months of the year, or the last 12 months
   const chartMonths = mode === 'year' ? monthRange(`${year}-01`, `${year}-12`) : monthRange(addMonths(month, -11), month);
@@ -239,7 +258,7 @@ export const CashManager: React.FC = () => {
 
   const catName = (id: string) => catById.get(id)?.name || '—';
   const catColor = (id: string) => catById.get(id)?.color || '#94a3b8';
-  const sourceLabel = (s: Source) => (s === 'tuition' ? t('srcTuition') : s === 'shop' ? t('srcShop') : t('srcManual'));
+  const sourceLabel = (s: Source) => (s === 'tuition' ? t('srcTuition') : s === 'shop' ? t('srcShop') : s === 'event' ? t('srcEvent') : t('srcManual'));
 
   // ---------- actions ----------
   const openNew = (type: CashType) => {
@@ -393,8 +412,8 @@ export const CashManager: React.FC = () => {
             { icon: <PiggyBank className="w-4 h-4" />, label: t('cashOnHand'), value: `${cashOnHand < 0 ? '−' : ''}${fmt(Math.abs(aCash))} DT`, sub: t('cashOnHandSub') },
             {
               icon: <GraduationCap className="w-4 h-4" />,
-              label: `${t('tuition')} · ${t('shop')}`,
-              value: `${fmt(tuitionTotal)} · ${fmt(shopTotal)}`,
+              label: `${t('srcTuition')} · ${t('srcShop')} · ${t('srcEvent')}`,
+              value: `${fmt(tuitionTotal)} · ${fmt(shopTotal)} · ${fmt(eventTotal)}`,
               sub: mode === 'year' ? `${t('avgMonth')}: ${fmt((totals.income - totals.expense) / Math.max(1, monthsInPeriod))} DT` : t('entriesCount', { count: periodLines.length })
             }
           ].map((s) => (
@@ -465,7 +484,7 @@ export const CashManager: React.FC = () => {
           <span className="text-[10px] font-black uppercase tracking-wide text-slate-400 me-1 flex items-center gap-1">
             <Filter className="w-3 h-3" /> {t('sources')}
           </span>
-          {(['manual', 'tuition', 'shop'] as const).map((s) => (
+          {SOURCES.map((s) => (
             <button
               key={s}
               onClick={() => setSources((x) => ({ ...x, [s]: !x[s] }))}
@@ -474,7 +493,7 @@ export const CashManager: React.FC = () => {
                 sources[s] ? 'bg-[#191919] text-white border-[#191919]' : 'bg-white text-slate-400 border-slate-200 line-through'
               }`}
             >
-              {s === 'manual' ? <Wallet className="w-3 h-3" /> : s === 'tuition' ? <GraduationCap className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+              {s === 'manual' ? <Wallet className="w-3 h-3" /> : s === 'tuition' ? <GraduationCap className="w-3 h-3" /> : s === 'event' ? <Ticket className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
               {sourceLabel(s)}
             </button>
           ))}
@@ -503,7 +522,7 @@ export const CashManager: React.FC = () => {
               onClick={() => {
                 setTypeFilter('all');
                 setCatFilter([]);
-                setSources({ manual: true, tuition: true, shop: true });
+                setSources({ manual: true, tuition: true, shop: true, event: true });
                 setSearch('');
               }}
               className="ms-1 px-2 py-1 text-[11px] font-black text-[#c11e3d] hover:underline cursor-pointer"
@@ -792,8 +811,8 @@ export const CashManager: React.FC = () => {
   function describeFilters() {
     const parts: string[] = [];
     if (typeFilter !== 'all') parts.push(t(typeFilter));
-    const off = (['manual', 'tuition', 'shop'] as const).filter((s) => sources[s]);
-    if (off.length < 3) parts.push(off.map(sourceLabel).join(' + '));
+    const on = SOURCES.filter((s) => sources[s]);
+    if (on.length < SOURCES.length) parts.push(on.map(sourceLabel).join(' + '));
     if (catFilter.length) parts.push(catFilter.map(catName).join(', '));
     if (search.trim()) parts.push(`“${search.trim()}”`);
     return parts.join(' · ');

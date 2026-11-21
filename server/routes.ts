@@ -47,10 +47,14 @@ import type {
   StockItem,
   StockLocation,
   StockMovement,
-  RequestComment
+  RequestComment,
+  ClubEvent,
+  EventRegistration,
+  EventRegistrationStatus
 } from '../src/types/index.js';
-import { WEEK_DAYS, GROUP_LEVELS } from '../src/types/index.js';
+import { WEEK_DAYS, GROUP_LEVELS, EVENT_REGISTRATION_STATUSES } from '../src/types/index.js';
 import { UNAVAILABLE_STATES, unitBreakdown, unitsField } from '../src/utils/stock.js';
+import { canRequest, isActiveRegistration, registrationState } from '../src/utils/events.js';
 import {
   LANDING_LANGS,
   LANDING_LIMITS,
@@ -539,6 +543,10 @@ router.get(
       ({ students, sessions, orders, scheduleItems } = await parentData);
     }
 
+    // Events: the admin gets all of them (deleted ones too, for the cash book) and every registration;
+    // a parent gets the visible ones and their own children's registrations
+    const eventData = admin ? await adminEventData() : user?.role === 'parent' ? await parentEventData(students) : null;
+
     // The standard fee always follows the classes' current prices (a stored value can be outdated,
     // e.g. after class prices were re-synced), so it is recomputed on every load
     const classPrice = new Map(groups.map((g) => [g.id, g.pricePerMonth]));
@@ -581,6 +589,7 @@ router.get(
       ...(admin
         ? { payments: payments.map((p) => sendMoney('payments', p)), deletedStudents: deletedStudents.map((st) => sendMoney('students', st)) }
         : {}),
+      ...(eventData || {}),
       ...(stock || {})
     });
   })
@@ -1486,6 +1495,13 @@ adminRouter.get(
       await batch.commit();
       snap = await col('cash_categories').get();
     }
+    // Event fees came later than the first categories: added to cash books created before them
+    if (!snap.docs.some((d) => d.get('system') === 'event')) {
+      const lang = req.query.lang === 'fr' || req.query.lang === 'ar' ? req.query.lang : 'en';
+      const name = { en: 'Event fees', fr: 'Frais d’événements', ar: 'رسوم الفعاليات' }[lang];
+      await col('cash_categories').doc('cat-event').set({ id: 'cat-event', type: 'income', name, color: '#a21caf', system: 'event' });
+      snap = await col('cash_categories').get();
+    }
     const categories = snap.docs.map((d) => d.data() as CashCategory);
     res.json({ categories, entries: (await listMoney<CashEntry>('cash_entries')).map((e) => sendMoney('cash_entries', e)) });
   })
@@ -1535,7 +1551,7 @@ async function parseCashEntry(b: Record<string, unknown>) {
   const category = liveData<CashCategory>(await col('cash_categories').doc(str(b.categoryId, 'Category', { max: 100 })).get());
   if (!category) throw new HttpError(404, 'Category not found.');
   if (category.type !== type) throw new HttpError(400, 'This category is for the other type of entry.');
-  // Fees and shop sales come from the Payments and Shop pages; adding them here would count them twice
+  // Fees, shop sales and event fees come from their own pages; adding them here would count them twice
   if (category.system) throw new HttpError(400, 'This category is filled automatically.');
   const date = str(b.date, 'Date', { max: 10 });
   if (!DATE_RE.test(date)) throw new HttpError(400, 'Date is invalid.');
@@ -2459,6 +2475,542 @@ adminRouter.delete(
   '/products/:id',
   ah(async (req, res) => {
     await softDelete(col('products').doc(req.params.id), req);
+    res.json({ ok: true });
+  })
+);
+
+// ---------- events ----------
+// The admin creates events (shown to parents or hidden), registers children or accepts the parents' requests,
+// and records what each family paid. Money received is income of the cash book (category "Event fees").
+
+/** A registration as stored: money in millimes, no amountDue (it follows the event's fee) */
+type StoredRegistration = Omit<EventRegistration, 'amountDue'> & { deletedAt?: string };
+
+const registrationRef = (eventId: string, studentId: string) => col('event_registrations').doc(`${eventId}_${studentId}`);
+
+/** "October 24, 2026" (events of the first version of the site) -> "2026-10-24"; '' when unreadable */
+function legacyDate(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  if (DATE_RE.test(value)) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * A stored event with money in millimes and every flag set. Only the known fields are kept, so events of the
+ * first version of the site (date as text, `time`, `spotsLeft`, `registeredUids`) come out in today's shape:
+ * hidden until the admin shows them. Saving one from the form rewrites it in that shape.
+ */
+function readEvent(raw: Record<string, unknown>): ClubEvent {
+  const e = readMoney('events', raw) as unknown as ClubEvent & { time?: string };
+  const [legacyStart, legacyEnd] = typeof e.time === 'string' ? e.time.split(/\s*[-–]\s*/) : [];
+  const time = (v: unknown) => (typeof v === 'string' && TIME_RE.test(v.padStart(5, '0')) ? v.padStart(5, '0') : undefined);
+  const startTime = time(e.startTime) ?? time(legacyStart);
+  const endTime = time(e.endTime) ?? (startTime ? time(legacyEnd) : undefined);
+  const optional = <K extends keyof ClubEvent>(k: K) => (e[k] !== undefined && e[k] !== null && e[k] !== '' ? { [k]: e[k] } : {});
+  return {
+    id: e.id,
+    title: String(e.title || ''),
+    ...optional('description'),
+    ...optional('imageUrl'),
+    date: legacyDate(e.date) || today(),
+    ...(legacyDate(e.endDate) ? { endDate: legacyDate(e.endDate) } : {}),
+    ...(startTime ? { startTime } : {}),
+    ...(endTime ? { endTime } : {}),
+    ...optional('location'),
+    fee: Number(e.fee) || 0,
+    ...(Number(e.capacity) > 0 ? { capacity: Number(e.capacity) } : {}),
+    ...(legacyDate(e.registrationDeadline) ? { registrationDeadline: legacyDate(e.registrationDeadline) } : {}),
+    visible: e.visible === true,
+    registrationOpen: e.registrationOpen !== false,
+    ...optional('publishedAt'),
+    ...optional('notifiedAt'),
+    createdAt: e.createdAt || '',
+    ...optional('updatedAt'),
+    ...optional('deletedAt')
+  };
+}
+
+async function getEvent(id: string): Promise<ClubEvent | undefined> {
+  const data = liveData<Record<string, unknown>>(await col('events').doc(id).get());
+  return data ? readEvent(data) : undefined;
+}
+
+const readRegistration = (raw: Record<string, unknown>) => readMoney('event_registrations', raw) as unknown as StoredRegistration;
+
+/** What a child owes for an event (millimes): the custom amount, or the event's fee */
+const dueFor = (r: StoredRegistration, event?: ClubEvent) => r.customFee ?? event?.fee ?? 0;
+
+/** A registration as the API sends it: with what is due, money in dinars. Parents never see the club's note. */
+function sendRegistration(r: StoredRegistration, event: ClubEvent | undefined, forParent = false): EventRegistration {
+  const { deletedAt: _deleted, adminNote, ...rest } = r;
+  return sendMoney('event_registrations', { ...rest, ...(!forParent && adminNote ? { adminNote } : {}), amountDue: dueFor(r, event) });
+}
+
+/** Number of children accepted for each event */
+async function acceptedCounts(): Promise<Map<string, number>> {
+  const snap = await col('event_registrations').where('status', '==', 'accepted').get();
+  const counts = new Map<string, number>();
+  snap.docs.filter(isLive).forEach((d) => counts.set(d.get('eventId'), (counts.get(d.get('eventId')) || 0) + 1));
+  return counts;
+}
+
+async function adminEventData() {
+  const [eventSnap, regSnap] = await Promise.all([col('events').get(), col('event_registrations').get()]);
+  const events = eventSnap.docs.map((d) => readEvent(d.data()));
+  const byId = new Map(events.map((e) => [e.id, e]));
+  return {
+    events: events.map((e) => sendMoney('events', e)),
+    eventRegistrations: regSnap.docs.filter(isLive).map((d) => sendRegistration(readRegistration(d.data()), byId.get(d.get('eventId'))))
+  };
+}
+
+/** Visible events (with the number of places taken), plus hidden ones a child is still registered for */
+async function parentEventData(children: Student[]) {
+  const ids = children.map((c) => c.id);
+  const [eventSnap, regs, counts] = await Promise.all([
+    col('events').get(),
+    whereIn<Record<string, unknown>>('event_registrations', 'studentId', ids).then((list) => list.map(readRegistration)),
+    acceptedCounts()
+  ]);
+  const events = eventSnap.docs
+    .filter(isLive)
+    .map((d) => readEvent(d.data()))
+    .filter((e) => e.visible || regs.some((r) => r.eventId === e.id && isActiveRegistration(r)));
+  const byId = new Map(events.map((e) => [e.id, e]));
+  return {
+    events: events.map(({ notifiedAt: _n, ...e }) => sendMoney('events', { ...e, acceptedCount: counts.get(e.id) || 0 })),
+    eventRegistrations: regs.filter((r) => byId.has(r.eventId)).map((r) => sendRegistration(r, byId.get(r.eventId), true))
+  };
+}
+
+/** A date from a form; optional ones give undefined when empty */
+function dateField(value: unknown, field: string, optional = false): string | undefined {
+  const s = str(value, field, { max: 10, optional });
+  if (!s) return undefined;
+  const [y, m, d] = s.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (!DATE_RE.test(s) || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) throw new HttpError(400, `${field} is invalid.`);
+  return s;
+}
+
+/** An event from the admin's form (money in millimes). A new image (data URL) is saved in data/uploads. */
+async function parseEvent(b: Record<string, unknown>, id: string, existing?: ClubEvent): Promise<ClubEvent> {
+  const date = dateField(b.date, 'Date')!;
+  let endDate = dateField(b.endDate, 'End date', true);
+  if (endDate && endDate < date) throw new HttpError(400, 'The last day must not be before the first day.');
+  if (endDate === date) endDate = undefined;
+  if (endDate && (Date.parse(endDate) - Date.parse(date)) / 86_400_000 > 30) throw new HttpError(400, 'An event lasts 31 days at most.');
+  const time = (v: unknown, field: string) => {
+    const s = str(v, field, { max: 5, optional: true });
+    if (s && !TIME_RE.test(s)) throw new HttpError(400, `${field} is invalid.`);
+    return s || undefined;
+  };
+  const startTime = time(b.startTime, 'Start time');
+  const endTime = time(b.endTime, 'End time');
+  if (endTime && !startTime) throw new HttpError(400, 'Please give the start time too.');
+  if (startTime && endTime && !endDate && endTime <= startTime) throw new HttpError(400, 'The end time must be after the start time.');
+  const registrationDeadline = dateField(b.registrationDeadline, 'Registration deadline', true);
+  if (registrationDeadline && registrationDeadline > date) throw new HttpError(400, 'The registration deadline must be on or before the first day.');
+  const capacity =
+    b.capacity === undefined || b.capacity === null || b.capacity === '' || Number(b.capacity) === 0
+      ? undefined
+      : Math.round(num(b.capacity, 'Places', { min: 1, max: 5000 }));
+  const description = str(b.description, 'Description', { max: 3000, optional: true });
+  const location = str(b.location, 'Place', { max: 160, optional: true });
+  const imageUrl = await imageField(b.imageUrl, 'events', { maxBytes: 700_000, field: 'Picture' });
+  const now = new Date().toISOString();
+  const event: ClubEvent = {
+    id,
+    title: str(b.title, 'Title', { max: 120 }),
+    ...(description ? { description } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+    date,
+    ...(endDate ? { endDate } : {}),
+    ...(startTime ? { startTime } : {}),
+    ...(endTime ? { endTime } : {}),
+    ...(location ? { location } : {}),
+    fee: toMillimes(num(b.fee ?? 0, 'Fee', { min: 0, max: 100_000 })),
+    ...(capacity ? { capacity } : {}),
+    ...(registrationDeadline ? { registrationDeadline } : {}),
+    visible: b.visible === true,
+    registrationOpen: b.registrationOpen !== false,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  const published = existing?.publishedAt || (event.visible ? now : undefined);
+  if (published) event.publishedAt = published;
+  if (existing?.notifiedAt) event.notifiedAt = existing.notifiedAt;
+  return event;
+}
+
+// ----- parents -----
+
+/** A parent asks to register one or more of their children. The club accepts (or not) on the Events page. */
+router.post(
+  '/events/:id/registrations',
+  requireUser,
+  ah(async (req, res) => {
+    const user = req.user!;
+    const event = await getEvent(req.params.id);
+    if (!event || (!event.visible && !isAdmin(user))) throw new HttpError(404, 'Event not found.');
+    const state = registrationState(event, today(), (await acceptedCounts()).get(event.id) || 0);
+    if (!canRequest(state)) {
+      throw new HttpError(409, state === 'past' ? 'This event has already taken place.' : state === 'deadline' ? 'The registration deadline has passed.' : 'Registration for this event is closed.');
+    }
+    const b = req.body || {};
+    if (!Array.isArray(b.studentIds) || b.studentIds.length === 0 || b.studentIds.length > 10) throw new HttpError(400, 'Choose between 1 and 10 children.');
+    const ids = [...new Set(b.studentIds.map((v: unknown) => str(v, 'Child', { max: 100 })))] as string[];
+    const mine = await parentStudents(req);
+    const kids = ids.map((id) => mine.find((s) => s.id === id));
+    if (kids.some((k) => !k)) throw new HttpError(403, 'You can only register your own children.');
+    const parentNote = str(b.note, 'Note', { max: 500, optional: true });
+    // Each request notifies every admin
+    await throttle(`event-register:${user.uid}`, 20, 60 * 60_000);
+
+    const at = new Date().toISOString();
+    const added = await db.runTransaction(async (tx) => {
+      const snaps = await tx.getAll(...kids.map((k) => registrationRef(event.id, k!.id)));
+      const out: Student[] = [];
+      snaps.forEach((snap, i) => {
+        const kid = kids[i]!;
+        const existing = isLive(snap) ? readRegistration(snap.data()!) : undefined;
+        // Already waiting or registered, or refused by the club: nothing to ask again
+        if (existing && existing.status !== 'cancelled') return;
+        const reg: StoredRegistration = {
+          // A child registered again after a cancellation keeps the money already received
+          ...(existing || {}),
+          id: snap.id,
+          eventId: event.id,
+          studentId: kid.id,
+          studentName: kid.studentName,
+          ...(kid.parentName ? { parentName: kid.parentName } : {}),
+          ...(kid.parentPhone ? { parentPhone: kid.parentPhone } : {}),
+          status: 'pending',
+          source: 'parent',
+          amountPaid: existing?.amountPaid ?? 0,
+          ...(parentNote ? { parentNote } : {}),
+          createdAt: existing?.createdAt || at,
+          updatedAt: at,
+          statusChangedAt: at
+        };
+        if (!parentNote) delete reg.parentNote;
+        tx.set(snap.ref, writeMoney(reg));
+        out.push(kid);
+      });
+      return out;
+    });
+    if (!added.length) throw new HttpError(409, 'These children are already registered for this event.');
+    await notify(
+      await adminUserIds(),
+      'event_registration_new',
+      { parent: added[0].parentName || user.displayName, children: added.map((k) => k.studentName).join(', '), event: event.title },
+      '#/admin/events',
+      { except: user.uid }
+    );
+    res.status(201).json({ studentIds: added.map((k) => k.id) });
+  })
+);
+
+/** A parent cancels a child's registration, as long as nothing was paid and the event has not started. */
+router.delete(
+  '/events/:id/registrations/:studentId',
+  requireUser,
+  ah(async (req, res) => {
+    const kid = (await parentStudents(req)).find((s) => s.id === req.params.studentId);
+    if (!kid) throw new HttpError(403, 'You can only change your own children’s registrations.');
+    const event = await getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Event not found.');
+    if (event.date < today()) throw new HttpError(409, 'This event has already taken place.');
+    const ref = registrationRef(event.id, kid.id);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const reg = isLive(snap) ? readRegistration(snap.data()!) : undefined;
+      if (!reg || !isActiveRegistration(reg)) throw new HttpError(404, 'This child is not registered for this event.');
+      if (reg.amountPaid > 0) throw new HttpError(409, 'A payment was already made for this registration: please contact the club to cancel it.');
+      const at = new Date().toISOString();
+      tx.update(ref, { status: 'cancelled', updatedAt: at, statusChangedAt: at });
+    });
+    await notify(await adminUserIds(), 'event_registration_cancelled', { parent: kid.parentName || req.user!.displayName, child: kid.studentName, event: event.title }, '#/admin/events', {
+      except: req.user!.uid
+    });
+    res.json({ ok: true });
+  })
+);
+
+// ----- admin -----
+
+/** Tells a parent their child's registration changed (accepted, waiting list, refused) */
+async function notifyRegistrationStatus(regs: { studentId: string; studentName: string; status: EventRegistrationStatus }[], event: ClubEvent) {
+  const parents = new Map((await parentsOf(regs.map((r) => r.studentId))).map((p) => [p.studentId, p.parentUid]));
+  const type = { accepted: 'event_accepted', waitlist: 'event_waitlist', refused: 'event_refused' } as const;
+  for (const r of regs) {
+    if (r.status !== 'accepted' && r.status !== 'waitlist' && r.status !== 'refused') continue;
+    await notify([parents.get(r.studentId)], type[r.status], { child: r.studentName, event: event.title, date: shortDate(event.date) }, '#/parent');
+  }
+}
+
+/** Refuses when accepting `adding` more children would go over the event's places */
+async function checkPlaces(tx: Parameters<Parameters<typeof db.runTransaction>[0]>[0], event: ClubEvent, adding: number) {
+  if (!event.capacity || adding <= 0) return;
+  const accepted = (await tx.get(col('event_registrations').where('eventId', '==', event.id).where('status', '==', 'accepted'))).docs.filter(isLive).length;
+  const left = Math.max(0, event.capacity - accepted);
+  if (adding > left) {
+    throw new HttpError(409, left === 0 ? `“${event.title}” is full (${event.capacity} places).` : `Only ${left} place(s) left in “${event.title}”.`);
+  }
+}
+
+adminRouter.post(
+  '/events',
+  ah(async (req, res) => {
+    const event = await parseEvent(req.body || {}, newId('evt'));
+    await col('events').doc(event.id).set(writeMoney(event));
+    res.status(201).json(sendMoney('events', event));
+  })
+);
+
+adminRouter.put(
+  '/events/:id',
+  ah(async (req, res) => {
+    const existing = await getEvent(req.params.id);
+    if (!existing) throw new HttpError(404, 'Event not found.');
+    const event = await parseEvent(req.body || {}, existing.id, existing);
+    const accepted = (await acceptedCounts()).get(event.id) || 0;
+    if (event.capacity && event.capacity < accepted) throw new HttpError(400, `${accepted} children are already accepted: the number of places can’t be lower.`);
+    await col('events').doc(event.id).set(writeMoney(event));
+    await replacedImage(existing.imageUrl, event.imageUrl);
+    res.json(sendMoney('events', event));
+  })
+);
+
+/** Show the event to parents, or hide it */
+adminRouter.patch(
+  '/events/:id/visibility',
+  ah(async (req, res) => {
+    const ref = col('events').doc(req.params.id);
+    const event = await getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Event not found.');
+    const visible = req.body?.visible === true;
+    await ref.update({ visible, ...(visible && !event.publishedAt ? { publishedAt: new Date().toISOString() } : {}) });
+    res.json({ ok: true });
+  })
+);
+
+/** Tell every family about a visible event (bell + push) */
+adminRouter.post(
+  '/events/:id/notify',
+  ah(async (req, res) => {
+    const event = await getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Event not found.');
+    if (!event.visible) throw new HttpError(409, 'Show the event to parents before telling them about it.');
+    await throttle(`event-notify:${event.id}`, 3, 60 * 60_000);
+    const families = [...new Set((await listAll<Record<string, unknown>>('students')).map((s) => s.parentUid as string | undefined).filter((u): u is string => !!u))];
+    await notify(families, 'event_new', { title: event.title, date: shortDate(event.date) }, '#/parent');
+    await col('events').doc(event.id).update({ notifiedAt: new Date().toISOString() });
+    res.json({ families: families.length });
+  })
+);
+
+/** Deleted events are kept (soft delete) with their registrations, so their payments stay in the cash book */
+adminRouter.delete(
+  '/events/:id',
+  ah(async (req, res) => {
+    await softDelete(col('events').doc(req.params.id), req);
+    res.json({ ok: true });
+  })
+);
+
+/** The club registers children directly (accepted by default). Children already registered get the new status. */
+adminRouter.post(
+  '/events/:id/registrations',
+  ah(async (req, res) => {
+    const event = await getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Event not found.');
+    const b = req.body || {};
+    if (!Array.isArray(b.studentIds) || b.studentIds.length === 0 || b.studentIds.length > 300) throw new HttpError(400, 'Choose between 1 and 300 children.');
+    const ids = [...new Set(b.studentIds.map((v: unknown) => str(v, 'Child', { max: 100 })))] as string[];
+    const status = oneOf(b.status ?? 'accepted', ['accepted', 'pending', 'waitlist'] as const, 'Status');
+    const at = new Date().toISOString();
+    const changed = await db.runTransaction(async (tx) => {
+      const studentSnaps = await tx.getAll(...ids.map((id) => col('students').doc(id)));
+      const regSnaps = await tx.getAll(...ids.map((id) => registrationRef(event.id, id)));
+      const out: StoredRegistration[] = [];
+      ids.forEach((id, i) => {
+        const data = liveData<Record<string, unknown>>(studentSnaps[i]);
+        if (!data) return;
+        const st = normalizeStudent(data);
+        const existing = isLive(regSnaps[i]) ? readRegistration(regSnaps[i].data()!) : undefined;
+        if (existing?.status === status) return;
+        out.push({
+          ...(existing || {}),
+          id: regSnaps[i].id,
+          eventId: event.id,
+          studentId: st.id,
+          studentName: st.studentName,
+          ...(st.parentName ? { parentName: st.parentName } : {}),
+          ...(st.parentPhone ? { parentPhone: st.parentPhone } : {}),
+          status,
+          source: existing?.source || 'admin',
+          amountPaid: existing?.amountPaid ?? 0,
+          createdAt: existing?.createdAt || at,
+          updatedAt: at,
+          statusChangedAt: at
+        });
+      });
+      if (out.length === 0 && ids.some((_, i) => !liveData(studentSnaps[i]))) throw new HttpError(404, 'Child not found.');
+      if (status === 'accepted') await checkPlaces(tx, event, out.length);
+      out.forEach((reg) => tx.set(registrationRef(event.id, reg.studentId), writeMoney(reg)));
+      return out;
+    });
+    await notifyRegistrationStatus(changed, event);
+    res.status(201).json({ count: changed.length });
+  })
+);
+
+/** Give several registrations of an event the same status (e.g. accept every pending request at once). */
+adminRouter.patch(
+  '/events/:id/registrations',
+  ah(async (req, res) => {
+    const event = await getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Event not found.');
+    const b = req.body || {};
+    if (!Array.isArray(b.registrationIds) || b.registrationIds.length === 0 || b.registrationIds.length > 300) throw new HttpError(400, 'Choose between 1 and 300 registrations.');
+    const ids = [...new Set(b.registrationIds.map((v: unknown) => str(v, 'Registration', { max: 200 })))] as string[];
+    const status = oneOf(b.status, EVENT_REGISTRATION_STATUSES, 'Status');
+    const at = new Date().toISOString();
+    const changed = await db.runTransaction(async (tx) => {
+      const snaps = await tx.getAll(...ids.map((id) => col('event_registrations').doc(id)));
+      const out: StoredRegistration[] = [];
+      for (const snap of snaps) {
+        const reg = isLive(snap) ? readRegistration(snap.data()!) : undefined;
+        if (!reg || reg.eventId !== event.id || reg.status === status) continue;
+        out.push({ ...reg, status });
+      }
+      if (status === 'accepted') await checkPlaces(tx, event, out.length);
+      out.forEach((reg) => tx.update(registrationRef(event.id, reg.studentId), { status, updatedAt: at, statusChangedAt: at }));
+      return out;
+    });
+    await notifyRegistrationStatus(changed, event);
+    res.json({ count: changed.length });
+  })
+);
+
+/** Change a registration's status (accept, waiting list, refuse, cancel), its amount (discount, free place) or the club's note. */
+adminRouter.patch(
+  '/event-registrations/:id',
+  ah(async (req, res) => {
+    const b = req.body || {};
+    const ref = col('event_registrations').doc(req.params.id);
+    const { reg, event, statusChanged } = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const reg = isLive(snap) ? readRegistration(snap.data()!) : undefined;
+      if (!reg) throw new HttpError(404, 'Registration not found.');
+      const eventData = liveData<Record<string, unknown>>(await tx.get(col('events').doc(reg.eventId)));
+      if (!eventData) throw new HttpError(404, 'Event not found.');
+      const event = readEvent(eventData);
+      const at = new Date().toISOString();
+      const update: Record<string, unknown> = { updatedAt: at };
+      let statusChanged = false;
+      if (b.status !== undefined) {
+        const status = oneOf(b.status, EVENT_REGISTRATION_STATUSES, 'Status');
+        if (status !== reg.status) {
+          if (status === 'accepted') await checkPlaces(tx, event, 1);
+          update.status = status;
+          update.statusChangedAt = at;
+          reg.status = status;
+          statusChanged = true;
+        }
+      }
+      if (b.customFee !== undefined) {
+        const custom = b.customFee === null || b.customFee === '' ? null : toMillimes(num(b.customFee, 'Amount', { min: 0, max: 100_000 }));
+        // A custom amount equal to the event's fee is just the fee
+        update.customFee = custom === null || custom === event.fee ? FieldValue.delete() : custom;
+      }
+      if (b.adminNote !== undefined) update.adminNote = str(b.adminNote, 'Note', { max: 1000, optional: true }) || FieldValue.delete();
+      tx.update(ref, update);
+      return { reg, event, statusChanged };
+    });
+    if (statusChanged) await notifyRegistrationStatus([reg], event);
+    res.json({ ok: true });
+  })
+);
+
+/** Record what a family paid for a registration (0 = refunded / not paid). */
+adminRouter.put(
+  '/event-registrations/:id/payment',
+  ah(async (req, res) => {
+    const b = req.body || {};
+    const amountPaid = toMillimes(num(b.amountPaid, 'Amount paid', { min: 0, max: 100_000 }));
+    const paidAt = dateField(b.paidAt, 'Payment date', true);
+    const method = amountPaid > 0 && b.method ? oneOf(b.method, PAYMENT_METHODS, 'Payment method') : undefined;
+    const ref = col('event_registrations').doc(req.params.id);
+    // Read and written together, so two saves at once can't both count the same money as received
+    const before = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const reg = isLive(snap) ? readRegistration(snap.data()!) : undefined;
+      if (!reg) throw new HttpError(404, 'Registration not found.');
+      tx.update(ref, {
+        amountPaid,
+        method: method ?? FieldValue.delete(),
+        paidAt: amountPaid > 0 ? paidAt || today() : FieldValue.delete(),
+        updatedAt: new Date().toISOString()
+      });
+      return reg;
+    });
+    const received = amountPaid - before.amountPaid;
+    if (received > 0) {
+      const event = await getEvent(before.eventId);
+      const [p] = await parentsOf([before.studentId]);
+      await notify([p?.parentUid], 'event_payment_received', { amount: toDinars(received), child: before.studentName, event: event?.title || '' }, '#/parent');
+    }
+    res.json({ ok: true });
+  })
+);
+
+/** Mark several registrations of an event as fully paid (e.g. a family paying for siblings, or cash collected on the day). */
+adminRouter.post(
+  '/events/:id/mark-paid',
+  ah(async (req, res) => {
+    const event = await getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Event not found.');
+    const b = req.body || {};
+    if (!Array.isArray(b.registrationIds) || b.registrationIds.length === 0 || b.registrationIds.length > 300) throw new HttpError(400, 'Choose between 1 and 300 registrations.');
+    const ids = [...new Set(b.registrationIds.map((v: unknown) => str(v, 'Registration', { max: 200 })))] as string[];
+    const method = b.method ? oneOf(b.method, PAYMENT_METHODS, 'Payment method') : 'cash';
+    const at = new Date().toISOString();
+    const paid = await db.runTransaction(async (tx) => {
+      const snaps = await tx.getAll(...ids.map((id) => col('event_registrations').doc(id)));
+      const out: { reg: StoredRegistration; received: number }[] = [];
+      for (const snap of snaps) {
+        const reg = isLive(snap) ? readRegistration(snap.data()!) : undefined;
+        if (!reg || reg.eventId !== event.id) continue;
+        const due = dueFor(reg, event);
+        if (due <= reg.amountPaid) continue;
+        tx.update(snap.ref, { amountPaid: due, method, paidAt: today(), updatedAt: at });
+        out.push({ reg, received: due - reg.amountPaid });
+      }
+      return out;
+    });
+    const parents = new Map((await parentsOf(paid.map((p) => p.reg.studentId))).map((p) => [p.studentId, p.parentUid]));
+    for (const p of paid) {
+      await notify([parents.get(p.reg.studentId)], 'event_payment_received', { amount: toDinars(p.received), child: p.reg.studentName, event: event.title }, '#/parent');
+    }
+    res.json({ count: paid.length });
+  })
+);
+
+/** Remove a registration made by mistake (only when no money was received: refund it first). */
+adminRouter.delete(
+  '/event-registrations/:id',
+  ah(async (req, res) => {
+    const ref = col('event_registrations').doc(req.params.id);
+    const reg = liveData<Record<string, unknown>>(await ref.get());
+    if (!reg) throw new HttpError(404, 'Registration not found.');
+    if (readRegistration(reg).amountPaid > 0) {
+      throw new HttpError(409, 'Money was received for this registration: set the amount paid to 0 (refund) before removing it.');
+    }
+    await softDelete(ref, req);
     res.json({ ok: true });
   })
 );

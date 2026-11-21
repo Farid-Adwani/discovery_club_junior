@@ -11,6 +11,7 @@ import {
   Landmark,
   LayoutGrid,
   Package,
+  PartyPopper,
   TrendingUp,
   Users
 } from 'lucide-react';
@@ -29,6 +30,7 @@ const TABS: { id: Tab; icon: React.ElementType }[] = [
   { id: 'groups', icon: CalendarDays },
   { id: 'attendance', icon: ClipboardList },
   { id: 'payments', icon: DollarSign },
+  { id: 'events', icon: PartyPopper },
   { id: 'cash', icon: Landmark },
   { id: 'stock', icon: Boxes },
   { id: 'inventory', icon: Package },
@@ -41,7 +43,8 @@ const TABS: { id: Tab; icon: React.ElementType }[] = [
  * Scrolls sideways on small screens (with arrows), keeps the open tab in view, and shows what is waiting.
  */
 export const AdminNav: React.FC<{ active: Tab; onOpen: (tab: Tab) => void }> = ({ active, onOpen }) => {
-  const { students, payments, orders, materialRequests, isFirebaseConnected } = useApp();
+  const { students, payments, orders, materialRequests, events, eventRegistrations, isFirebaseConnected } = useApp();
+  const liveEventIds = new Set(events.filter((e) => !e.deletedAt).map((e) => e.id));
   const t = useT(hubMessages);
   const { dir } = useLanguage();
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -52,6 +55,7 @@ export const AdminNav: React.FC<{ active: Tab; onOpen: (tab: Tab) => void }> = (
     students: students.filter((s) => s.status === 'waitlist').length,
     payments: monthRows(currentMonth(), students, payments).filter((r) => r.outstanding > 0).length,
     inventory: orders.filter((o) => o.status === 'requested').length,
+    events: eventRegistrations.filter((r) => r.status === 'pending' && liveEventIds.has(r.eventId)).length,
     stock: materialRequests.filter((r) => r.status === 'pending').length
   };
 

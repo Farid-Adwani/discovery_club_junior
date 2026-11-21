@@ -5,6 +5,7 @@ import { Student } from '../../types';
 import { useLanguage, useT } from '../../i18n';
 import { scheduleMessages } from '../../i18n/messages/schedule';
 import { WeekEntry, WeekEntryKind, addDays, buildClassWeek, buildWeek, startOfWeek, toISODate } from '../../utils/schedule';
+import { EVENT_ITEM_PREFIX, eventScheduleItems } from '../../utils/events';
 
 const KIND_STYLE: Record<WeekEntryKind, string> = {
   class: 'bg-rose-50 border-rose-200 text-rose-900',
@@ -42,7 +43,9 @@ export const WeekSchedule: React.FC<{
   showStudentNames?: boolean;
   editing?: WeekScheduleEditing;
 }> = ({ students, classIds, trainerId, showStudentNames = false, editing }) => {
-  const { groups, scheduleItems } = useApp();
+  const { groups, scheduleItems: addedItems, events, eventRegistrations } = useApp();
+  // Club events a child is accepted for show in their week like the items the office added
+  const scheduleItems = useMemo(() => [...addedItems, ...eventScheduleItems(events, eventRegistrations)], [addedItems, events, eventRegistrations]);
   const t = useT(scheduleMessages);
   const { locale } = useLanguage();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -210,7 +213,7 @@ export const WeekSchedule: React.FC<{
                                 <span>{t('cancelThisDay')}</span>
                               </button>
                             )
-                          ) : (
+                          ) : e.item?.id.startsWith(EVENT_ITEM_PREFIX) ? null : (
                             <button
                               onClick={() => editing.onRemove(e)}
                               className="flex items-center gap-1 font-black text-rose-700 hover:underline cursor-pointer"
