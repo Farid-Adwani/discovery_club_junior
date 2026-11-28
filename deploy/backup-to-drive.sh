@@ -14,7 +14,7 @@ PASSFILE="${PASSFILE:-$HOME/.backup-passphrase}"
 # The rclone remote's root_folder_id is the backups folder in Drive (DEPLOY.md, section 7)
 REMOTE="${REMOTE:-gdrive:}"
 KEEP_LOCAL_DAYS="${KEEP_LOCAL_DAYS:-14}"
-KEEP_DRIVE_DAYS="${KEEP_DRIVE_DAYS:-90}"
+KEEP_DRIVE_DAYS="${KEEP_DRIVE_DAYS:-15}"
 
 [ -s "$PASSFILE" ] || { echo "Missing passphrase file $PASSFILE (see DEPLOY.md, section 7)" >&2; exit 1; }
 

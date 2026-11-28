@@ -172,7 +172,7 @@ sudo systemctl restart discovery-club
 
 ## 7. Backups (every night, to Google Drive)
 
-`deploy/backup-to-drive.sh` copies the database (safe while the site runs) and the images (`data/uploads/`) into one encrypted file. It keeps 14 days of these files on the server in `~club/backups/`, and uploads each one to a backups folder in Google Drive, which keeps 90 days (ours: My Drive › Discovery Club Junior Website › db club). A systemd timer runs it every night at 03:30.
+`deploy/backup-to-drive.sh` copies the database (safe while the site runs) and the images (`data/uploads/`) into one encrypted file. It keeps 14 days of these files on the server in `~club/backups/`, and uploads each one to a backups folder in Google Drive, which keeps 15 days (ours: My Drive › Discovery Club Junior Website › db club). A systemd timer runs it every night at 03:30.
 
 One-time setup, as root:
 
@@ -197,15 +197,13 @@ sudo -u club -H rclone config create gdrive drive scope=drive.file
 
 Open the `http://127.0.0.1:53682/auth?...` link it prints, sign in with the Google account that should hold the backups, and allow. With `scope=drive.file`, rclone only sees the files it creates, not the rest of that Drive.
 
-Because of that, rclone must create the backups folder itself (it cannot use one you made in Drive). Create it, then point rclone at it by its ID:
+Then choose the Drive folder for the backups: open it in Drive and copy its ID, the end of the address (`drive.google.com/drive/folders/<ID>`). rclone can upload into it, and it only sees the backups it put there:
 
 ```bash
-sudo -u club -H rclone mkdir "gdrive:db club"
-sudo -u club -H rclone lsjson gdrive: --dirs-only            # copy the "ID" of db club
 sudo -u club -H rclone config update gdrive root_folder_id=<ID> config_refresh_token=false
 ```
 
-Then, in Drive, move `db club` wherever you like (we keep it in `Discovery Club Junior Website`). rclone finds it by its ID, so moving or renaming it later changes nothing.
+rclone finds the folder by its ID, so moving or renaming it in Drive later changes nothing.
 
 **3. The nightly timer**
 
