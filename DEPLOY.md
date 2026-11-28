@@ -172,7 +172,7 @@ sudo systemctl restart discovery-club
 
 ## 7. Backups (every night, to Google Drive)
 
-`deploy/backup-to-drive.sh` copies the database (safe while the site runs) and the images (`data/uploads/`) into one encrypted file. It keeps 14 days of these files on the server in `~club/backups/`, and uploads each one to a `DiscoveryClubJunior-backups` folder in Google Drive, which keeps 90 days. A systemd timer runs it every night at 03:30.
+`deploy/backup-to-drive.sh` copies the database (safe while the site runs) and the images (`data/uploads/`) into one encrypted file. It keeps 14 days of these files on the server in `~club/backups/`, and uploads each one to a backups folder in Google Drive, which keeps 90 days (ours: My Drive › Discovery Club Junior Website › db club). A systemd timer runs it every night at 03:30.
 
 One-time setup, as root:
 
@@ -196,6 +196,16 @@ sudo -u club -H rclone config create gdrive drive scope=drive.file
 ```
 
 Open the `http://127.0.0.1:53682/auth?...` link it prints, sign in with the Google account that should hold the backups, and allow. With `scope=drive.file`, rclone only sees the files it creates, not the rest of that Drive.
+
+Because of that, rclone must create the backups folder itself (it cannot use one you made in Drive). Create it, then point rclone at it by its ID:
+
+```bash
+sudo -u club -H rclone mkdir "gdrive:db club"
+sudo -u club -H rclone lsjson gdrive: --dirs-only            # copy the "ID" of db club
+sudo -u club -H rclone config update gdrive root_folder_id=<ID> config_refresh_token=false
+```
+
+Then, in Drive, move `db club` wherever you like (we keep it in `Discovery Club Junior Website`). rclone finds it by its ID, so moving or renaming it later changes nothing.
 
 **3. The nightly timer**
 
@@ -235,7 +245,7 @@ systemctl start discovery-club-backup                 # a first backup right now
 journalctl -u discovery-club-backup -n 5 --no-pager
 ```
 
-The last line should say `Backed up discovery-club-….tar.gz.gpg (…) to gdrive:DiscoveryClubJunior-backups`, and the file appears in Drive.
+The last line should say `Backed up discovery-club-….tar.gz.gpg (…) to gdrive:`, and the file appears in the Drive folder.
 
 Admins also have a **Back up now** button on their dashboard. It runs the same script from the site's own service. If that service is sandboxed with `ProtectSystem=strict`, let it write the backups and rclone's sign-in: add `-/home/club/backups -/home/club/.config/rclone` to its `ReadWritePaths=` line, then `systemctl daemon-reload && systemctl restart discovery-club`. Later: `systemctl list-timers discovery-club-backup` shows the last and next run, `journalctl -u discovery-club-backup` shows what happened.
 
@@ -243,7 +253,7 @@ To restore a backup (from `~club/backups/`, or downloaded from Drive):
 
 ```bash
 mkdir -p /tmp/restore && cd /tmp/restore
-sudo -u club -H rclone copy gdrive:DiscoveryClubJunior-backups/discovery-club-2026-11-29-0330.tar.gz.gpg .
+sudo -u club -H rclone copy gdrive:discovery-club-2026-11-29-0330.tar.gz.gpg .
 gpg --pinentry-mode loopback -o backup.tar.gz -d discovery-club-2026-11-29-0330.tar.gz.gpg   # asks for the passphrase
 tar -xzf backup.tar.gz                                # -> club.db and uploads/
 

@@ -11,7 +11,8 @@ SITE="$(cd "$(dirname "$0")/.." && pwd)"
 DATA="$(cd "$SITE" && realpath "${DATA_DIR:-data}")"
 BACKUPS="${BACKUPS:-$HOME/backups}"
 PASSFILE="${PASSFILE:-$HOME/.backup-passphrase}"
-REMOTE="${REMOTE:-gdrive:DiscoveryClubJunior-backups}"
+# The rclone remote's root_folder_id is the backups folder in Drive (DEPLOY.md, section 7)
+REMOTE="${REMOTE:-gdrive:}"
 KEEP_LOCAL_DAYS="${KEEP_LOCAL_DAYS:-14}"
 KEEP_DRIVE_DAYS="${KEEP_DRIVE_DAYS:-90}"
 
