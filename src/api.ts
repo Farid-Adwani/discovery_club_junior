@@ -15,11 +15,11 @@ export class ApiError extends Error {
 /** Calls our backend, attaching the signed-in user's session token. */
 export async function api<T = unknown>(
   path: string,
-  options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown } = {}
+  options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown; timeoutMs?: number } = {}
 ): Promise<T> {
   const token = getSessionToken();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {

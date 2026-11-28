@@ -26,6 +26,7 @@ import { fromISODate } from '../../utils/schedule';
 import { birthdayPeople } from '../../utils/birthdays';
 import { currentMonth, monthRows } from '../../utils/payments';
 import { BirthdaysCard } from '../common/BirthdaysCard';
+import { BackupCard } from './BackupCard';
 import { ModalPortal } from '../common/ModalPortal';
 
 export type AdminSection =
@@ -238,6 +239,9 @@ export const AdminHub: React.FC<{ onOpen: (section: AdminSection) => void }> = (
 
       {/* Birthdays */}
       <BirthdaysCard people={birthdayPeople(students, trainers, staffMembers, adminProfiles)} onManage={() => onOpen('team')} />
+
+      {/* Backup to Google Drive */}
+      <BackupCard />
 
       {/* Edit profile */}
       {isEditing && (

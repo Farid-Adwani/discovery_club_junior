@@ -71,6 +71,7 @@ import { TIMELINE_KINDS, TIMELINE_LIMITS, type AlbumEdit, type NewAlbum, type Ti
 import { deleteImage, imageField, isStoredImage, replacedImage, uploadDataUrl } from './storage.js';
 import { readMoney, writeMoney, sendMoney, upgradeMoney, toMillimes, toDinars, type MoneyCollection } from './money.js';
 import { allowAttempt, recordAttempt, clearAttempts, clientIp, takeAttempt } from './rateLimit.js';
+import { runDriveBackup } from './driveBackup.js';
 import { notify, adminUserIds, trainerUserIds, parentsOf, shortDate, sendPush, subscriptionId, isPushEndpoint, vapidPublicKey, type StoredNotification } from './notify.js';
 import { notificationMessages } from '../src/i18n/messages/notifications.js';
 
@@ -1099,6 +1100,20 @@ router.post(
 const adminRouter = Router();
 adminRouter.use(requireRole('admin'));
 router.use('/admin', adminRouter);
+
+/** "Back up now": database + images to Google Drive, like the nightly backup */
+adminRouter.post(
+  '/backup',
+  ah(async (req, res) => {
+    await throttle(`backup:${req.user!.uid}`, 10, 60 * 60_000);
+    try {
+      res.json(await runDriveBackup());
+    } catch (err) {
+      // The real reason (Drive not connected, no passphrase…) helps the admin more than "Server error"
+      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  })
+);
 
 adminRouter.patch(
   '/students/:id',

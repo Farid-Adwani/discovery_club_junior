@@ -170,31 +170,91 @@ sudo systemctl restart discovery-club
 
 `data/` is not touched by updates.
 
-## 7. Backups
+## 7. Backups (every night, to Google Drive)
 
-`npm run backup` makes a consistent copy of the database while the site runs. The images are plain files in `data/uploads/`.
+`deploy/backup-to-drive.sh` copies the database (safe while the site runs) and the images (`data/uploads/`) into one encrypted file. It keeps 14 days of these files on the server in `~club/backups/`, and uploads each one to a `DiscoveryClubJunior-backups` folder in Google Drive, which keeps 90 days. A systemd timer runs it every night at 03:30.
 
-Daily backup at 03:30, keeping 30 days (as `club`: `crontab -e`):
-
-```cron
-30 3 * * * cd /home/club/site && npm run -s backup -- /home/club/backups/club-$(date +\%F).db && find /home/club/backups -name 'club-*.db' -mtime +30 -delete
-```
-
-**Also copy them off the server**, for example from your computer every week:
+One-time setup, as root:
 
 ```bash
-rsync -a club@<server>:backups/ ~/discovery-backups/db/
-rsync -a club@<server>:site/data/uploads/ ~/discovery-backups/uploads/
+SITE=/home/club/site      # where the site is (/srv/discovery-club/site on our VPS)
+apt install -y rclone
 ```
 
-To restore a backup:
+**1. The encryption passphrase.** The script refuses to run without it. Save a copy in your password manager: without it, the backups cannot be opened.
 
 ```bash
-sudo systemctl stop discovery-club
-cp /home/club/backups/club-2026-11-21.db /home/club/site/data/club.db
-rm -f /home/club/site/data/club.db-wal /home/club/site/data/club.db-shm
-sudo systemctl start discovery-club
+sudo -u club -H sh -c 'umask 077; openssl rand -base64 32 > ~/.backup-passphrase'
+cat ~club/.backup-passphrase
 ```
+
+**2. Connect Google Drive.** rclone signs in through a web page on port 53682 of the server. Forward that port so the page opens in your computer's browser:
+
+```bash
+ssh -L 53682:127.0.0.1:53682 root@<server>                  # from your computer
+sudo -u club -H rclone config create gdrive drive scope=drive.file
+```
+
+Open the `http://127.0.0.1:53682/auth?...` link it prints, sign in with the Google account that should hold the backups, and allow. With `scope=drive.file`, rclone only sees the files it creates, not the rest of that Drive.
+
+**3. The nightly timer**
+
+```bash
+cat > /etc/systemd/system/discovery-club-backup.service <<EOF
+[Unit]
+Description=Discovery Club Junior backup to Google Drive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=club
+Group=club
+ExecStart=$SITE/deploy/backup-to-drive.sh
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+EOF
+
+cat > /etc/systemd/system/discovery-club-backup.timer <<EOF
+[Unit]
+Description=Nightly Discovery Club Junior backup
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now discovery-club-backup.timer
+systemctl start discovery-club-backup                 # a first backup right now
+journalctl -u discovery-club-backup -n 5 --no-pager
+```
+
+The last line should say `Backed up discovery-club-….tar.gz.gpg (…) to gdrive:DiscoveryClubJunior-backups`, and the file appears in Drive.
+
+Admins also have a **Back up now** button on their dashboard. It runs the same script from the site's own service. If that service is sandboxed with `ProtectSystem=strict`, let it write the backups and rclone's sign-in: add `-/home/club/backups -/home/club/.config/rclone` to its `ReadWritePaths=` line, then `systemctl daemon-reload && systemctl restart discovery-club`. Later: `systemctl list-timers discovery-club-backup` shows the last and next run, `journalctl -u discovery-club-backup` shows what happened.
+
+To restore a backup (from `~club/backups/`, or downloaded from Drive):
+
+```bash
+mkdir -p /tmp/restore && cd /tmp/restore
+sudo -u club -H rclone copy gdrive:DiscoveryClubJunior-backups/discovery-club-2026-11-29-0330.tar.gz.gpg .
+gpg --pinentry-mode loopback -o backup.tar.gz -d discovery-club-2026-11-29-0330.tar.gz.gpg   # asks for the passphrase
+tar -xzf backup.tar.gz                                # -> club.db and uploads/
+
+systemctl stop discovery-club
+install -o club -g club -m 600 club.db $SITE/data/club.db
+rm -f $SITE/data/club.db-wal $SITE/data/club.db-shm
+rsync -a --chown=club:club uploads/ $SITE/data/uploads/
+systemctl start discovery-club
+```
+
+`npm run backup` still makes a quick database-only copy in `data/backups/`, for example before a risky change.
 
 ## Useful commands
 
@@ -202,5 +262,6 @@ sudo systemctl start discovery-club
 | --- | --- |
 | `npm run set-password -- <email> <password>` | Creates an account or changes its password (works while the site runs) |
 | `npm run backup` | Copies the database to `data/backups/` |
+| `sudo systemctl start discovery-club-backup` | Backs up the database and images to Google Drive now |
 | `journalctl -u discovery-club -f` | Live logs |
 | `sudo systemctl restart discovery-club` | Restart after an update or a change in `.env` |
